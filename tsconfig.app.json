@@ -19,7 +19,6 @@
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "erasableSyntaxOnly": false,
     "noFallthroughCasesInSwitch": false,
     "noUncheckedSideEffectImports": false
   },

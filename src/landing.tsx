@@ -4,7 +4,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "./lib/utils";
 import { Input } from "@/components/ui/input";
-import { FaGoogle, FaXTwitter } from "react-icons/fa6"
+import { FaApple, FaDiscord, FaGoogle, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
 import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
@@ -104,6 +104,12 @@ export default function Landing() {
                 </Button>
                 <Button variant="outline" size="icon" disabled>
                   <FaXTwitter />
+                </Button>
+                <Button variant="outline" size="icon" disabled>
+                  <FaDiscord />
+                </Button>
+                <Button variant="outline" size="icon" disabled>
+                  <FaApple />
                 </Button>
               </div>
             </div>

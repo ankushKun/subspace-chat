@@ -38,6 +38,8 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<App />} />
+          <Route path="/app/:serverId" element={<App />} />
+          <Route path="/app/:serverId/:channelId" element={<App />} />
           <Route path="/app/settings" element={<Settings />} />
         </Routes>
       </HashRouter>

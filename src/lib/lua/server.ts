@@ -6,8 +6,8 @@ db = db or sqlite3.open_memory()
 
 PROFILES = "bKKJjeOXr3ViedwUB6hz_Me3VFRxMXS0yTkZBkJEL3s"
 
-server_name = Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
-server_icon = ""
+server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
+server_icon = server_icon or ""
 
 -- easily read from the database
 function SQLRead(query, ...)
@@ -43,13 +43,13 @@ end
 r = db:exec([[
     CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
         order_id INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
         order_id INTEGER NOT NULL DEFAULT 1,
         category_id INTEGER,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
@@ -92,11 +92,16 @@ end)
 
 app.post("/update-server", function(req, res)
     assert(isOwner(req.msg.From), "You are not the owner of this server")
-    local name = req.body.name
-    local icon = req.body.icon
+    local name = req.body.name or nil
+    local icon = req.body.icon or nil
 
-    server_name = name or server_name
-    server_icon = icon or server_icon
+    if name then
+        server_name = name
+    end
+
+    if icon then
+        server_icon = icon
+    end
 
     res:json({
         success = true
@@ -107,7 +112,7 @@ app.post("/create-category", function(req, res)
     assert(isOwner(req.msg.From), "You are not the owner of this server")
     local name = req.body.name
     local order = req.body.order or 1
-    local rows_updated = SQLWrite("INSERT INTO categories (name, order) VALUES (?, ?)", name, order)
+    local rows_updated = SQLWrite("INSERT INTO categories (name, order_id) VALUES (?, ?)", name, order)
     if rows_updated == 1 then
         res:json({
             category_id = db:last_insert_rowid(),
@@ -126,7 +131,7 @@ app.post("/update-category", function(req, res)
     local id = req.body.id
     local name = req.body.name
     local order = req.body.order or 1
-    local rows_updated = SQLWrite("UPDATE categories SET name = ?, order = ? WHERE id = ?", name, order, id)
+    local rows_updated = SQLWrite("UPDATE categories SET name = ?, order_id = ? WHERE id = ?", name, order, id)
     if rows_updated == 1 then
         res:json({
             success = true
@@ -164,8 +169,8 @@ app.post("/create-channel", function(req, res)
     local name = req.body.name
     local category_id = req.body.category_id
     local order = req.body.order or 1
-    local rows_updated = SQLWrite("INSERT INTO channels (name, category_id, order) VALUES (?, ?, ?)", name, category_id,
-        order)
+    local rows_updated = SQLWrite("INSERT INTO channels (name, category_id, order_id) VALUES (?, ?, ?)", name,
+        category_id, order)
     if rows_updated == 1 then
         res:json({
             channel_id = db:last_insert_rowid(),
@@ -201,16 +206,16 @@ app.post("/update-channel", function(req, res)
         table.insert(params, category_id)
     end
     if order then
-        query = query .. "order = ?, "
+        query = query .. "order_id = ?, "
         table.insert(params, order)
 
         -- Update order of other channels in the same category
         local cat_id = category_id or SQLRead("SELECT category_id FROM channels WHERE id = ?", id)[1].category_id
         local shift_query = [[
             UPDATE channels
-            SET "order" = "order" + 1
+            SET "order_id" = "order_id" + 1
             WHERE category_id = ?
-            AND "order" >= ?
+            AND "order_id" >= ?
             AND id != ?
         ]]
         SQLWrite(shift_query, cat_id, order, id)

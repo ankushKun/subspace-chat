@@ -88,8 +88,8 @@ const ServerIcon = ({ id }: { id: string }) => {
                 />
                 {isRefreshing && !isLoading && (
                     <div className="absolute bottom-0 right-0 w-2 h-2">
-                        <div className="animate-ping absolute h-2 w-2 rounded-full bg-primary/70 opacity-75"></div>
-                        <div className="relative rounded-full h-2 w-2 bg-primary"></div>
+                        <div className="animate-ping absolute h-2 w-2 rounded-full bg-palette-lavender opacity-75"></div>
+                        <div className="relative rounded-full h-2 w-2 bg-palette-lavender"></div>
                     </div>
                 )}
             </Button>

@@ -37,7 +37,7 @@ export function to(file: File): Promise<Uint8Array> {
 }
 
 export async function createServer(name: string, icon: File) {
-    console.log("Spawning server...");
+    console.log("Spawning server...", { name, icon: icon.name });
 
     // Read the file as an ArrayBuffer properly
     const iconUint8Array = await to(icon);
@@ -146,22 +146,44 @@ export function parseOutput(msg: MessageResult) {
 }
 
 export async function uploadFileAndGetId(file: File): Promise<string> {
-    // without turbo
+    console.log(`[uploadFileAndGetId] Uploading file:`, file.name, file.size, file.type);
+    // Using standard Arweave for reliable uploads
+    try {
+        const fileId = await uploadWithStandardArweave(file);
+        console.log(`[uploadFileAndGetId] File uploaded successfully:`, fileId);
+        return fileId;
+    } catch (error) {
+        console.error(`[uploadFileAndGetId] Upload failed:`, error);
+        throw error;
+    }
+}
+
+// Reliable implementation using standard Arweave
+async function uploadWithStandardArweave(file: File): Promise<string> {
+    console.log(`[uploadWithStandardArweave] Starting upload:`, file.name);
     const ar = Arweave.init({
         host: "arweave.net",
         port: 443,
         protocol: "https",
     });
 
-    const tx = await ar.createTransaction({ data: await to(file) }, "use_wallet");
+    const fileData = await to(file);
+    console.log(`[uploadWithStandardArweave] File converted to Uint8Array:`, fileData.byteLength);
+
+    const tx = await ar.createTransaction({ data: fileData }, "use_wallet");
+    console.log(`[uploadWithStandardArweave] Transaction created:`, tx.id);
 
     tx.addTag("Content-Type", file.type);
     tx.addTag("App-Name", "Subspace-Chat");
     // @ts-ignore
     tx.addTag("App-Version", window.APP_VERSION);
 
+    console.log(`[uploadWithStandardArweave] Signing transaction...`);
     await ar.transactions.sign(tx, "use_wallet");
+    console.log(`[uploadWithStandardArweave] Transaction signed, posting...`);
+
     const res = await ar.transactions.post(tx);
+    console.log(`[uploadWithStandardArweave] Transaction posted, status:`, res.status);
 
     if (res.status == 200) {
         return tx.id;
@@ -170,60 +192,29 @@ export async function uploadFileAndGetId(file: File): Promise<string> {
     }
 }
 
-// export async function uploadFileAndGetId(file: File): Promise<string> {
-//     try {
-//         // Create an unauthenticated client (for browser environments)
-//         // In real implementation, you'd use an authenticated client with your wallet
-//         const turbo = TurboFactory.authenticated({ token: 'arweave' });
-
-//         // Create a stream factory from the File object
-//         const fileStreamFactory = () => file.stream();
-
-//         // Create a size factory that returns the file size
-//         const fileSizeFactory = () => file.size;
-
-//         // Determine the Content-Type based on the file's type
-//         const contentType = file.type || 'application/octet-stream';
-
-//         // Upload the file with proper Content-Type tag
-//         const response = await turbo.uploadFile({
-//             // @ts-ignore
-//             fileStreamFactory,
-//             fileSizeFactory,
-//             dataItemOpts: {
-//                 tags: [
-//                     { name: "Content-Type", value: contentType }
-//                 ]
-//             }
-//         });
-
-//         console.log("File uploaded successfully:", response);
-
-//         // Return the transaction ID
-//         return response.id;
-//     } catch (error) {
-//         console.error("Error uploading file:", error);
-//         throw error;
-//     }
-// }
-
 export async function getJoinedServers(address: string): Promise<string[]> {
+    console.log(`[getJoinedServers] Fetching joined servers for address: ${address}`);
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
         body: {
             id: address
         },
     })
+    console.log(`[getJoinedServers] Response:`, res);
 
     if (res.status == 200) {
-        return JSON.parse((res.json as any).profile.servers_joined || "[]");
+        const servers = JSON.parse((res.json as any).profile.servers_joined || "[]");
+        console.log(`[getJoinedServers] Parsed servers:`, servers);
+        return servers;
     } else {
         throw new Error(res.error);
     }
 }
 
 export async function getServerInfo(id: string) {
-    const res = await aofetch(`${id}/`)
+    console.log(`[getServerInfo] Fetching server info for: ${id}`);
+    const res = await aofetch(`${id}/`);
+    console.log(`[getServerInfo] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -232,6 +223,7 @@ export async function getServerInfo(id: string) {
 }
 
 export async function updateServer(id: string, name: string, icon: string) {
+    console.log(`[updateServer] Updating server: ${id}`, { name, icon });
     const res = await aofetch(`${id}/update-server`, {
         method: "POST",
         body: {
@@ -239,6 +231,7 @@ export async function updateServer(id: string, name: string, icon: string) {
             icon
         }
     });
+    console.log(`[updateServer] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -247,13 +240,25 @@ export async function updateServer(id: string, name: string, icon: string) {
 }
 
 export async function createCategory(serverId: string, name: string, order?: number) {
+    console.log(`[createCategory] Creating category in server: ${serverId}`, { name, order });
+    const body: any = {
+        name: name
+    };
+
+    // Use order_id instead of order to match the database schema
+    if (order !== undefined) {
+        body.order_id = order;
+    } else {
+        body.order_id = 1; // Default value
+    }
+
+    console.log(`[createCategory] Sending request with body:`, body);
+
     const res = await aofetch(`${serverId}/create-category`, {
         method: "POST",
-        body: {
-            name,
-            order
-        }
+        body: body
     });
+    console.log(`[createCategory] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -262,14 +267,24 @@ export async function createCategory(serverId: string, name: string, order?: num
 }
 
 export async function updateCategory(serverId: string, id: number, name: string, order?: number) {
+    console.log(`[updateCategory] Updating category in server: ${serverId}`, { id, name, order });
+    const body: any = {
+        id: id,
+        name: name
+    };
+
+    // Use order_id instead of order to match the database schema
+    if (order !== undefined) {
+        body.order_id = order;
+    }
+
+    console.log(`[updateCategory] Sending request with body:`, body);
+
     const res = await aofetch(`${serverId}/update-category`, {
         method: "POST",
-        body: {
-            id,
-            name,
-            order
-        }
+        body: body
     });
+    console.log(`[updateCategory] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -278,12 +293,14 @@ export async function updateCategory(serverId: string, id: number, name: string,
 }
 
 export async function deleteCategory(serverId: string, id: number) {
+    console.log(`[deleteCategory] Deleting category in server: ${serverId}`, { id });
     const res = await aofetch(`${serverId}/delete-category`, {
         method: "POST",
         body: {
             id
         }
     });
+    console.log(`[deleteCategory] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -292,14 +309,29 @@ export async function deleteCategory(serverId: string, id: number) {
 }
 
 export async function createChannel(serverId: string, name: string, categoryId?: number, order?: number) {
+    console.log(`[createChannel] Creating channel in server: ${serverId}`, { name, categoryId, order });
+    const body: any = {
+        name: name
+    };
+
+    if (categoryId !== undefined) {
+        body.category_id = categoryId;
+    }
+
+    // Use order_id instead of order to match the database schema
+    if (order !== undefined) {
+        body.order_id = order;
+    } else {
+        body.order_id = 1; // Default value
+    }
+
+    console.log(`[createChannel] Sending request with body:`, body);
+
     const res = await aofetch(`${serverId}/create-channel`, {
         method: "POST",
-        body: {
-            name,
-            category_id: categoryId,
-            order
-        }
+        body: body
     });
+    console.log(`[createChannel] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -308,15 +340,31 @@ export async function createChannel(serverId: string, name: string, categoryId?:
 }
 
 export async function updateChannel(serverId: string, id: number, name?: string, categoryId?: number, order?: number) {
+    console.log(`[updateChannel] Updating channel in server: ${serverId}`, { id, name, categoryId, order });
+    const body: any = {
+        id: id
+    };
+
+    if (name !== undefined) {
+        body.name = name;
+    }
+
+    if (categoryId !== undefined) {
+        body.category_id = categoryId;
+    }
+
+    // Use order_id instead of order to match the database schema
+    if (order !== undefined) {
+        body.order_id = order;
+    }
+
+    console.log(`[updateChannel] Sending request with body:`, body);
+
     const res = await aofetch(`${serverId}/update-channel`, {
         method: "POST",
-        body: {
-            id,
-            name,
-            category_id: categoryId,
-            order
-        }
+        body: body
     });
+    console.log(`[updateChannel] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -325,12 +373,14 @@ export async function updateChannel(serverId: string, id: number, name?: string,
 }
 
 export async function deleteChannel(serverId: string, id: number) {
+    console.log(`[deleteChannel] Deleting channel in server: ${serverId}`, { id });
     const res = await aofetch(`${serverId}/delete-channel`, {
         method: "POST",
         body: {
             id
         }
     });
+    console.log(`[deleteChannel] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -339,12 +389,14 @@ export async function deleteChannel(serverId: string, id: number) {
 }
 
 export async function getMessages(serverId: string, channelId: number) {
+    console.log(`[getMessages] Fetching messages for channel: ${channelId} in server: ${serverId}`);
     const res = await aofetch(`${serverId}/get-messages`, {
         method: "GET",
         body: {
             channel_id: channelId
         }
     });
+    console.log(`[getMessages] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -353,6 +405,7 @@ export async function getMessages(serverId: string, channelId: number) {
 }
 
 export async function sendMessage(serverId: string, channelId: number, content: string) {
+    console.log(`[sendMessage] Sending message to channel: ${channelId} in server: ${serverId}`, { content });
     const res = await aofetch(`${serverId}/send-message`, {
         method: "POST",
         body: {
@@ -360,6 +413,7 @@ export async function sendMessage(serverId: string, channelId: number, content: 
             content
         }
     });
+    console.log(`[sendMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -368,6 +422,7 @@ export async function sendMessage(serverId: string, channelId: number, content: 
 }
 
 export async function editMessage(serverId: string, msgId: string, content: string) {
+    console.log(`[editMessage] Editing message: ${msgId} in server: ${serverId}`, { content });
     const res = await aofetch(`${serverId}/edit-message`, {
         method: "POST",
         body: {
@@ -375,6 +430,7 @@ export async function editMessage(serverId: string, msgId: string, content: stri
             content
         }
     });
+    console.log(`[editMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -383,12 +439,14 @@ export async function editMessage(serverId: string, msgId: string, content: stri
 }
 
 export async function deleteMessage(serverId: string, msgId: string) {
+    console.log(`[deleteMessage] Deleting message: ${msgId} in server: ${serverId}`);
     const res = await aofetch(`${serverId}/delete-message`, {
         method: "POST",
         body: {
             msg_id: msgId
         }
     });
+    console.log(`[deleteMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -397,10 +455,12 @@ export async function deleteMessage(serverId: string, msgId: string) {
 }
 
 export async function getProfile(address?: string) {
+    console.log(`[getProfile] Fetching profile for:`, address || "current user");
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
         body: address ? { id: address } : undefined
     });
+    console.log(`[getProfile] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -409,6 +469,7 @@ export async function getProfile(address?: string) {
 }
 
 export async function updateProfile(username?: string, pfp?: string) {
+    console.log(`[updateProfile] Updating profile:`, { username, pfp });
     const res = await aofetch(`${PROFILES}/update-profile`, {
         method: "POST",
         body: {
@@ -416,6 +477,7 @@ export async function updateProfile(username?: string, pfp?: string) {
             pfp
         }
     });
+    console.log(`[updateProfile] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -424,12 +486,14 @@ export async function updateProfile(username?: string, pfp?: string) {
 }
 
 export async function joinServer(serverId: string) {
+    console.log(`[joinServer] Joining server: ${serverId}`);
     const res = await aofetch(`${PROFILES}/join-server`, {
         method: "POST",
         body: {
             server_id: serverId
         }
     });
+    console.log(`[joinServer] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -438,12 +502,14 @@ export async function joinServer(serverId: string) {
 }
 
 export async function leaveServer(serverId: string) {
+    console.log(`[leaveServer] Leaving server: ${serverId}`);
     const res = await aofetch(`${PROFILES}/leave-server`, {
         method: "POST",
         body: {
             server_id: serverId
         }
     });
+    console.log(`[leaveServer] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {

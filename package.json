@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ardrive/turbo-sdk": "^1.20.0",
+    "@ardrive/turbo-sdk": "^1.21.0",
     "@arweave-wallet-kit/core": "^0.1.1",
     "@arweave-wallet-kit/react": "^0.3.2",
     "@arweave-wallet-kit/styles": "^0.1.1",
@@ -27,6 +27,7 @@
     "arweave-wallet-kit": "^1.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^16.5.0",
     "lucide-react": "^0.510.0",
     "next-themes": "^0.4.6",
     "react": "18",
@@ -37,7 +38,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.6",
-    "vite-plugin-node-polyfills": "^0.23.0",
+    "vite-plugin-node-polyfills": "^0.22.0",
     "zustand": "^5.0.4"
   },
   "devDependencies": {

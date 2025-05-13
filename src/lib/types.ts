@@ -18,6 +18,7 @@ export type Server = {
     channels: Channel[]
     name: string
     icon: string
+    owner: string
 }
 
 export interface GlobalState {

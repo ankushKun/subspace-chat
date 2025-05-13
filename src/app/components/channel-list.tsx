@@ -1,7 +1,7 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X } from "lucide-react";
-import type { Server } from "@/lib/types";
-import { useState, useCallback } from "react";
+import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight } from "lucide-react";
+import type { Server, Category, Channel } from "@/lib/types";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -21,6 +21,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
+import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua } from "@/lib/ao";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
+import serverCode from "@/lib/lua/server";
+import { Button } from "@/components/ui/button";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -153,10 +157,14 @@ const FileDropzone = ({
 };
 
 export default function ChannelList() {
-    const { activeServer } = useGlobalState();
+    const { activeServer, setActiveServer, activeServerId } = useGlobalState();
     const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
     const [createChannelOpen, setCreateChannelOpen] = useState(false);
     const [updateServerOpen, setUpdateServerOpen] = useState(false);
+    const [isUpdatingServer, setIsUpdatingServer] = useState(false);
+    const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+    const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+    const activeAddress = useActiveAddress();
 
     // Form states
     const [categoryName, setCategoryName] = useState("");
@@ -164,42 +172,294 @@ export default function ChannelList() {
     const [serverName, setServerName] = useState("");
     const [serverIcon, setServerIcon] = useState<File | null>(null);
 
-    const handleCreateCategory = () => {
+    // Check if current user is server owner
+    const isServerOwner = activeServer?.owner === activeAddress;
+
+    // Initialize server name when dialog opens
+    useEffect(() => {
+        if (updateServerOpen && activeServer) {
+            setServerName(activeServer.name);
+        }
+    }, [updateServerOpen, activeServer]);
+
+    const handleCreateCategory = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
         if (!categoryName.trim()) {
             return toast.error("Please enter a category name");
         }
 
-        // Handle category creation logic here
-        toast.success(`Category "${categoryName}" created`);
-        setCategoryName("");
-        setCreateCategoryOpen(false);
+        setIsCreatingCategory(true);
+
+        try {
+            toast.promise(createCategory(activeServerId, categoryName.trim()), {
+                loading: "Creating category...",
+                success: (result) => {
+                    setCategoryName("");
+                    setCreateCategoryOpen(false);
+                    // Refresh server data would be ideal here
+                    return "Category created successfully";
+                },
+                error: "Failed to create category"
+            });
+        } catch (error) {
+            console.error("Error creating category:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to create category");
+        } finally {
+            setIsCreatingCategory(false);
+        }
     };
 
-    const handleCreateChannel = () => {
+    const handleCreateChannel = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
         if (!channelName.trim()) {
             return toast.error("Please enter a channel name");
         }
 
-        // Handle channel creation logic here
-        toast.success(`Channel "#${channelName}" created`);
-        setChannelName("");
-        setCreateChannelOpen(false);
+        setIsCreatingChannel(true);
+
+        try {
+            toast.promise(createChannel(activeServerId, channelName.trim()), {
+                loading: "Creating channel...",
+                success: (result) => {
+                    setChannelName("");
+                    setCreateChannelOpen(false);
+                    // Refresh server data would be ideal here
+                    return "Channel created successfully";
+                },
+                error: "Failed to create channel"
+            });
+        } catch (error) {
+            console.error("Error creating channel:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to create channel");
+        } finally {
+            setIsCreatingChannel(false);
+        }
     };
 
-    const handleUpdateServer = () => {
+    const handleUpdateServer = async () => {
+        if (!activeServer) {
+            return toast.error("No active server selected");
+        }
+
         if (!serverName.trim()) {
             return toast.error("Please enter a server name");
         }
 
-        // Handle server update logic here
-        toast.success("Server details updated");
-        setServerName("");
-        setServerIcon(null);
-        setUpdateServerOpen(false);
+        if (!activeServerId) {
+            return toast.error("No server ID found");
+        }
+
+        // Validate file size if a new icon is selected
+        if (serverIcon && serverIcon.size > 100 * 1024) {
+            return toast.error("Server icon must be less than 100KB");
+        }
+
+        setIsUpdatingServer(true);
+
+        try {
+            // Start with the current icon ID
+            let iconId = activeServer.icon || "";
+
+            // Upload new icon if selected
+            if (serverIcon) {
+                toast.info("Uploading server icon...");
+                try {
+                    const uploadedIconId = await uploadFileAndGetId(serverIcon);
+                    if (uploadedIconId) {
+                        iconId = uploadedIconId;
+                    } else {
+                        toast.error("Failed to get icon ID after upload");
+                        setIsUpdatingServer(false);
+                        return;
+                    }
+                } catch (error) {
+                    console.error("Error uploading icon:", error);
+                    toast.error("Failed to upload server icon");
+                    setIsUpdatingServer(false);
+                    return;
+                }
+            }
+
+            // Ensure icon is a non-empty string
+            if (!iconId) {
+                iconId = ""; // Provide empty string as default
+            }
+
+            // toast.info("Updating server details...");
+
+            toast.promise(updateServer(activeServerId, serverName, iconId), {
+                loading: "Updating server details... don't close this window",
+                success: (result) => {
+                    if (result) {
+                        setActiveServer({
+                            ...activeServer,
+                            name: serverName,
+                            icon: iconId
+                        });
+                        return "Server details updated successfully";
+                    }
+                },
+                error: "Failed to update server details"
+            });
+
+            setServerName("");
+            setServerIcon(null);
+            setUpdateServerOpen(false);
+        } catch (error) {
+            console.error("Error updating server:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to update server");
+        } finally {
+            setIsUpdatingServer(false);
+        }
     };
 
+    const handleUpdateServerProcessCode = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
+        async function updateServerProcessCode() {
+            await runLua(serverCode, activeServerId, [{ name: "Subspace-Chat-Function", value: "Update-Server-Code" }])
+        }
+
+        // toast that has a button to confirm if user wants to update the server process code
+        toast.custom((t) => (
+            <div className="flex items-center gap-4 bg-accent border border-border backdrop-blur-sm p-4 rounded-lg">
+                <ShieldAlertIcon className="w-5 h-5" />
+                <div className="flex-1">
+                    <p className="font-medium">Update Server Process Code</p>
+                    <p className="text-sm text-muted-foreground">Are you sure you want to proceed? This could break server code</p>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                    <Button size="sm" onClick={() => {
+                        toast.dismiss(t)
+                        toast.promise(updateServerProcessCode(), {
+                            loading: "Updating server process code...",
+                            success: "Server process code updated successfully",
+                            error: "Failed to update server process code"
+                        })
+                    }}>Update</Button>
+                    <Button variant="ghost" size="sm" onClick={() => toast.dismiss(t)}>Cancel</Button>
+                </div>
+            </div>
+        ))
+
+
+    };
+
+    const handleServerDelete = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
+        toast.info("TODO: Delete server")
+
+    }
+
+    // Organize channels by categories
+    const { categories, categorizedChannels, uncategorizedChannels } = useMemo(() => {
+        if (!activeServer) {
+            return { categories: [], categorizedChannels: new Map(), uncategorizedChannels: [] };
+        }
+
+        console.log("Active server data:", activeServer);
+
+        // Sort categories by order_id
+        const sortedCategories = [...activeServer.categories].sort((a, b) => a.order_id - b.order_id);
+
+        // Create a map of category_id to channels
+        const channelsByCategory = new Map<number, Channel[]>();
+
+        // Create a map of category IDs for quick lookup
+        const categoryIds = new Set(sortedCategories.map(cat => cat.id));
+        console.log("Category IDs:", Array.from(categoryIds));
+
+        // Organize all channels - improved categorization
+        for (const channel of activeServer.channels) {
+            // Handle different types of category_id - could be number, string, or null
+            const catId = channel.category_id;
+
+            // Skip undefined/null category_id
+            if (catId === null || catId === undefined) {
+                continue;
+            }
+
+            // Convert to number for consistency (might be stored as string)
+            const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
+
+            // Only add to a category if the category exists
+            if (categoryIds.has(categoryId)) {
+                if (!channelsByCategory.has(categoryId)) {
+                    channelsByCategory.set(categoryId, []);
+                }
+                channelsByCategory.get(categoryId)?.push(channel);
+            }
+        }
+
+        // Sort channels within each category by order_id
+        for (const [categoryId, channels] of channelsByCategory.entries()) {
+            channelsByCategory.set(
+                categoryId,
+                channels.sort((a, b) => a.order_id - b.order_id)
+            );
+        }
+
+        // Get channels without a category and sort them
+        const uncategorized = activeServer.channels
+            .filter(channel => {
+                // Consider a channel uncategorized if:
+                // 1. It has no category_id or
+                // 2. Its category_id doesn't match any existing category
+                const catId = channel.category_id;
+                if (catId === null || catId === undefined) return true;
+
+                const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
+                return !categoryIds.has(categoryId);
+            })
+            .sort((a, b) => a.order_id - b.order_id);
+
+        console.log("Uncategorized channels:", uncategorized);
+        console.log("Categories:", sortedCategories);
+        console.log("Categorized channels map:", Object.fromEntries([...channelsByCategory.entries()].map(([k, v]) => [k, v])));
+
+        return {
+            categories: sortedCategories,
+            categorizedChannels: channelsByCategory,
+            uncategorizedChannels: uncategorized
+        };
+    }, [activeServer]);
+
+    // Track which categories are expanded (default all expanded)
+    const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+
+    // Toggle category expansion
+    const toggleCategory = (categoryId: number) => {
+        setExpandedCategories(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(categoryId)) {
+                newSet.delete(categoryId);
+            } else {
+                newSet.add(categoryId);
+            }
+            return newSet;
+        });
+    };
+
+    // Ensure all categories are expanded by default when activeServer changes
+    useEffect(() => {
+        if (activeServer?.categories) {
+            setExpandedCategories(new Set(activeServer.categories.map(cat => cat.id)));
+        }
+    }, [activeServer?.categories]);
+
     return (
-        <div className="relative w-full">
+        <div className="relative w-full flex flex-col h-full">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild className="w-full">
                     <div className='w-full select-none border-b border-border/70 hover:bg-accent/40 rounded-t-lg p-3 px-4 flex items-center justify-between cursor-pointer'>
@@ -212,38 +472,155 @@ export default function ChannelList() {
                     className="w-full min-w-[333px] max-w-[333px] p-2 space-y-1 bg-background/95 backdrop-blur-sm"
                     sideOffset={4}
                 >
-                    <DropdownMenuItem
-                        onClick={() => setCreateCategoryOpen(true)}
-                        className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
-                    >
-                        <FolderPlus className="h-5 w-5" />
-                        <div>
-                            <p className="font-medium">Create Category</p>
-                            <p className="text-xs text-muted-foreground">Add a new category</p>
+                    {isServerOwner && (
+                        <>
+                            <DropdownMenuItem
+                                onClick={() => setCreateCategoryOpen(true)}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <FolderPlus className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Create Category</p>
+                                    <p className="text-xs text-muted-foreground">Add a new category</p>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => setCreateChannelOpen(true)}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <MessageSquarePlus className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Create Channel</p>
+                                    <p className="text-xs text-muted-foreground">Add a new channel</p>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => setUpdateServerOpen(true)}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <Settings className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Update Server Details</p>
+                                    <p className="text-xs text-muted-foreground">Edit name and icon</p>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={handleUpdateServerProcessCode}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <CloudAlertIcon className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Update Server Process Code</p>
+                                    <p className="text-xs text-muted-foreground">Update server code to latest version</p>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={handleServerDelete}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <TrashIcon className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Delete Server</p>
+                                    <p className="text-xs text-muted-foreground">Delete this server</p>
+                                </div>
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                    {!isServerOwner && (
+                        <div className="px-4 py-3 text-sm text-muted-foreground">
+                            You need to be the server owner to manage this server.
                         </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => setCreateChannelOpen(true)}
-                        className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
-                    >
-                        <MessageSquarePlus className="h-5 w-5" />
-                        <div>
-                            <p className="font-medium">Create Channel</p>
-                            <p className="text-xs text-muted-foreground">Add a new channel</p>
-                        </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => setUpdateServerOpen(true)}
-                        className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
-                    >
-                        <Settings className="h-5 w-5" />
-                        <div>
-                            <p className="font-medium">Update Server Details</p>
-                            <p className="text-xs text-muted-foreground">Edit name and icon</p>
-                        </div>
-                    </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Channel List Content */}
+            <div className="flex-1 overflow-y-auto py-2">
+                {!activeServer ? (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {/* Debug Info */}
+                        {process.env.NODE_ENV === 'development' && (
+                            <div className="p-2 text-xs border border-yellow-500 rounded mb-2 bg-yellow-500/10">
+                                <details>
+                                    <summary className="cursor-pointer font-mono">Debug Info</summary>
+                                    <pre className="mt-2 overflow-auto max-h-[200px]">
+                                        {JSON.stringify({
+                                            channels: activeServer.channels.length,
+                                            categories: categories.length,
+                                            uncategorized: uncategorizedChannels.length,
+                                            categorized: Array.from(categorizedChannels.keys())
+                                        }, null, 2)}
+                                    </pre>
+                                </details>
+                            </div>
+                        )}
+
+                        {/* Uncategorized Channels - Now displayed at the top */}
+                        {uncategorizedChannels.length > 0 && (
+                            <div className="space-y-1 px-2 mb-4">
+                                {uncategorizedChannels.map(channel => (
+                                    <ChannelItem key={channel.id} channel={channel} />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* All channels if categorization seems to have failed */}
+                        {activeServer.channels.length > 0 &&
+                            uncategorizedChannels.length === 0 &&
+                            categorizedChannels.size === 0 && (
+                                <div className="space-y-1 px-2 mb-4 border-l-2 border-blue-500/30 pl-2">
+                                    <div className="text-xs uppercase font-semibold text-muted-foreground mb-1">
+                                        All Channels
+                                    </div>
+                                    {activeServer.channels.map(channel => (
+                                        <ChannelItem key={channel.id} channel={channel} />
+                                    ))}
+                                </div>
+                            )}
+
+                        {/* Categories and their channels */}
+                        {categories.map(category => (
+                            <div key={category.id} className="space-y-1">
+                                <CategoryHeader
+                                    category={category}
+                                    isExpanded={expandedCategories.has(category.id)}
+                                    onToggle={() => toggleCategory(category.id)}
+                                />
+
+                                {expandedCategories.has(category.id) && (
+                                    <div className="space-y-1 px-2">
+                                        {categorizedChannels.has(category.id) && categorizedChannels.get(category.id)?.length ? (
+                                            categorizedChannels.get(category.id)?.map(channel => (
+                                                <ChannelItem key={channel.id} channel={channel} />
+                                            ))
+                                        ) : (
+                                            <div className="text-xs text-muted-foreground py-1 px-2">
+                                                No channels in this category
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+
+                        {/* Empty state when no channels exist */}
+                        {activeServer.channels.length === 0 && (
+                            <div className="px-4 py-8 text-center text-muted-foreground">
+                                <p className="text-sm">No channels available.</p>
+                                {isServerOwner && (
+                                    <p className="text-xs mt-1">
+                                        Create a channel to get started.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Create Category Dialog */}
             <AlertDialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
@@ -270,8 +647,21 @@ export default function ChannelList() {
                     </div>
 
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleCreateCategory}>Create</AlertDialogAction>
+                        <AlertDialogCancel disabled={isCreatingCategory}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleCreateCategory}
+                            disabled={isCreatingCategory}
+                            className="relative"
+                        >
+                            {isCreatingCategory ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create"
+                            )}
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -301,8 +691,21 @@ export default function ChannelList() {
                     </div>
 
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleCreateChannel}>Create</AlertDialogAction>
+                        <AlertDialogCancel disabled={isCreatingChannel}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleCreateChannel}
+                            disabled={isCreatingChannel}
+                            className="relative"
+                        >
+                            {isCreatingChannel ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create"
+                            )}
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -338,11 +741,61 @@ export default function ChannelList() {
                     </div>
 
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleUpdateServer}>Update</AlertDialogAction>
+                        <AlertDialogCancel disabled={isUpdatingServer}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleUpdateServer}
+                            disabled={isUpdatingServer}
+                            className="relative"
+                        >
+                            {isUpdatingServer ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Updating...
+                                </>
+                            ) : (
+                                "Update"
+                            )}
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+        </div>
+    );
+}
+
+// Category Header Component
+function CategoryHeader({
+    category,
+    isExpanded,
+    onToggle
+}: {
+    category: Category;
+    isExpanded: boolean;
+    onToggle: () => void;
+}) {
+    return (
+        <button
+            onClick={onToggle}
+            className="w-full flex items-center justify-between px-2 py-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors"
+        >
+            <div className="flex items-center gap-1">
+                <ChevronRight
+                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                />
+                <span>{category.name}</span>
+            </div>
+        </button>
+    );
+}
+
+// Channel Item Component
+function ChannelItem({ channel }: { channel: Channel }) {
+    return (
+        <div
+            className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-accent/40 cursor-pointer group text-muted-foreground hover:text-foreground transition-colors"
+        >
+            <HashIcon className="h-4 w-4" />
+            <span className="text-sm font-medium truncate">{channel.name}</span>
         </div>
     );
 }

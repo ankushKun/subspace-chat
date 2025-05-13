@@ -6,6 +6,7 @@ import Hero from '@/app/components/hero';
 import Chat from '@/app/components/chat';
 import ServerList from '@/app/components/server-list';
 import { useEffect } from 'react';
+import { uploadFileAndGetId } from '@/lib/ao';
 
 export default function App() {
     const { serverId, channelId, userId } = useParams();
@@ -20,6 +21,9 @@ export default function App() {
         // Set server ID from URL params
         setActiveServerId(serverId ? serverId : null);
     }, [serverId, channelId, userId, setActiveServerId]);
+
+    useEffect(() => {
+    }, []);
 
     return (
         <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>

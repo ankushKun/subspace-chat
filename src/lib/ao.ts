@@ -5,6 +5,7 @@ import type { Tag } from "@/lib/types"
 import aoxpressSource from "@/lib/lua/aoxpress"
 import serverSource from "@/lib/lua/server"
 // import { TurboFactory } from "@ardrive/turbo-sdk/web";
+import Arweave from "arweave";
 
 const SCHEDULER = "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA"
 const MODULE = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw"
@@ -24,27 +25,24 @@ const ao = connect({
     CU_URL: `https://cu.ardrive.io`,
 })
 
+export function to(file: File): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            resolve(new Uint8Array(reader.result as ArrayBuffer));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+    });
+}
+
 export async function createServer(name: string, icon: File) {
     console.log("Spawning server...");
 
     // Read the file as an ArrayBuffer properly
-    const iconArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            if (reader.result instanceof ArrayBuffer) {
-                resolve(reader.result);
-            } else {
-                reject(new Error("Failed to read file as ArrayBuffer"));
-            }
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsArrayBuffer(icon);
-    });
+    const iconUint8Array = await to(icon);
 
-    // Convert ArrayBuffer to Uint8Array which is more widely compatible
-    const iconUint8Array = new Uint8Array(iconArrayBuffer);
-
-    console.log("Icon array buffer created", iconArrayBuffer.byteLength, icon.type);
+    console.log("Icon array buffer created", iconUint8Array.byteLength, icon.type);
 
     const serverId = await ao.spawn({
         scheduler: SCHEDULER,
@@ -147,6 +145,31 @@ export function parseOutput(msg: MessageResult) {
     return msg;
 }
 
+export async function uploadFileAndGetId(file: File): Promise<string> {
+    // without turbo
+    const ar = Arweave.init({
+        host: "arweave.net",
+        port: 443,
+        protocol: "https",
+    });
+
+    const tx = await ar.createTransaction({ data: await to(file) }, "use_wallet");
+
+    tx.addTag("Content-Type", file.type);
+    tx.addTag("App-Name", "Subspace-Chat");
+    // @ts-ignore
+    tx.addTag("App-Version", window.APP_VERSION);
+
+    await ar.transactions.sign(tx, "use_wallet");
+    const res = await ar.transactions.post(tx);
+
+    if (res.status == 200) {
+        return tx.id;
+    } else {
+        throw new Error(res.statusText);
+    }
+}
+
 // export async function uploadFileAndGetId(file: File): Promise<string> {
 //     try {
 //         // Create an unauthenticated client (for browser environments)
@@ -207,3 +230,224 @@ export async function getServerInfo(id: string) {
         throw new Error(res.error);
     }
 }
+
+export async function updateServer(id: string, name: string, icon: string) {
+    const res = await aofetch(`${id}/update-server`, {
+        method: "POST",
+        body: {
+            name,
+            icon
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function createCategory(serverId: string, name: string, order?: number) {
+    const res = await aofetch(`${serverId}/create-category`, {
+        method: "POST",
+        body: {
+            name,
+            order
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function updateCategory(serverId: string, id: number, name: string, order?: number) {
+    const res = await aofetch(`${serverId}/update-category`, {
+        method: "POST",
+        body: {
+            id,
+            name,
+            order
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function deleteCategory(serverId: string, id: number) {
+    const res = await aofetch(`${serverId}/delete-category`, {
+        method: "POST",
+        body: {
+            id
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function createChannel(serverId: string, name: string, categoryId?: number, order?: number) {
+    const res = await aofetch(`${serverId}/create-channel`, {
+        method: "POST",
+        body: {
+            name,
+            category_id: categoryId,
+            order
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function updateChannel(serverId: string, id: number, name?: string, categoryId?: number, order?: number) {
+    const res = await aofetch(`${serverId}/update-channel`, {
+        method: "POST",
+        body: {
+            id,
+            name,
+            category_id: categoryId,
+            order
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function deleteChannel(serverId: string, id: number) {
+    const res = await aofetch(`${serverId}/delete-channel`, {
+        method: "POST",
+        body: {
+            id
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function getMessages(serverId: string, channelId: number) {
+    const res = await aofetch(`${serverId}/get-messages`, {
+        method: "GET",
+        body: {
+            channel_id: channelId
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function sendMessage(serverId: string, channelId: number, content: string) {
+    const res = await aofetch(`${serverId}/send-message`, {
+        method: "POST",
+        body: {
+            channel_id: channelId,
+            content
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function editMessage(serverId: string, msgId: string, content: string) {
+    const res = await aofetch(`${serverId}/edit-message`, {
+        method: "POST",
+        body: {
+            msg_id: msgId,
+            content
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function deleteMessage(serverId: string, msgId: string) {
+    const res = await aofetch(`${serverId}/delete-message`, {
+        method: "POST",
+        body: {
+            msg_id: msgId
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function getProfile(address?: string) {
+    const res = await aofetch(`${PROFILES}/profile`, {
+        method: "GET",
+        body: address ? { id: address } : undefined
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function updateProfile(username?: string, pfp?: string) {
+    const res = await aofetch(`${PROFILES}/update-profile`, {
+        method: "POST",
+        body: {
+            username,
+            pfp
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function joinServer(serverId: string) {
+    const res = await aofetch(`${PROFILES}/join-server`, {
+        method: "POST",
+        body: {
+            server_id: serverId
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
+export async function leaveServer(serverId: string) {
+    const res = await aofetch(`${PROFILES}/leave-server`, {
+        method: "POST",
+        body: {
+            server_id: serverId
+        }
+    });
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+

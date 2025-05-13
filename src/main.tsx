@@ -1,12 +1,13 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { ArweaveWalletKit } from "@arweave-wallet-kit/react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
+import { HashRouter, Route, Routes } from "react-router-dom";
+import Landing from '@/landing'
+import App from '@/app'
 
 
 
@@ -31,7 +32,13 @@ createRoot(document.getElementById('root')!).render(
         displayTheme: "dark"
       }}
     >
-      <App />
+      <Toaster />
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/app" element={<App />} />
+        </Routes>
+      </HashRouter>
     </ArweaveWalletKit>
   </ThemeProvider>
 )

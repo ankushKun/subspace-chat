@@ -8,6 +8,7 @@ import { FaGoogle, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
 import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
+import { useNavigate } from "react-router-dom"
 
 
 enum LoginStep {
@@ -30,11 +31,12 @@ function BackgroundStars({ className }: { className?: string }) {
   )
 }
 
-function App() {
+export default function Landing() {
   const [loginStep, setLoginStep] = useState<LoginStep>(LoginStep.Landing);
   const { connect, connected, disconnect } = useConnection();
   const { setOpen } = useProfileModal();
   const address = useActiveAddress();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (connected) {
@@ -43,8 +45,10 @@ function App() {
   }, [connected, address]);
 
   async function start() {
-    if (connected)
+    if (connected) {
       console.log("connected", address);
+      navigate("/app");
+    }
     else
       setLoginStep(LoginStep.Login);
   }
@@ -121,5 +125,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

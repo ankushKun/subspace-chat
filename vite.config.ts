@@ -18,5 +18,6 @@ export default defineConfig({
   // define global env variables
   define: {
     "APP_VERSION": JSON.stringify(packageJson.version),
+    process: { env: {} }
   },
 })

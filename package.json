@@ -10,10 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ardrive/turbo-sdk": "^1.25.0",
     "@arweave-wallet-kit/core": "^0.1.1",
     "@arweave-wallet-kit/react": "^0.3.2",
     "@arweave-wallet-kit/styles": "^0.1.1",
     "@arweave-wallet-kit/wander-strategy": "^0.1.2",
+    "@permaweb/aoconnect": "^0.0.84",
     "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-dropdown-menu": "^2.1.14",
     "@radix-ui/react-progress": "^1.1.6",

@@ -4,6 +4,7 @@ import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/re
 import type { Tag } from "@/lib/types"
 import aoxpressSource from "@/lib/lua/aoxpress"
 import serverSource from "@/lib/lua/server"
+// import { TurboFactory } from "@ardrive/turbo-sdk/web";
 
 const SCHEDULER = "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA"
 const MODULE = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw"
@@ -145,6 +146,43 @@ export function parseOutput(msg: MessageResult) {
     }
     return msg;
 }
+
+// export async function uploadFileAndGetId(file: File): Promise<string> {
+//     try {
+//         // Create an unauthenticated client (for browser environments)
+//         // In real implementation, you'd use an authenticated client with your wallet
+//         const turbo = TurboFactory.authenticated({ token: 'arweave' });
+
+//         // Create a stream factory from the File object
+//         const fileStreamFactory = () => file.stream();
+
+//         // Create a size factory that returns the file size
+//         const fileSizeFactory = () => file.size;
+
+//         // Determine the Content-Type based on the file's type
+//         const contentType = file.type || 'application/octet-stream';
+
+//         // Upload the file with proper Content-Type tag
+//         const response = await turbo.uploadFile({
+//             // @ts-ignore
+//             fileStreamFactory,
+//             fileSizeFactory,
+//             dataItemOpts: {
+//                 tags: [
+//                     { name: "Content-Type", value: contentType }
+//                 ]
+//             }
+//         });
+
+//         console.log("File uploaded successfully:", response);
+
+//         // Return the transaction ID
+//         return response.id;
+//     } catch (error) {
+//         console.error("Error uploading file:", error);
+//         throw error;
+//     }
+// }
 
 export async function getJoinedServers(address: string): Promise<string[]> {
     const res = await aofetch(`${PROFILES}/profile`, {

@@ -1,14 +1,15 @@
-import { createRoot } from 'react-dom/client'
 import './index.css'
+import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { ArweaveWalletKit } from "@arweave-wallet-kit/react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
 import Settings from '@/settings'
+import { User } from 'lucide-react'
 
 
 
@@ -19,7 +20,8 @@ createRoot(document.getElementById('root')!).render(
       config={{
         appInfo: {
           name: "Subspace Chat",
-          logo: ""
+          // logo: "https://arweave.net/L9FExC-Wzzvmu201-he_UTH_HymCXGEemlKIJoa1_9k"
+          logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
         },
         permissions: [
           "ACCESS_ADDRESS",
@@ -38,9 +40,11 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<App />} />
+          <Route path="/user/:userId" element={<App />} />
           <Route path="/app/:serverId" element={<App />} />
           <Route path="/app/:serverId/:channelId" element={<App />} />
           <Route path="/app/settings" element={<Settings />} />
+          <Route path='*' element={<Navigate to='/' />} />
         </Routes>
       </HashRouter>
     </ArweaveWalletKit>

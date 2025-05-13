@@ -25,6 +25,7 @@ import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua
 import { useActiveAddress } from "@arweave-wallet-kit/react";
 import serverCode from "@/lib/lua/server";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -362,38 +363,34 @@ export default function ChannelList() {
 
     }
 
-    // Organize channels by categories
+    // Organize channels by categories in a clean, performant way
     const { categories, categorizedChannels, uncategorizedChannels } = useMemo(() => {
         if (!activeServer) {
             return { categories: [], categorizedChannels: new Map(), uncategorizedChannels: [] };
         }
 
-        console.log("Active server data:", activeServer);
-
-        // Sort categories by order_id
+        // 1. Sort categories by their display order
         const sortedCategories = [...activeServer.categories].sort((a, b) => a.order_id - b.order_id);
 
-        // Create a map of category_id to channels
+        // 2. Create a set of valid category IDs for efficient lookups
+        const categoryIds = new Set(sortedCategories.map(cat => cat.id));
+
+        // 3. Initialize the map of categories to their channels
         const channelsByCategory = new Map<number, Channel[]>();
 
-        // Create a map of category IDs for quick lookup
-        const categoryIds = new Set(sortedCategories.map(cat => cat.id));
-        console.log("Category IDs:", Array.from(categoryIds));
-
-        // Organize all channels - improved categorization
+        // 4. First pass: categorize channels into their respective categories
         for (const channel of activeServer.channels) {
-            // Handle different types of category_id - could be number, string, or null
             const catId = channel.category_id;
 
-            // Skip undefined/null category_id
+            // Skip channels without category assignments
             if (catId === null || catId === undefined) {
                 continue;
             }
 
-            // Convert to number for consistency (might be stored as string)
+            // Ensure consistent ID type (handle string vs number)
             const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
 
-            // Only add to a category if the category exists
+            // Only categorize if the category actually exists
             if (categoryIds.has(categoryId)) {
                 if (!channelsByCategory.has(categoryId)) {
                     channelsByCategory.set(categoryId, []);
@@ -402,7 +399,7 @@ export default function ChannelList() {
             }
         }
 
-        // Sort channels within each category by order_id
+        // 5. Sort channels within each category by their display order
         for (const [categoryId, channels] of channelsByCategory.entries()) {
             channelsByCategory.set(
                 categoryId,
@@ -410,23 +407,18 @@ export default function ChannelList() {
             );
         }
 
-        // Get channels without a category and sort them
+        // 6. Identify channels that don't belong to a valid category
         const uncategorized = activeServer.channels
             .filter(channel => {
-                // Consider a channel uncategorized if:
-                // 1. It has no category_id or
-                // 2. Its category_id doesn't match any existing category
                 const catId = channel.category_id;
+
+                // Channel is uncategorized if it has no category or its category doesn't exist
                 if (catId === null || catId === undefined) return true;
 
                 const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
                 return !categoryIds.has(categoryId);
             })
             .sort((a, b) => a.order_id - b.order_id);
-
-        console.log("Uncategorized channels:", uncategorized);
-        console.log("Categories:", sortedCategories);
-        console.log("Categorized channels map:", Object.fromEntries([...channelsByCategory.entries()].map(([k, v]) => [k, v])));
 
         return {
             categories: sortedCategories,
@@ -438,7 +430,7 @@ export default function ChannelList() {
     // Track which categories are expanded (default all expanded)
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
 
-    // Toggle category expansion
+    // Toggle category expansion when clicked
     const toggleCategory = (categoryId: number) => {
         setExpandedCategories(prev => {
             const newSet = new Set(prev);
@@ -451,7 +443,7 @@ export default function ChannelList() {
         });
     };
 
-    // Ensure all categories are expanded by default when activeServer changes
+    // Ensure all categories are expanded by default when server changes
     useEffect(() => {
         if (activeServer?.categories) {
             setExpandedCategories(new Set(activeServer.categories.map(cat => cat.id)));
@@ -542,7 +534,7 @@ export default function ChannelList() {
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {/* Debug Info */}
+                        {/* Development-only debug info */}
                         {process.env.NODE_ENV === 'development' && (
                             <div className="p-2 text-xs border border-yellow-500 rounded mb-2 bg-yellow-500/10">
                                 <details>
@@ -559,7 +551,7 @@ export default function ChannelList() {
                             </div>
                         )}
 
-                        {/* Uncategorized Channels - Now displayed at the top */}
+                        {/* Uncategorized Channels Section */}
                         {uncategorizedChannels.length > 0 && (
                             <div className="space-y-1 px-2 mb-4">
                                 {uncategorizedChannels.map(channel => (
@@ -568,7 +560,7 @@ export default function ChannelList() {
                             </div>
                         )}
 
-                        {/* All channels if categorization seems to have failed */}
+                        {/* Fallback: Display all channels if categorization failed */}
                         {activeServer.channels.length > 0 &&
                             uncategorizedChannels.length === 0 &&
                             categorizedChannels.size === 0 && (
@@ -790,9 +782,12 @@ function CategoryHeader({
 
 // Channel Item Component
 function ChannelItem({ channel }: { channel: Channel }) {
+    const navigate = useNavigate();
+    const { activeServerId } = useGlobalState();
     return (
         <div
             className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-accent/40 cursor-pointer group text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => navigate(`/app/${activeServerId}/${channel.id}`)}
         >
             <HashIcon className="h-4 w-4" />
             <span className="text-sm font-medium truncate">{channel.name}</span>

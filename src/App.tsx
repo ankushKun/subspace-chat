@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { FaGoogle, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
-import { toast } from "sonner";
+import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
+
 
 enum LoginStep {
   Landing = "landing",
@@ -31,9 +32,28 @@ function BackgroundStars({ className }: { className?: string }) {
 
 function App() {
   const [loginStep, setLoginStep] = useState<LoginStep>(LoginStep.Landing);
+  const { connect, connected, disconnect } = useConnection();
+  const { setOpen } = useProfileModal();
+  const address = useActiveAddress();
 
-  function loginWithArweave() {
+  useEffect(() => {
+    if (connected) {
+      console.log("connected", address);
+    }
+  }, [connected, address]);
 
+  async function start() {
+    if (connected)
+      console.log("connected", address);
+    else
+      setLoginStep(LoginStep.Login);
+  }
+
+  async function loginWithArweave() {
+    if (connected)
+      setOpen(true);
+    else
+      await connect();
   }
 
   return (
@@ -48,7 +68,7 @@ function App() {
         <p className="text-foreground/70 text-lg mb-12 tracking-wide text-center">Your intergalactic communications system</p>
         {loginStep === LoginStep.Landing && (
           <Button variant="outline" className="text-lg p-6"
-            onClick={() => setLoginStep(LoginStep.Login)}>
+            onClick={start}>
             PRESS START
           </Button>
         )}

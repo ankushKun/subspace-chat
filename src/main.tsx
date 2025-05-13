@@ -8,6 +8,7 @@ import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
+import Settings from '@/settings'
 
 
 
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<App />} />
+          <Route path="/app/settings" element={<Settings />} />
         </Routes>
       </HashRouter>
     </ArweaveWalletKit>

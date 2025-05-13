@@ -57,7 +57,7 @@ export default function Landing() {
     if (connected)
       setOpen(true);
     else
-      await connect();
+      connect().then(() => navigate("/app"));
   }
 
   return (

@@ -27,6 +27,7 @@ import serverCode from "@/lib/lua/server";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";
+import { useMobile } from "@/hooks";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -167,7 +168,7 @@ export default function ChannelList() {
     const [isCreatingCategory, setIsCreatingCategory] = useState(false);
     const [isCreatingChannel, setIsCreatingChannel] = useState(false);
     const activeAddress = useActiveAddress();
-
+    const isMobile = useMobile();
     // Form states
     const [categoryName, setCategoryName] = useState("");
     const [channelName, setChannelName] = useState("");
@@ -465,7 +466,8 @@ export default function ChannelList() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                     align="start"
-                    className="w-full min-w-[333px] max-w-[333px] p-2 space-y-1 bg-background/95 backdrop-blur-sm"
+                    data-mobile={isMobile}
+                    className="p-2 data-[mobile=true]:!w-[calc(100vw-88px)] data-[mobile=false]:!min-w-[333px]  space-y-1 bg-background/95 backdrop-blur-sm"
                     sideOffset={4}
                 >
                     {/* Copy Invite available to all users */}

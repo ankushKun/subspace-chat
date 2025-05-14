@@ -95,6 +95,9 @@ export interface GlobalState {
     invalidServerIds: Set<string>
     markServerAsInvalid: (serverId: string) => void
     isServerValid: (serverId: string) => boolean
+
+    showUsers: boolean
+    setShowUsers: (show: boolean) => void
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -315,7 +318,9 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 refreshingServers: newRefreshing
             });
         }
-    }
+    },
+    showUsers: false,
+    setShowUsers: (show: boolean) => set({ showUsers: show })
 }))
 
 // Hook to synchronize server ID with server data

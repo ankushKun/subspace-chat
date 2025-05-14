@@ -1,10 +1,13 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { HashIcon, Loader2, Send } from "lucide-react";
+import { ArrowLeft, HashIcon, Loader2, Send, Users } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
 import { getMessages, sendMessage } from "@/lib/ao";
 import { toast } from "sonner";
+import { useMobile } from "@/hooks";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 // Message type from server
 interface Message {
@@ -29,8 +32,12 @@ export default function Chat() {
         activeChannelId,
         activeServerId,
         getChannelMessages,
-        cacheChannelMessages
+        cacheChannelMessages,
+        showUsers,
+        setShowUsers
     } = useGlobalState();
+    const isMobile = useMobile();
+    const navigate = useNavigate();
     const [messages, setMessages] = useState<Message[]>([]);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [messageInput, setMessageInput] = useState("");
@@ -270,7 +277,7 @@ export default function Chat() {
     if (!activeChannel) {
         return (
             <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground">
-                <div className="text-lg">Select a channel to start chatting</div>
+                <div className="text-lg text-center">Select a channel to start chatting</div>
             </div>
         );
     }
@@ -279,6 +286,9 @@ export default function Chat() {
         <div className="h-full w-full flex flex-col">
             {/* Channel Header */}
             <div className="flex items-center gap-2 p-3 border-b border-border/30 h-14">
+                {isMobile && <Button variant="ghost" size="icon" className="!p-0 -ml-1" onClick={() => navigate(-1)}>
+                    <ArrowLeft size={20} className="!h-5 !w-5 text-muted-foreground" />
+                </Button>}
                 <HashIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="font-medium">{activeChannel?.name}</span>
                 {isLoadingMessages && (
@@ -289,6 +299,13 @@ export default function Chat() {
                         </div>
                     </div>
                 )}
+                <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}
+                    className="!p-0 ml-auto data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                    onClick={() => {
+                        setShowUsers(!showUsers);
+                    }}>
+                    <Users size={20} className="!h-5 !w-5" />
+                </Button>
             </div>
 
             {/* Chat Content Area */}

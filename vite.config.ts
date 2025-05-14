@@ -19,15 +19,40 @@ try {
 export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
+    strategies: 'injectManifest',
+    srcDir: 'public',
+    filename: 'service-worker.js',
+    injectRegister: 'auto',
+    devOptions: {
+      enabled: true
+    },
     workbox: {
-      globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+      globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico,json,woff,woff2,ttf,eot}'],
       maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+      runtimeCaching: [
+        {
+          urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'images-cache',
+            expiration: {
+              maxEntries: 50,
+              maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+            }
+          }
+        }
+      ]
     },
     manifest: {
       name: "Subspace Chat",
       short_name: "Subspace",
       description: "Intergalactic communication app",
       theme_color: "#000000",
+      background_color: "#000000",
+      display: "standalone",
+      orientation: "landscape",
+      scope: "./",
+      start_url: "./index.html",
       icons: [
         {
           src: 's.png',
@@ -37,9 +62,19 @@ export default defineConfig({
         {
           src: 's.png',
           sizes: '512x512',
-          type: 'image/png'
+          type: 'image/png',
+          purpose: 'any maskable'
         }
       ],
+      categories: ["social", "communication"],
+      shortcuts: [
+        {
+          name: "Settings",
+          short_name: "Settings",
+          description: "Subspace settings",
+          url: "/app/settings"
+        }
+      ]
     }
   })],
   base: "./",

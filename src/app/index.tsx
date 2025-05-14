@@ -9,16 +9,20 @@ import { useEffect } from 'react';
 import { uploadFileAndGetId } from '@/lib/ao';
 import Profile from './components/profile';
 import { useConnection } from '@arweave-wallet-kit/react';
+import { useMobile } from '@/hooks';
+import UsersList from './components/users-list';
 
 export default function App() {
     const { connected } = useConnection();
+    const isMobile = useMobile();
     const navigate = useNavigate();
     const { serverId, channelId, userId } = useParams();
     const {
         setActiveServerId,
         activeServerId,
         isLoadingServer,
-        setActiveChannelId
+        setActiveChannelId,
+        showUsers
     } = useGlobalState();
 
     useEffect(() => {
@@ -52,6 +56,25 @@ export default function App() {
         }
     }, [serverId, channelId, userId, setActiveServerId, setActiveChannelId]);
 
+    if (isMobile) {
+        return <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>
+            {!channelId ? <>
+                <div className='w-16 bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
+                    <ServerList />
+                </div>
+                {/* channels / dm list */}
+                <div className='w-full bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
+                    {activeServerId === null ? <DmList /> : <ChannelList />}
+                    <Profile />
+                </div>
+            </> : <>
+                <div className='w-full bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
+                    {showUsers ? <UsersList /> : <Chat />}
+                </div>
+            </>}
+        </div>;
+    }
+
     return (
         <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>
             <div className='w-16 bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
@@ -66,8 +89,8 @@ export default function App() {
             <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
                 {activeServerId === null ? <Hero /> : <Chat />}
             </div>
-            {activeServerId !== null && <div className='w-80 bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
-                <div>users</div>
+            {activeServerId !== null && showUsers && <div className='w-80 bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
+                <UsersList />
             </div>}
         </div>
     )

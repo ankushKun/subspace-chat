@@ -16,6 +16,36 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  <script>
+    // Analytics initialization - just copy this entire script tag to any project
+    (function () {
+      // Configuration
+      const ANALYTICS_CONFIG = {
+        src: 'https://analytics_arlink.ar.io/browser.js',
+        processId: 'TbhrEIRizB0KTEb4BHlCPqnIGbun-gP_xmO90domorE',
+        trackUrlHashes: true,
+        debug: true
+      };
+
+      // Wait for DOM to be ready
+      function init() {
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = ANALYTICS_CONFIG.src;
+        script.setAttribute('data-process-id', ANALYTICS_CONFIG.processId);
+        script.setAttribute('data-track-url-hashes', ANALYTICS_CONFIG.trackUrlHashes);
+        script.setAttribute('data-debug', ANALYTICS_CONFIG.debug);
+        document.body.appendChild(script);
+      }
+
+      // Handle different loading states
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
 </body>
 
 </html>

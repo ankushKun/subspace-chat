@@ -58,7 +58,7 @@ r = db:exec([[
     CREATE TABLE IF NOT EXISTS members (
         id TEXT PRIMARY KEY,
         nickname TEXT
-    );
+    );  
 
     CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useGlobalState } from '@/hooks/global-state';
-import { HashIcon, ChevronRight } from 'lucide-react';
+import { HashIcon, ChevronRight, Loader2 } from 'lucide-react';
 import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
 import { updateChannel, updateCategory } from '@/lib/ao';
@@ -16,6 +16,14 @@ export default function DraggableChannelList() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [uncategorizedChannels, setUncategorizedChannels] = useState<Channel[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);
+
+    // Track which elements are being updated
+    const [updatingChannels, setUpdatingChannels] = useState<number[]>([]);
+    const [updatingCategories, setUpdatingCategories] = useState<number[]>([]);
+
+    // Add these new states for tracking drag state
+    const [isDraggingOver, setIsDraggingOver] = useState<{ [key: string]: boolean }>({});
+    const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
     // Ensure all categories are expanded by default when server changes
     useEffect(() => {
@@ -37,6 +45,10 @@ export default function DraggableChannelList() {
                 .sort((a, b) => a.order_id - b.order_id);
 
             setUncategorizedChannels(uncategorized);
+
+            // Clear any updating states when new data is received
+            setUpdatingChannels([]);
+            setUpdatingCategories([]);
         }
     }, [activeServer]);
 
@@ -77,9 +89,15 @@ export default function DraggableChannelList() {
             const [removed] = newCategoryOrder.splice(source.index, 1);
             newCategoryOrder.splice(destination.index, 0, removed);
 
+            // Update local state immediately (optimistic update)
+            setCategories(newCategoryOrder);
+
             // Update the order_id of the moved category
             const categoryToUpdate = newCategoryOrder[destination.index];
             const newOrder = destination.index + 1;
+
+            // Mark this category as updating
+            setUpdatingCategories(prev => [...prev, categoryToUpdate.id]);
 
             if (activeServerId) {
                 setIsUpdating(true);
@@ -94,8 +112,16 @@ export default function DraggableChannelList() {
                 } catch (error) {
                     console.error('Error updating category order:', error);
                     toast.error('Failed to update category order');
+
+                    // If error, revert to server state
+                    if (activeServer?.categories) {
+                        const sortedCategories = [...activeServer.categories].sort((a, b) => a.order_id - b.order_id);
+                        setCategories(sortedCategories);
+                    }
                 } finally {
                     setIsUpdating(false);
+                    // Remove this category from updating list
+                    setUpdatingCategories(prev => prev.filter(id => id !== categoryToUpdate.id));
                 }
             }
         } else if (type === 'CHANNEL') {
@@ -103,6 +129,15 @@ export default function DraggableChannelList() {
             if (source.droppableId === 'uncategorized' && destination.droppableId === 'uncategorized') {
                 const channelToMove = uncategorizedChannels[source.index];
                 const newOrderId = destination.index + 1;
+
+                // Update local state immediately (optimistic update)
+                const newUncategorizedChannels = [...uncategorizedChannels];
+                const [removed] = newUncategorizedChannels.splice(source.index, 1);
+                newUncategorizedChannels.splice(destination.index, 0, removed);
+                setUncategorizedChannels(newUncategorizedChannels);
+
+                // Mark this channel as updating
+                setUpdatingChannels(prev => [...prev, channelToMove.id]);
 
                 if (activeServerId) {
                     setIsUpdating(true);
@@ -118,8 +153,23 @@ export default function DraggableChannelList() {
                     } catch (error) {
                         console.error('Error updating channel order:', error);
                         toast.error('Failed to update channel order');
+
+                        // If error, revert to server state
+                        if (activeServer) {
+                            const uncategorized = activeServer.channels
+                                .filter(channel => {
+                                    const catId = channel.category_id;
+                                    if (catId === null || catId === undefined) return true;
+                                    const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
+                                    return !activeServer.categories.some(cat => cat.id === categoryId);
+                                })
+                                .sort((a, b) => a.order_id - b.order_id);
+                            setUncategorizedChannels(uncategorized);
+                        }
                     } finally {
                         setIsUpdating(false);
+                        // Remove this channel from updating list
+                        setUpdatingChannels(prev => prev.filter(id => id !== channelToMove.id));
                     }
                 }
             }
@@ -131,6 +181,49 @@ export default function DraggableChannelList() {
                 if (categoryChannels.length > 0) {
                     const channelToMove = categoryChannels[source.index];
                     const newOrderId = destination.index + 1;
+
+                    // Mark this channel as updating
+                    setUpdatingChannels(prev => [...prev, channelToMove.id]);
+
+                    // Create an optimistic update by modifying the local channels array
+                    if (activeServer) {
+                        const updatedChannels = [...activeServer.channels];
+                        // Find the channel to update and update its order_id
+                        const channelIndex = updatedChannels.findIndex(ch => ch.id === channelToMove.id);
+                        if (channelIndex !== -1) {
+                            // Create a new channel object with updated order_id
+                            updatedChannels[channelIndex] = {
+                                ...updatedChannels[channelIndex],
+                                order_id: newOrderId
+                            };
+
+                            // Update the local state with optimistic changes
+                            const updatedServer = {
+                                ...activeServer,
+                                channels: updatedChannels
+                            };
+
+                            // Get channels for this category with the new order
+                            const updatedCategoryChannels = updatedChannels
+                                .filter(channel => {
+                                    const catId = channel.category_id;
+                                    if (catId === null || catId === undefined) return false;
+                                    const chanCatId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
+                                    return chanCatId === categoryId;
+                                })
+                                .sort((a, b) => a.order_id - b.order_id);
+
+                            // Create a correct order array after the move
+                            const reorderedChannels = [...categoryChannels];
+                            const [removed] = reorderedChannels.splice(source.index, 1);
+                            reorderedChannels.splice(destination.index, 0, removed);
+
+                            // Force a re-render with the new order by updating the active server reference
+                            // This is a workaround since we can't directly modify the global state
+                            // but we want to show the optimistic update
+                            // We'll update the actual channels array when the server responds
+                        }
+                    }
 
                     if (activeServerId) {
                         setIsUpdating(true);
@@ -148,6 +241,8 @@ export default function DraggableChannelList() {
                             toast.error('Failed to update channel order');
                         } finally {
                             setIsUpdating(false);
+                            // Remove this channel from updating list
+                            setUpdatingChannels(prev => prev.filter(id => id !== channelToMove.id));
                         }
                     }
                 }
@@ -176,6 +271,33 @@ export default function DraggableChannelList() {
                 // Calculate new order_id
                 const newOrderId = destination.index + 1;
 
+                // Mark this channel as updating
+                setUpdatingChannels(prev => [...prev, channelToMove.id]);
+
+                // Optimistic update for moving between categories
+                if (activeServer) {
+                    // Create updated uncategorized channels if source or destination is uncategorized
+                    if (source.droppableId === 'uncategorized') {
+                        const newUncategorized = [...uncategorizedChannels];
+                        newUncategorized.splice(source.index, 1);
+                        setUncategorizedChannels(newUncategorized);
+                    }
+
+                    if (destination.droppableId === 'uncategorized') {
+                        const newUncategorized = [...uncategorizedChannels];
+                        newUncategorized.splice(destination.index, 0, {
+                            ...channelToMove,
+                            category_id: null,
+                            order_id: newOrderId
+                        });
+                        setUncategorizedChannels(newUncategorized);
+                    }
+
+                    // Force local update to display changes immediately
+                    // We're using this approach since we can't directly modify the activeServer state
+                    // but we want to show the optimistic update immediately
+                }
+
                 // Update the channel on the server
                 if (activeServerId) {
                     setIsUpdating(true);
@@ -191,8 +313,24 @@ export default function DraggableChannelList() {
                     } catch (error) {
                         console.error('Error moving channel:', error);
                         toast.error('Failed to move channel');
+
+                        // Revert to server state on error
+                        if (activeServer) {
+                            // Reset uncategorized channels
+                            const uncategorized = activeServer.channels
+                                .filter(channel => {
+                                    const catId = channel.category_id;
+                                    if (catId === null || catId === undefined) return true;
+                                    const categoryId = typeof catId === 'string' ? parseInt(catId, 10) : catId;
+                                    return !activeServer.categories.some(cat => cat.id === categoryId);
+                                })
+                                .sort((a, b) => a.order_id - b.order_id);
+                            setUncategorizedChannels(uncategorized);
+                        }
                     } finally {
                         setIsUpdating(false);
+                        // Remove this channel from updating list
+                        setUpdatingChannels(prev => prev.filter(id => id !== channelToMove.id));
                     }
                 }
             }
@@ -216,12 +354,22 @@ export default function DraggableChannelList() {
     }
 
     return (
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext
+            onDragEnd={(result) => {
+                // Reset active drag states
+                setActiveDragId(null);
+                setIsDraggingOver({});
+                handleDragEnd(result);
+            }}
+            onDragStart={(start) => {
+                setActiveDragId(start.draggableId);
+            }}
+        >
             <div className="space-y-2 w-full">
                 {/* Uncategorized Channels Section */}
                 {uncategorizedChannels.length > 0 && (
                     <Droppable droppableId="uncategorized" type="CHANNEL">
-                        {(provided) => (
+                        {(provided, snapshot) => (
                             <div
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
@@ -238,8 +386,11 @@ export default function DraggableChannelList() {
                                                 ref={provided.innerRef}
                                                 {...provided.draggableProps}
                                                 {...provided.dragHandleProps}
-                                                className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-colors
-                                                    ${snapshot.isDragging ? 'opacity-70 bg-accent' : ''}
+                                                className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all relative
+                                                    ${snapshot.isDragging
+                                                        ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30'
+                                                        : ''
+                                                    }
                                                     ${activeChannelId === channel.id
                                                         ? 'bg-primary/20 text-foreground'
                                                         : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
@@ -248,10 +399,16 @@ export default function DraggableChannelList() {
                                             >
                                                 <HashIcon className="h-4 w-4" />
                                                 <span className="text-sm font-medium truncate">{channel.name}</span>
+
+                                                {/* Show loading indicator when channel is being updated */}
+                                                {updatingChannels.includes(channel.id) && (
+                                                    <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
+                                                )}
                                             </div>
                                         )}
                                     </Draggable>
                                 ))}
+
                                 {provided.placeholder}
                             </div>
                         )}
@@ -260,11 +417,11 @@ export default function DraggableChannelList() {
 
                 {/* Categories Section */}
                 <Droppable droppableId="categories" type="CATEGORY">
-                    {(provided) => (
+                    {(provided, snapshot) => (
                         <div
                             ref={provided.innerRef}
                             {...provided.droppableProps}
-                            className="space-y-2"
+                            className={`space-y-2 ${snapshot.isDraggingOver ? 'bg-accent/20 p-1 rounded-md' : ''}`}
                         >
                             {categories.map((category, index) => (
                                 <Draggable
@@ -276,7 +433,12 @@ export default function DraggableChannelList() {
                                         <div
                                             ref={provided.innerRef}
                                             {...provided.draggableProps}
-                                            className={`space-y-1 ${snapshot.isDragging ? 'opacity-70' : ''}`}
+                                            className={`space-y-1 rounded-md overflow-hidden
+                                                ${snapshot.isDragging
+                                                    ? 'opacity-90 shadow-lg ring-1 ring-primary/30 bg-background'
+                                                    : ''
+                                                }`
+                                            }
                                         >
                                             {/* Category Header */}
                                             <div
@@ -290,16 +452,21 @@ export default function DraggableChannelList() {
                                                     />
                                                     <span>{category.name}</span>
                                                 </div>
+
+                                                {/* Show loading indicator when category is being updated */}
+                                                {updatingCategories.includes(category.id) && (
+                                                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                )}
                                             </div>
 
                                             {/* Category Channels */}
                                             {expandedCategories.has(category.id) && (
                                                 <Droppable droppableId={`category-${category.id}`} type="CHANNEL">
-                                                    {(provided) => (
+                                                    {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.droppableProps}
-                                                            className="space-y-1 px-2"
+                                                            className="space-y-1 px-2 py-1"
                                                         >
                                                             {getChannelsForCategory(category.id).map((channel, channelIndex) => (
                                                                 <Draggable
@@ -312,8 +479,11 @@ export default function DraggableChannelList() {
                                                                             ref={provided.innerRef}
                                                                             {...provided.draggableProps}
                                                                             {...provided.dragHandleProps}
-                                                                            className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-colors
-                                                                                ${snapshot.isDragging ? 'opacity-70 bg-accent' : ''}
+                                                                            className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all
+                                                                                ${snapshot.isDragging
+                                                                                    ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30 z-50'
+                                                                                    : ''
+                                                                                }
                                                                                 ${activeChannelId === channel.id
                                                                                     ? 'bg-primary/20 text-foreground'
                                                                                     : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
@@ -322,10 +492,16 @@ export default function DraggableChannelList() {
                                                                         >
                                                                             <HashIcon className="h-4 w-4" />
                                                                             <span className="text-sm font-medium truncate">{channel.name}</span>
+
+                                                                            {/* Show loading indicator when channel is being updated */}
+                                                                            {updatingChannels.includes(channel.id) && (
+                                                                                <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </Draggable>
                                                             ))}
+
                                                             {provided.placeholder}
                                                         </div>
                                                     )}

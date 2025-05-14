@@ -197,6 +197,7 @@ export default function ChannelList() {
 
         try {
             toast.loading("Creating category...");
+            // Let the backend place it at the end (default behavior)
             await createCategory(activeServerId, categoryName.trim());
             toast.dismiss();
             toast.success("Category created successfully");

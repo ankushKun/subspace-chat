@@ -1,21 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useGlobalState } from '@/hooks/global-state';
-import { HashIcon, ChevronRight, Loader2 } from 'lucide-react';
+import { HashIcon, ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react';
 import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
-import { updateChannel, updateCategory } from '@/lib/ao';
+import { updateChannel, updateCategory, createChannel, refreshCurrentServerData } from '@/lib/ao';
 import { toast } from 'sonner';
+import { useActiveAddress } from '@arweave-wallet-kit/react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function DraggableChannelList() {
-    const { activeServer, activeServerId, activeChannelId, setActiveChannelId } = useGlobalState();
+    const { activeServer, activeServerId, activeChannelId, setActiveChannelId, refreshServerData } = useGlobalState();
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
     const navigate = useNavigate();
+    const activeAddress = useActiveAddress();
+
+    // Refs to track operations and retries
+    const isRefreshing = useRef(false);
+    const pendingRefreshTimer = useRef<NodeJS.Timeout | null>(null);
+    const operationsCount = useRef(0);
+    const lastOperation = useRef<number>(0);
 
     // Initialize categories and channels
     const [categories, setCategories] = useState<Category[]>([]);
     const [uncategorizedChannels, setUncategorizedChannels] = useState<Channel[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isRefreshingUI, setIsRefreshingUI] = useState(false);
+
+    // Add state for create channel dialog
+    const [createChannelOpen, setCreateChannelOpen] = useState(false);
+    const [channelName, setChannelName] = useState("");
+    const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
+    const [isCreatingChannel, setIsCreatingChannel] = useState(false);
 
     // Track which elements are being updated
     const [updatingChannels, setUpdatingChannels] = useState<number[]>([]);
@@ -24,6 +51,84 @@ export default function DraggableChannelList() {
     // Add these new states for tracking drag state
     const [isDraggingOver, setIsDraggingOver] = useState<{ [key: string]: boolean }>({});
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+    // Check if current user is server owner
+    const isServerOwner = activeServer?.owner === activeAddress;
+
+    // Enhanced refresh function with debounce
+    const scheduleRefresh = (immediate = false) => {
+        // Clear any pending refresh timer
+        if (pendingRefreshTimer.current) {
+            clearTimeout(pendingRefreshTimer.current);
+            pendingRefreshTimer.current = null;
+        }
+
+        // If a refresh is already in progress and it's not an immediate request, 
+        // schedule another refresh after the current one completes
+        if (isRefreshing.current && !immediate) {
+            operationsCount.current++;
+            console.log(`[scheduleRefresh] Operation queued, total: ${operationsCount.current}`);
+            return;
+        }
+
+        const doRefresh = async () => {
+            if (isRefreshing.current) return;
+
+            try {
+                isRefreshing.current = true;
+                setIsRefreshingUI(true);
+                operationsCount.current = 0;
+                lastOperation.current = Date.now();
+
+                console.log(`[scheduleRefresh] Refreshing server data...`);
+                await refreshServerData();
+
+                // After refresh, check if new operations were queued during the refresh
+                if (operationsCount.current > 0) {
+                    console.log(`[scheduleRefresh] ${operationsCount.current} operations occurred during refresh, scheduling another refresh`);
+                    pendingRefreshTimer.current = setTimeout(() => {
+                        pendingRefreshTimer.current = null;
+                        doRefresh();
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error(`[scheduleRefresh] Error refreshing data:`, error);
+                toast.error("Failed to refresh data. Some changes may not be visible.");
+            } finally {
+                isRefreshing.current = false;
+                setIsRefreshingUI(false);
+            }
+        };
+
+        if (immediate) {
+            doRefresh();
+        } else {
+            // Delay the refresh to batch potential multiple operations
+            pendingRefreshTimer.current = setTimeout(() => {
+                pendingRefreshTimer.current = null;
+                doRefresh();
+            }, 200);
+        }
+    };
+
+    // Automatic refresh after operations
+    useEffect(() => {
+        // Set up auto-refresh every 30 seconds
+        const timer = setInterval(() => {
+            // Only auto-refresh if it's been more than 30 seconds since last operation
+            if (activeServerId && Date.now() - lastOperation.current > 30000) {
+                console.log(`[autoRefresh] Performing periodic refresh`);
+                scheduleRefresh(false);
+            }
+        }, 30000);
+
+        return () => {
+            clearInterval(timer);
+            if (pendingRefreshTimer.current) {
+                clearTimeout(pendingRefreshTimer.current);
+            }
+        };
+    }, [activeServerId]);
 
     // Ensure all categories are expanded by default when server changes
     useEffect(() => {
@@ -52,6 +157,61 @@ export default function DraggableChannelList() {
         }
     }, [activeServer]);
 
+    // Handle creating a channel in a specific category
+    const handleCreateChannelInCategory = (categoryId: number) => {
+        if (!isServerOwner) return;
+        setTargetCategoryId(categoryId);
+        setChannelName("");
+        setCreateChannelOpen(true);
+    };
+
+    // Handle creating an uncategorized channel
+    const handleCreateUncategorizedChannel = () => {
+        if (!isServerOwner) return;
+        setTargetCategoryId(null);
+        setChannelName("");
+        setCreateChannelOpen(true);
+    };
+
+    // Handle manual refresh button click
+    const handleManualRefresh = () => {
+        if (isRefreshingUI) return;
+        toast.info("Refreshing data...");
+        scheduleRefresh(true);
+    };
+
+    // Handle channel create submit
+    const handleCreateChannel = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
+        if (!channelName.trim()) {
+            return toast.error("Please enter a channel name");
+        }
+
+        setIsCreatingChannel(true);
+        lastOperation.current = Date.now();
+
+        try {
+            toast.loading("Creating channel...");
+            await createChannel(activeServerId, channelName.trim(), targetCategoryId);
+            toast.dismiss();
+            toast.success("Channel created successfully");
+
+            setChannelName("");
+            setCreateChannelOpen(false);
+
+            // Refresh data after channel creation
+            scheduleRefresh(false);
+        } catch (error) {
+            console.error("Error creating channel:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to create channel");
+        } finally {
+            setIsCreatingChannel(false);
+        }
+    };
+
     // Toggle category expansion when clicked
     const toggleCategory = (categoryId: number) => {
         setExpandedCategories(prev => {
@@ -76,6 +236,7 @@ export default function DraggableChannelList() {
     // Handle drag end
     const handleDragEnd = async (result: any) => {
         const { source, destination, type, draggableId } = result;
+        lastOperation.current = Date.now();
 
         // Dropped outside the list
         if (!destination) return;
@@ -109,6 +270,9 @@ export default function DraggableChannelList() {
                         newOrder
                     );
                     toast.success('Category order updated');
+
+                    // Refresh data after update
+                    scheduleRefresh(false);
                 } catch (error) {
                     console.error('Error updating category order:', error);
                     toast.error('Failed to update category order');
@@ -150,6 +314,9 @@ export default function DraggableChannelList() {
                             newOrderId
                         );
                         toast.success('Channel order updated');
+
+                        // Schedule refresh after update
+                        scheduleRefresh(false);
                     } catch (error) {
                         console.error('Error updating channel order:', error);
                         toast.error('Failed to update channel order');
@@ -236,6 +403,9 @@ export default function DraggableChannelList() {
                                 newOrderId
                             );
                             toast.success('Channel order updated');
+
+                            // Schedule refresh after update
+                            scheduleRefresh(false);
                         } catch (error) {
                             console.error('Error updating channel order:', error);
                             toast.error('Failed to update channel order');
@@ -310,6 +480,9 @@ export default function DraggableChannelList() {
                             newOrderId
                         );
                         toast.success('Channel moved successfully');
+
+                        // Schedule refresh after update with higher priority
+                        scheduleRefresh(true);
                     } catch (error) {
                         console.error('Error moving channel:', error);
                         toast.error('Failed to move channel');
@@ -354,26 +527,48 @@ export default function DraggableChannelList() {
     }
 
     return (
-        <DragDropContext
-            onDragEnd={(result) => {
-                // Reset active drag states
-                setActiveDragId(null);
-                setIsDraggingOver({});
-                handleDragEnd(result);
-            }}
-            onDragStart={(start) => {
-                setActiveDragId(start.draggableId);
-            }}
-        >
-            <div className="space-y-2 w-full">
-                {/* Uncategorized Channels Section */}
-                {uncategorizedChannels.length > 0 && (
+        <>
+            <div className="flex items-center justify-between px-2 mb-2">
+                {isRefreshingUI ? (
+                    <span className="text-xs text-muted-foreground flex items-center opacity-40">
+                        <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
+                        Refreshing...
+                    </span>
+                ) : (
+                    <span className="text-xs text-muted-foreground opacity-0">•</span>
+                )}
+
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 opacity-30 hover:opacity-100 transition-opacity"
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshingUI}
+                    title="Refresh data"
+                >
+                    <RefreshCw className="h-3 w-3 text-muted-foreground" />
+                </Button>
+            </div>
+
+            <DragDropContext
+                onDragEnd={(result) => {
+                    // Reset active drag states
+                    setActiveDragId(null);
+                    setIsDraggingOver({});
+                    handleDragEnd(result);
+                }}
+                onDragStart={(start) => {
+                    setActiveDragId(start.draggableId);
+                }}
+            >
+                <div className="space-y-2 w-full">
+                    {/* Uncategorized Channels Section - always show it */}
                     <Droppable droppableId="uncategorized" type="CHANNEL">
                         {(provided, snapshot) => (
                             <div
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
-                                className="space-y-1 px-2 mb-4"
+                                className="space-y-1 px-2 mb-4 min-h-[8px]"
                             >
                                 {uncategorizedChannels.map((channel, index) => (
                                     <Draggable
@@ -413,109 +608,173 @@ export default function DraggableChannelList() {
                             </div>
                         )}
                     </Droppable>
-                )}
 
-                {/* Categories Section */}
-                <Droppable droppableId="categories" type="CATEGORY">
-                    {(provided, snapshot) => (
-                        <div
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
-                            className={`space-y-2 ${snapshot.isDraggingOver ? 'bg-accent/20 p-1 rounded-md' : ''}`}
-                        >
-                            {categories.map((category, index) => (
-                                <Draggable
-                                    key={category.id.toString()}
-                                    draggableId={`category-${category.id}`}
-                                    index={index}
-                                >
-                                    {(provided, snapshot) => (
-                                        <div
-                                            ref={provided.innerRef}
-                                            {...provided.draggableProps}
-                                            className={`space-y-1 rounded-md overflow-hidden
-                                                ${snapshot.isDragging
-                                                    ? 'opacity-90 shadow-lg ring-1 ring-primary/30 bg-background'
-                                                    : ''
-                                                }`
-                                            }
-                                        >
-                                            {/* Category Header */}
+                    {/* Categories Section */}
+                    <Droppable droppableId="categories" type="CATEGORY">
+                        {(provided, snapshot) => (
+                            <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={`space-y-2 ${snapshot.isDraggingOver ? 'bg-accent/20 p-1 rounded-md' : ''}`}
+                            >
+                                {categories.map((category, index) => (
+                                    <Draggable
+                                        key={category.id.toString()}
+                                        draggableId={`category-${category.id}`}
+                                        index={index}
+                                    >
+                                        {(provided, snapshot) => (
                                             <div
-                                                {...provided.dragHandleProps}
-                                                className="w-full flex items-center justify-between px-2 py-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors cursor-pointer"
-                                                onClick={() => toggleCategory(category.id)}
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                className={`space-y-1 rounded-md overflow-hidden
+                                                    ${snapshot.isDragging
+                                                        ? 'opacity-90 shadow-lg ring-1 ring-primary/30 bg-background'
+                                                        : ''
+                                                    }`
+                                                }
                                             >
-                                                <div className="flex items-center gap-1">
-                                                    <ChevronRight
-                                                        className={`h-3 w-3 transition-transform ${expandedCategories.has(category.id) ? 'rotate-90' : ''}`}
-                                                    />
-                                                    <span>{category.name}</span>
+                                                {/* Category Header */}
+                                                <div
+                                                    {...provided.dragHandleProps}
+                                                    className="w-full flex items-center justify-between px-2 py-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors cursor-pointer"
+                                                >
+                                                    <div
+                                                        className="flex items-center gap-1"
+                                                        onClick={() => toggleCategory(category.id)}
+                                                    >
+                                                        <ChevronRight
+                                                            className={`h-3 w-3 transition-transform ${expandedCategories.has(category.id) ? 'rotate-90' : ''}`}
+                                                        />
+                                                        <span>{category.name}</span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1">
+                                                        {/* Show loading indicator when category is being updated */}
+                                                        {updatingCategories.includes(category.id) && (
+                                                            <Loader2 className="h-3 w-3 animate-spin text-primary mr-1" />
+                                                        )}
+
+                                                        {/* Add plus button for creating channels in this category */}
+                                                        {isServerOwner && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleCreateChannelInCategory(category.id);
+                                                                }}
+                                                                className="w-5 h-5 rounded-full hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title={`Add channel to ${category.name}`}
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                {/* Show loading indicator when category is being updated */}
-                                                {updatingCategories.includes(category.id) && (
-                                                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                {/* Category Channels */}
+                                                {expandedCategories.has(category.id) && (
+                                                    <Droppable droppableId={`category-${category.id}`} type="CHANNEL">
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.droppableProps}
+                                                                className="space-y-1 px-2 py-1"
+                                                            >
+                                                                {getChannelsForCategory(category.id).map((channel, channelIndex) => (
+                                                                    <Draggable
+                                                                        key={channel.id.toString()}
+                                                                        draggableId={`channel-${channel.id}`}
+                                                                        index={channelIndex}
+                                                                    >
+                                                                        {(provided, snapshot) => (
+                                                                            <div
+                                                                                ref={provided.innerRef}
+                                                                                {...provided.draggableProps}
+                                                                                {...provided.dragHandleProps}
+                                                                                className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all
+                                                                                    ${snapshot.isDragging
+                                                                                        ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30 z-50'
+                                                                                        : ''
+                                                                                    }
+                                                                                    ${activeChannelId === channel.id
+                                                                                        ? 'bg-primary/20 text-foreground'
+                                                                                        : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
+                                                                                }
+                                                                                onClick={() => handleChannelClick(channel)}
+                                                                            >
+                                                                                <HashIcon className="h-4 w-4" />
+                                                                                <span className="text-sm font-medium truncate">{channel.name}</span>
+
+                                                                                {/* Show loading indicator when channel is being updated */}
+                                                                                {updatingChannels.includes(channel.id) && (
+                                                                                    <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </Draggable>
+                                                                ))}
+
+                                                                {provided.placeholder}
+                                                            </div>
+                                                        )}
+                                                    </Droppable>
                                                 )}
                                             </div>
+                                        )}
+                                    </Draggable>
+                                ))}
+                                {provided.placeholder}
+                            </div>
+                        )}
+                    </Droppable>
+                </div>
+            </DragDropContext>
 
-                                            {/* Category Channels */}
-                                            {expandedCategories.has(category.id) && (
-                                                <Droppable droppableId={`category-${category.id}`} type="CHANNEL">
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.droppableProps}
-                                                            className="space-y-1 px-2 py-1"
-                                                        >
-                                                            {getChannelsForCategory(category.id).map((channel, channelIndex) => (
-                                                                <Draggable
-                                                                    key={channel.id.toString()}
-                                                                    draggableId={`channel-${channel.id}`}
-                                                                    index={channelIndex}
-                                                                >
-                                                                    {(provided, snapshot) => (
-                                                                        <div
-                                                                            ref={provided.innerRef}
-                                                                            {...provided.draggableProps}
-                                                                            {...provided.dragHandleProps}
-                                                                            className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all
-                                                                                ${snapshot.isDragging
-                                                                                    ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30 z-50'
-                                                                                    : ''
-                                                                                }
-                                                                                ${activeChannelId === channel.id
-                                                                                    ? 'bg-primary/20 text-foreground'
-                                                                                    : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
-                                                                            }
-                                                                            onClick={() => handleChannelClick(channel)}
-                                                                        >
-                                                                            <HashIcon className="h-4 w-4" />
-                                                                            <span className="text-sm font-medium truncate">{channel.name}</span>
+            {/* Create Channel Dialog */}
+            <AlertDialog open={createChannelOpen} onOpenChange={setCreateChannelOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Create Channel</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {targetCategoryId !== null
+                                ? `Add a new channel to "${categories.find(c => c.id === targetCategoryId)?.name || 'this category'}"`
+                                : "Add a new uncategorized channel"}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
 
-                                                                            {/* Show loading indicator when channel is being updated */}
-                                                                            {updatingChannels.includes(channel.id) && (
-                                                                                <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </Draggable>
-                                                            ))}
-
-                                                            {provided.placeholder}
-                                                        </div>
-                                                    )}
-                                                </Droppable>
-                                            )}
-                                        </div>
-                                    )}
-                                </Draggable>
-                            ))}
-                            {provided.placeholder}
+                    <div className="py-4">
+                        <div className="space-y-2">
+                            <label htmlFor="channel-name" className="text-sm font-medium text-foreground">
+                                Channel Name
+                            </label>
+                            <Input
+                                id="channel-name"
+                                placeholder="e.g. general"
+                                value={channelName}
+                                onChange={(e) => setChannelName(e.target.value)}
+                            />
                         </div>
-                    )}
-                </Droppable>
-            </div>
-        </DragDropContext>
+                    </div>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isCreatingChannel}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleCreateChannel}
+                            disabled={isCreatingChannel}
+                            className="relative"
+                        >
+                            {isCreatingChannel ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 } 

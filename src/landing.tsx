@@ -113,6 +113,10 @@ export default function Landing() {
             {/* Registration form will go here */}
           </div>
         )}
+        <div className="text-xs text-muted-foreground/60 p-0 mt-2">
+          {/* @ts-ignore */}
+          v{__APP_VERSION__}
+        </div>
       </div>
     </div>
   );

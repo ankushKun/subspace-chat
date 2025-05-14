@@ -9,7 +9,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
 import Settings from '@/settings'
-import { User } from 'lucide-react'
+import Invite from '@/invite'
 
 
 
@@ -44,7 +44,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/app/:serverId" element={<App />} />
           <Route path="/app/:serverId/:channelId" element={<App />} />
           <Route path="/app/settings" element={<Settings />} />
-          <Route path='*' element={<Navigate to='/' />} />
+          <Route path="/invite" element={<Invite />} />
+          <Route path="/invite/:serverId" element={<Invite />} />
+          {/* <Route path='*' element={<Navigate to='/' />} /> */}
         </Routes>
       </HashRouter>
     </ArweaveWalletKit>

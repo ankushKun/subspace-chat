@@ -1,34 +1,19 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
-import { useTheme } from "@/components/theme-provider";
-import { cn } from "./lib/utils";
 import { Input } from "@/components/ui/input";
 import { FaApple, FaDiscord, FaGoogle, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
 import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
 import { useNavigate } from "react-router-dom"
+import BackgroundStars from "@/components/background-stars";
 
 
 enum LoginStep {
   Landing = "landing",
   Login = "login",
   Register = "register",
-}
-
-function BackgroundStars({ className }: { className?: string }) {
-  const { theme } = useTheme();
-  return (
-    <div className={cn("absolute inset-0 z-[-1] pointer-events-none left-0 top-0 w-full h-full", className)} style={{
-      backgroundImage: "url(/stars.gif)",
-      backgroundSize: "cover",
-      backgroundPosition: "center center",
-      backgroundRepeat: "no-repeat",
-      filter: theme === "dark" ? "invert(0)" : "invert(1)",
-    }}>
-    </div>
-  )
 }
 
 export default function Landing() {

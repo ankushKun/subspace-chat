@@ -4,7 +4,7 @@ sqlite3 = require("lsqlite3")
 
 db = db or sqlite3.open_memory()
 
-PROFILES = "bKKJjeOXr3ViedwUB6hz_Me3VFRxMXS0yTkZBkJEL3s"
+PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
 server_icon = server_icon or ""
@@ -717,6 +717,24 @@ Handlers.add("Add-Member", function(msg)
     local rows_updated = SQLWrite("INSERT INTO members (id) VALUES (?)", id)
     if rows_updated == 1 then
         print("Added member " .. id)
+    else
+        ao.send({
+            Target = msg.From,
+            Action = "Error",
+            Data = db:errmsg(),
+            Tags = {
+                User = id
+            }
+        })
+    end
+end)
+
+Handlers.add("Remove-Member", function(msg)
+    assert(msg.From == PROFILES, "You are not authorized to remove members from this server")
+    local id = msg.Tags.User
+    local rows_updated = SQLWrite("DELETE FROM members WHERE id = ?", id)
+    if rows_updated == 1 then
+        print("Removed member " .. id)
     else
         ao.send({
             Target = msg.From,

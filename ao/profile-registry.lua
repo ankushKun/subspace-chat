@@ -191,6 +191,12 @@ app.post("/leave-server", function(req, res)
 
     UpdateServers(id, new_servers)
 
+    ao.send({
+        Target = server_id,
+        Action = "Remove-Member",
+        Tags = { User = id }
+    })
+
     res:json({
         success = true
     })

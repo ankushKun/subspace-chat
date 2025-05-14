@@ -568,19 +568,35 @@ export async function joinServer(serverId: string) {
     }
 }
 
-export async function leaveServer(serverId: string) {
-    console.log(`[leaveServer] Leaving server: ${serverId}`);
-    const res = await aofetch(`${PROFILES}/leave-server`, {
-        method: "POST",
-        body: {
-            server_id: serverId
+/**
+ * Removes a server from the user's joined servers list
+ * @param serverId The server to leave
+ */
+export async function leaveServer(serverId: string): Promise<boolean> {
+    try {
+        console.log(`[leaveServer] Leaving server: ${serverId}`);
+        const res = await aofetch(`${PROFILES}/leave-server`, {
+            method: "POST",
+            body: {
+                server_id: serverId
+            }
+        });
+        console.log(`[leaveServer] Response:`, res);
+
+        if (res.status == 200) {
+            // Trigger refresh after successful operation
+            try {
+                await refreshCurrentServerData();
+            } catch (error) {
+                console.warn('[leaveServer] Failed to refresh data:', error);
+            }
+            return true;
+        } else {
+            throw new Error(res.error);
         }
-    });
-    console.log(`[leaveServer] Response:`, res);
-    if (res.status == 200) {
-        return res.json;
-    } else {
-        throw new Error(res.error);
+    } catch (error) {
+        console.error("Error leaving server:", error);
+        throw error;
     }
 }
 

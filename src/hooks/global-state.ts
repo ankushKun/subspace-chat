@@ -91,6 +91,10 @@ export interface GlobalState {
     getChannelMessages: (channelId: number | null) => any[] | null
     cacheChannelMessages: (channelId: number | null, messages: any[]) => void
     clearMessageCache: () => void
+    // Invalid server tracking
+    invalidServerIds: Set<string>
+    markServerAsInvalid: (serverId: string) => void
+    isServerValid: (serverId: string) => boolean
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -199,10 +203,43 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
     },
 
+    // Add tracking for invalid server IDs
+    invalidServerIds: new Set<string>(),
+
+    markServerAsInvalid: (serverId: string) => {
+        const { invalidServerIds } = get();
+        const updatedInvalidServers = new Set(invalidServerIds);
+        updatedInvalidServers.add(serverId);
+        set({ invalidServerIds: updatedInvalidServers });
+
+        // Optionally clear this server from cache
+        const { serverCache } = get();
+        if (serverCache.has(serverId)) {
+            const updatedCache = new Map(serverCache);
+            updatedCache.delete(serverId);
+            set({ serverCache: updatedCache });
+            saveServerCache(updatedCache);
+        }
+
+        console.log(`[markServerAsInvalid] Marked server as invalid: ${serverId}`);
+    },
+
+    isServerValid: (serverId: string) => {
+        const { invalidServerIds } = get();
+        return !invalidServerIds.has(serverId);
+    },
+
+    // Update the fetchServerInfo function to handle invalid servers
     fetchServerInfo: async (serverId: string, isBackgroundRefresh = false) => {
         if (!serverId) return;
 
-        const { serverCache, refreshingServers, activeServerId } = get();
+        const { serverCache, refreshingServers, activeServerId, invalidServerIds } = get();
+
+        // Skip if this server is already known to be invalid
+        if (invalidServerIds.has(serverId)) {
+            console.log(`[fetchServerInfo] Skipping fetch for invalid server: ${serverId}`);
+            return;
+        }
 
         // If this is already being refreshed, don't duplicate the request
         if (refreshingServers.has(serverId)) return;
@@ -255,7 +292,21 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
             set(updates);
         } catch (error) {
-            console.error('Failed to fetch server info:', error);
+            console.error(`Failed to fetch server info for ${serverId}:`, error);
+
+            // Mark server as invalid if we get specific errors that indicate the server doesn't exist
+            // Examine error message to determine if this is a "server not found" type error
+            const errorMessage = String(error).toLowerCase();
+            if (
+                errorMessage.includes("not found") ||
+                errorMessage.includes("does not exist") ||
+                errorMessage.includes("cannot read properties") ||
+                errorMessage.includes("internal server error")
+            ) {
+                console.log(`[fetchServerInfo] Marking server as invalid due to error: ${serverId}`);
+                get().markServerAsInvalid(serverId);
+            }
+
             // Remove from refreshing set on error too
             const newRefreshing = new Set(get().refreshingServers);
             newRefreshing.delete(serverId);

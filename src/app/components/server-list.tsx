@@ -1,9 +1,9 @@
-import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2 } from "lucide-react"
+import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2 } from "lucide-react"
 import type { Server } from "@/lib/types"
 
 import { Button } from "@/components/ui/button";
 import { useGlobalState } from "@/hooks/global-state";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import TextWLine from "@/components/text-w-line";
 import {
     DropdownMenu,
@@ -23,7 +23,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-import { createServer, getJoinedServers, getServerInfo, joinServer } from "@/lib/ao";
+import { createServer, getJoinedServers, getServerInfo, joinServer, leaveServer } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
@@ -37,59 +37,128 @@ const sampleInvites = [
     "https://join_subspace.ar.io/abcxyz",
 ]
 
-
-
-const ServerIcon = ({ id }: { id: string }) => {
+const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: () => void }) => {
     const navigate = useNavigate();
     const {
         activeServerId,
         activeServer,
         isLoadingServer,
         serverCache,
-        refreshingServers
+        refreshingServers,
+        isServerValid
     } = useGlobalState();
     const [hover, setHover] = useState(false);
+    const [isLeavingServer, setIsLeavingServer] = useState(false);
+    const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+
+    const isInvalid = !isServerValid(id);
+    const isActive = activeServerId === id;
 
     const handleMouseEnter = () => setHover(true);
     const handleMouseLeave = () => setHover(false);
 
     function clicked() {
-        navigate(`/app/${id}`);
-        setHover(false);
+        if (!isInvalid) {
+            navigate(`/app/${id}`);
+            setHover(false);
+        }
     }
 
-    // Get server info from the global state or cache
-    const cachedData = serverCache.get(id);
-    const serverInfo = activeServerId === id ?
-        activeServer :
+    async function handleLeaveServer() {
+        try {
+            setIsLeavingServer(true);
+            await leaveServer(id);
+            toast.success("Server removed successfully");
+
+            // Refresh the server list
+            refreshServerList();
+            navigate('/app');
+        } catch (error) {
+            console.error("Error leaving server:", error);
+            toast.error("Failed to leave server");
+        } finally {
+            setIsLeavingServer(false);
+            setConfirmLeaveOpen(false);
+        }
+    }
+
+    // Get server info from the global state or cache, but only if not invalid
+    const cachedData = !isInvalid ? serverCache.get(id) : null;
+
+    // Important: Only use activeServer data if this specific server is active
+    // This prevents carrying over data from previous servers
+    const serverInfo = !isInvalid && isActive ? activeServer :
         (cachedData ? cachedData.data : null);
 
-    // Show loading state only when loading initial data, not on background refreshes
-    const isLoading = isLoadingServer && activeServerId === id && !cachedData;
-    const isRefreshing = refreshingServers.has(id);
+    // Determine if we're loading this specific server
+    const isLoading = !isInvalid && isActive && isLoadingServer;
+
+    // Only show refreshing indicator if this specific server is being refreshed
+    const isRefreshing = !isInvalid && refreshingServers.has(id);
+
+    // Determine if we have valid server data to display
+    const hasServerData = !isInvalid && serverInfo && serverInfo.icon;
 
     return (
         <div className="relative group">
             <Button
-                className='w-12 h-12 p-0 rounded-lg relative'
+                className={`w-12 h-12 p-0 rounded-lg relative ${isInvalid ? 'opacity-80 grayscale' : ''}`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={clicked}
             >
                 <div
-                    data-visible={hover || activeServerId === id}
-                    data-expand={activeServerId === id}
+                    data-visible={hover || isActive}
+                    data-expand={isActive}
                     className='w-[2px] absolute -left-2 z-10 bg-foreground rounded-r transition-all duration-100 h-2 data-[expand=true]:h-6 data-[visible=true]:opacity-100 data-[visible=false]:opacity-0'
                 />
-                <img
-                    src={`https://arweave.net/${serverInfo?.icon || id}`}
-                    className='w-full h-full object-cover rounded-lg'
-                    alt={serverInfo?.name || id}
-                />
+
+                {/* Invalid server display */}
+                {isInvalid && (
+                    <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
+                        <ShieldAlertIcon className="w-6 h-6 text-destructive" />
+                    </div>
+                )}
+
+                {/* Loading state */}
+                {!isInvalid && isLoading && (
+                    <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                )}
+
+                {/* Server with data */}
+                {!isInvalid && !isLoading && hasServerData && (
+                    <img
+                        src={`https://arweave.net/${serverInfo.icon}`}
+                        className='w-full h-full object-cover rounded-lg'
+                        alt={serverInfo?.name || id}
+                    />
+                )}
+
+                {/* Default placeholder when not loading but no data yet */}
+                {!isInvalid && !isLoading && !hasServerData && (
+                    <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
+                        <div className="w-6 h-6 bg-foreground/20 rounded-full" />
+                    </div>
+                )}
+
                 {isRefreshing && !isLoading && (
                     <div className="absolute bottom-0 right-0 w-2 h-2">
                         <div className="animate-ping absolute h-2 w-2 rounded-full bg-palette-lavender opacity-75"></div>
                         <div className="relative rounded-full h-2 w-2 bg-palette-lavender"></div>
+                    </div>
+                )}
+
+                {isInvalid && (
+                    <div
+                        className="absolute -bottom-1 -right-1 w-5 h-5 bg-destructive rounded-full flex items-center justify-center cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmLeaveOpen(true);
+                        }}
+                    >
+                        <Trash2 className="w-3 h-3 text-white" />
                     </div>
                 )}
             </Button>
@@ -106,6 +175,16 @@ const ServerIcon = ({ id }: { id: string }) => {
             >
                 {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isInvalid ? (
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 text-destructive">
+                            <ShieldAlertIcon className="h-3 w-3" />
+                            <span>Invalid Server</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            ID: {id.substring(0, 6)}...
+                        </div>
+                    </div>
                 ) : (
                     <div className="flex items-center gap-1">
                         {serverInfo?.name || id.substring(0, 6)}
@@ -113,6 +192,35 @@ const ServerIcon = ({ id }: { id: string }) => {
                     </div>
                 )}
             </div>
+
+            {/* Confirm Leave Dialog */}
+            <AlertDialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Leave Server</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This server appears to be invalid or no longer accessible. Would you like to remove it from your server list?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isLeavingServer}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleLeaveServer}
+                            disabled={isLeavingServer}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isLeavingServer ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Removing...
+                                </>
+                            ) : (
+                                "Remove Server"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }
@@ -248,7 +356,7 @@ const FileDropzone = ({
 };
 
 export default function ServerList() {
-    const { activeServerId } = useGlobalState();
+    const { activeServerId, isServerValid } = useGlobalState();
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [joinInput, setJoinInput] = useState("");
@@ -258,6 +366,7 @@ export default function ServerList() {
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
     const address = useActiveAddress();
     const navigate = useNavigate();
+
     useEffect(() => {
         console.log("address", address);
         if (!address) return
@@ -287,6 +396,12 @@ export default function ServerList() {
         console.log("Joining server", serverId);
 
         try {
+            // Try to fetch server info first to validate it exists
+            toast.loading("Verifying server...");
+            await getServerInfo(serverId);
+
+            // If server info fetch succeeded, join the server
+            toast.dismiss();
             toast.loading("Joining server...");
             await joinServer(serverId);
             toast.dismiss();
@@ -297,11 +412,16 @@ export default function ServerList() {
 
             // Close dialog and navigate to the server
             setJoinDialogOpen(false);
+            setJoinInput("");
             navigate(`/app/${serverId}`);
         } catch (error) {
             console.error("Error joining server:", error);
             toast.dismiss();
-            toast.error(error instanceof Error ? error.message : "Failed to join server");
+
+            // Mark as invalid in global state
+            useGlobalState.getState().markServerAsInvalid(serverId);
+
+            toast.error("Invalid server ID or server not found");
         }
     }
 
@@ -351,7 +471,11 @@ export default function ServerList() {
                 <Loader2 className="h-12 w-12 p-3 animate-spin" />
             ) : (
                 joinedServers.map((id) => (
-                    <ServerIcon key={id} id={id} />
+                    <ServerIcon
+                        key={id}
+                        id={id}
+                        refreshServerList={runGetJoinedServers}
+                    />
                 ))
             )}
             {/* add server button */}

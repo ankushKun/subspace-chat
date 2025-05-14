@@ -19,9 +19,7 @@ try {
 export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
-    strategies: 'injectManifest',
-    srcDir: 'public',
-    filename: 'service-worker.js',
+    strategies: 'generateSW',
     injectRegister: 'auto',
     devOptions: {
       enabled: true
@@ -103,9 +101,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
-        // Ensure service worker is included in the build
-        'service-worker': path.resolve(__dirname, 'public/service-worker.js'),
-        'register-sw': path.resolve(__dirname, 'public/register-sw.js'),
+        // Don't include service worker in input - let VitePWA handle it
       },
       output: {
         manualChunks: {

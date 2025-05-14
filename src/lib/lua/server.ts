@@ -80,13 +80,15 @@ end
 app.get("/", function(req, res)
     local categories = SQLRead("SELECT * FROM categories")
     local channels = SQLRead("SELECT * FROM channels")
+    local member_count = SQLRead("SELECT COUNT(*) FROM members")[1]["COUNT(*)"]
 
     res:json({
         name = server_name,
         icon = server_icon,
         owner = Owner,
         categories = categories,
-        channels = channels
+        channels = channels,
+        member_count = member_count
     })
 end)
 

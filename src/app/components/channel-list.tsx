@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight } from "lucide-react";
+import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight, Link } from "lucide-react";
 import type { Server, Category, Channel } from "@/lib/types";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
@@ -466,6 +466,19 @@ export default function ChannelList() {
                 >
                     {isServerOwner && (
                         <>
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`${window.location.origin}/#/invite/${activeServerId}`)
+                                    toast.success("Invite link copied to clipboard")
+                                }}
+                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                            >
+                                <Link className="h-5 w-5" />
+                                <div>
+                                    <p className="font-medium">Copy Invite</p>
+                                    <p className="text-xs text-muted-foreground">Use this link to invite others to the server</p>
+                                </div>
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() => setCreateCategoryOpen(true)}
                                 className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"

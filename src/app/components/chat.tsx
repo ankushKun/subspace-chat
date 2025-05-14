@@ -64,9 +64,11 @@ export default function Chat() {
                     setMessages(cachedMessages);
                     setIsLoadingMessages(false);
                 } else {
-                    // Only show loading if we don't have cached messages
+                    // No cached messages found - explicitly clear messages
+                    console.log(`[Chat] No cached messages for channel ${activeChannelId}`);
+                    setMessages([]);
+                    // Show loading indicator
                     setIsLoadingMessages(true);
-                    // Don't clear messages here, to avoid flickering
                 }
             }
         }

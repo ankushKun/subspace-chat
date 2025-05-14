@@ -19,6 +19,7 @@ export type Server = {
     name: string
     icon: string
     owner: string
+    member_count: number
 }
 
 export interface GlobalState {

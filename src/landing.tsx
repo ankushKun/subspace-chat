@@ -26,6 +26,7 @@ export default function Landing() {
   useEffect(() => {
     if (connected) {
       console.log("connected", address);
+      navigate("/app");
     }
   }, [connected, address]);
 

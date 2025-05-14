@@ -6,7 +6,14 @@ import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
 
-const packageJson = JSON.parse(fs.readFileSync("package.json", { encoding: "utf-8" }))
+// More robust way to get package version
+let packageVersion = '1.0.0'; // Default fallback version
+try {
+  const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), { encoding: "utf-8" }));
+  packageVersion = packageJson.version || packageVersion;
+} catch (error) {
+  console.warn('Could not read package.json version, using fallback version', error);
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -51,7 +58,7 @@ export default defineConfig({
   },
   // define global env variables
   define: {
-    "APP_VERSION": JSON.stringify(packageJson.version),
+    "__APP_VERSION__": JSON.stringify(packageVersion),
     'process.env': {
       // DO NOT EXPOSE THE ENTIRE process.env HERE - sensitive information on CI/CD could be exposed.
       URL: process.env.URL,

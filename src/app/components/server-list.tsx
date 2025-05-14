@@ -355,6 +355,18 @@ const FileDropzone = ({
     );
 };
 
+// Global variable to capture the install prompt event before component mounts
+let deferredPromptEvent: any = null;
+
+// Add global event listener to capture beforeinstallprompt
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPromptEvent = e;
+        console.log('beforeinstallprompt event captured globally');
+    });
+}
+
 export default function ServerList() {
     const { activeServerId, isServerValid } = useGlobalState();
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
@@ -364,8 +376,8 @@ export default function ServerList() {
     const [serverIcon, setServerIcon] = useState<File | null>(null);
     const [fetchingJoinedServers, setFetchingJoinedServers] = useState(false);
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
-    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-    const [isInstallable, setIsInstallable] = useState(false);
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(deferredPromptEvent);
+    const [isInstallable, setIsInstallable] = useState(!!deferredPromptEvent);
     const address = useActiveAddress();
     const navigate = useNavigate();
 
@@ -378,7 +390,15 @@ export default function ServerList() {
             setDeferredPrompt(e);
             // Update UI to notify the user they can install the PWA
             setIsInstallable(true);
+            console.log('beforeinstallprompt event detected in component');
         };
+
+        // Check for globally captured event first
+        if (deferredPromptEvent) {
+            setDeferredPrompt(deferredPromptEvent);
+            setIsInstallable(true);
+            console.log('Using previously captured install prompt');
+        }
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
@@ -394,23 +414,33 @@ export default function ServerList() {
 
     // Handle install button click
     const handleInstallClick = async () => {
-        if (!deferredPrompt) return;
+        const promptEvent = deferredPrompt || deferredPromptEvent;
+
+        if (!promptEvent) {
+            console.log('No install prompt available');
+            return;
+        }
 
         // Show the installation prompt
-        deferredPrompt.prompt();
+        promptEvent.prompt();
 
         // Wait for the user to respond to the prompt
-        const choiceResult = await deferredPrompt.userChoice;
+        try {
+            const choiceResult = await promptEvent.userChoice;
 
-        if (choiceResult.outcome === 'accepted') {
-            console.log('User accepted the install prompt');
-            toast.success("App installed successfully!");
-        } else {
-            console.log('User dismissed the install prompt');
+            if (choiceResult.outcome === 'accepted') {
+                console.log('User accepted the install prompt');
+                toast.success("App installed successfully!");
+            } else {
+                console.log('User dismissed the install prompt');
+            }
+        } catch (error) {
+            console.error('Error with install prompt:', error);
         }
 
         // Clear the saved prompt since it can't be used again
         setDeferredPrompt(null);
+        deferredPromptEvent = null;
         setIsInstallable(false);
     };
 
@@ -673,7 +703,11 @@ export default function ServerList() {
                         <AlertDialogAction onClick={runCreateServer}>Create</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-            </AlertDialog >
+            </AlertDialog>
+            <div className="text-[10px] text-muted-foreground/60 p-0 -mb-1">
+                {/* @ts-ignore */}
+                v{__APP_VERSION__}
+            </div>
         </>
     )
 }

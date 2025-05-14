@@ -46,7 +46,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/app/settings" element={<Settings />} />
           <Route path="/invite" element={<Invite />} />
           <Route path="/invite/:serverId" element={<Invite />} />
-          {/* <Route path='*' element={<Navigate to='/' />} /> */}
+          <Route path='*' element={<Navigate to='/' />} />
         </Routes>
       </HashRouter>
     </ArweaveWalletKit>

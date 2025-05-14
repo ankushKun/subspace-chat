@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useGlobalState, useServerSync, useCachePersistence } from '@/hooks/global-state';
 import ChannelList from '@/app/components/channel-list';
 import DmList from '@/app/components/dm-list';
@@ -8,8 +8,11 @@ import ServerList from '@/app/components/server-list';
 import { useEffect } from 'react';
 import { uploadFileAndGetId } from '@/lib/ao';
 import Profile from './components/profile';
+import { useConnection } from '@arweave-wallet-kit/react';
 
 export default function App() {
+    const { connected } = useConnection();
+    const navigate = useNavigate();
     const { serverId, channelId, userId } = useParams();
     const {
         setActiveServerId,
@@ -17,6 +20,15 @@ export default function App() {
         isLoadingServer,
         setActiveChannelId
     } = useGlobalState();
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if (!connected) {
+                navigate("/");
+            }
+        }, 200);
+        return () => clearTimeout(t);
+    }, [connected]);
 
     // Use hooks for server synchronization and cache persistence
     useServerSync();

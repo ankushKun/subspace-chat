@@ -14,9 +14,9 @@ const MODULE = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw"
 export const PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 
 const CommonTags: Tag[] = [
-    { name: "App-Name", value: "BetterIDEa" },
+    { name: "App-Name", value: "Subspace-Chat" },
     // @ts-ignore
-    { name: "App-Version", value: window.APP_VERSION },
+    { name: "App-Version", value: __APP_VERSION__ || "DEV" },
     { name: 'Authority', value: 'fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY' },
 ];
 

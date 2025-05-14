@@ -26,6 +26,7 @@ import { useActiveAddress } from "@arweave-wallet-kit/react";
 import serverCode from "@/lib/lua/server";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
+import DraggableChannelList from "./draggable-channel-list";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -195,16 +196,13 @@ export default function ChannelList() {
         setIsCreatingCategory(true);
 
         try {
-            toast.promise(createCategory(activeServerId, categoryName.trim()), {
-                loading: "Creating category...",
-                success: (result) => {
-                    setCategoryName("");
-                    setCreateCategoryOpen(false);
-                    // Refresh server data would be ideal here
-                    return "Category created successfully";
-                },
-                error: "Failed to create category"
-            });
+            toast.loading("Creating category...");
+            await createCategory(activeServerId, categoryName.trim());
+            toast.dismiss();
+            toast.success("Category created successfully");
+
+            setCategoryName("");
+            setCreateCategoryOpen(false);
         } catch (error) {
             console.error("Error creating category:", error);
             toast.error(error instanceof Error ? error.message : "Failed to create category");
@@ -225,16 +223,13 @@ export default function ChannelList() {
         setIsCreatingChannel(true);
 
         try {
-            toast.promise(createChannel(activeServerId, channelName.trim()), {
-                loading: "Creating channel...",
-                success: (result) => {
-                    setChannelName("");
-                    setCreateChannelOpen(false);
-                    // Refresh server data would be ideal here
-                    return "Channel created successfully";
-                },
-                error: "Failed to create channel"
-            });
+            toast.loading("Creating channel...");
+            await createChannel(activeServerId, channelName.trim());
+            toast.dismiss();
+            toast.success("Channel created successfully");
+
+            setChannelName("");
+            setCreateChannelOpen(false);
         } catch (error) {
             console.error("Error creating channel:", error);
             toast.error(error instanceof Error ? error.message : "Failed to create channel");
@@ -269,18 +264,21 @@ export default function ChannelList() {
 
             // Upload new icon if selected
             if (serverIcon) {
-                toast.info("Uploading server icon...");
+                toast.loading("Uploading server icon...");
                 try {
                     const uploadedIconId = await uploadFileAndGetId(serverIcon);
                     if (uploadedIconId) {
                         iconId = uploadedIconId;
+                        toast.dismiss();
                     } else {
+                        toast.dismiss();
                         toast.error("Failed to get icon ID after upload");
                         setIsUpdatingServer(false);
                         return;
                     }
                 } catch (error) {
                     console.error("Error uploading icon:", error);
+                    toast.dismiss();
                     toast.error("Failed to upload server icon");
                     setIsUpdatingServer(false);
                     return;
@@ -292,29 +290,27 @@ export default function ChannelList() {
                 iconId = ""; // Provide empty string as default
             }
 
-            // toast.info("Updating server details...");
+            toast.loading("Updating server details... don't close this window");
+            const result = await updateServer(activeServerId, serverName, iconId);
+            toast.dismiss();
 
-            toast.promise(updateServer(activeServerId, serverName, iconId), {
-                loading: "Updating server details... don't close this window",
-                success: (result) => {
-                    if (result) {
-                        setActiveServer({
-                            ...activeServer,
-                            name: serverName,
-                            icon: iconId
-                        });
-                        return "Server details updated successfully";
-                    }
-                },
-                error: "Failed to update server details"
-            });
+            if (result) {
+                // Update local state to reflect changes
+                setActiveServer({
+                    ...activeServer,
+                    name: serverName,
+                    icon: iconId
+                });
+                toast.success("Server details updated successfully");
+            }
 
             setServerName("");
             setServerIcon(null);
             setUpdateServerOpen(false);
         } catch (error) {
             console.error("Error updating server:", error);
-            toast.error(error instanceof Error ? error.message : "Failed to update server");
+            toast.dismiss();
+            toast.error(error instanceof Error ? error.message : "Failed to update server details");
         } finally {
             setIsUpdatingServer(false);
         }
@@ -555,9 +551,7 @@ export default function ChannelList() {
                                     <pre className="mt-2 overflow-auto max-h-[200px]">
                                         {JSON.stringify({
                                             channels: activeServer.channels.length,
-                                            categories: categories.length,
-                                            uncategorized: uncategorizedChannels.length,
-                                            categorized: Array.from(categorizedChannels.keys()),
+                                            categories: activeServer.categories.length,
                                             activeChannelId: activeChannelId
                                         }, null, 2)}
                                     </pre>
@@ -565,65 +559,8 @@ export default function ChannelList() {
                             </div>
                         )}
 
-                        {/* Uncategorized Channels Section */}
-                        {uncategorizedChannels.length > 0 && (
-                            <div className="space-y-1 px-2 mb-4">
-                                {uncategorizedChannels.map(channel => (
-                                    <ChannelItem key={channel.id} channel={channel} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Fallback: Display all channels if categorization failed */}
-                        {activeServer.channels.length > 0 &&
-                            uncategorizedChannels.length === 0 &&
-                            categorizedChannels.size === 0 && (
-                                <div className="space-y-1 px-2 mb-4 border-l-2 border-blue-500/30 pl-2">
-                                    <div className="text-xs uppercase font-semibold text-muted-foreground mb-1">
-                                        All Channels
-                                    </div>
-                                    {activeServer.channels.map(channel => (
-                                        <ChannelItem key={channel.id} channel={channel} />
-                                    ))}
-                                </div>
-                            )}
-
-                        {/* Categories and their channels */}
-                        {categories.map(category => (
-                            <div key={category.id} className="space-y-1">
-                                <CategoryHeader
-                                    category={category}
-                                    isExpanded={expandedCategories.has(category.id)}
-                                    onToggle={() => toggleCategory(category.id)}
-                                />
-
-                                {expandedCategories.has(category.id) && (
-                                    <div className="space-y-1 px-2">
-                                        {categorizedChannels.has(category.id) && categorizedChannels.get(category.id)?.length ? (
-                                            categorizedChannels.get(category.id)?.map(channel => (
-                                                <ChannelItem key={channel.id} channel={channel} />
-                                            ))
-                                        ) : (
-                                            <div className="text-xs text-muted-foreground py-1 px-2">
-                                                No channels in this category
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-
-                        {/* Empty state when no channels exist */}
-                        {activeServer.channels.length === 0 && (
-                            <div className="px-4 py-8 text-center text-muted-foreground">
-                                <p className="text-sm">No channels available.</p>
-                                {isServerOwner && (
-                                    <p className="text-xs mt-1">
-                                        Create a channel to get started.
-                                    </p>
-                                )}
-                            </div>
-                        )}
+                        {/* Use the draggable channel list component instead */}
+                        <DraggableChannelList />
                     </div>
                 )}
             </div>

@@ -4,12 +4,43 @@ json = require("json")
 
 db = db or sqlite3.open_memory()
 
+-- easily read from the database
+function SQLRead(query, ...)
+    local m = {}
+    local _ = 1
+    local stmt = db:prepare(query)
+    if stmt then
+        local bind_res = stmt:bind_values(...)
+        assert(bind_res, "❌[bind error] " .. db:errmsg())
+        for row in stmt:nrows() do
+            -- table.insert(m, row)
+            m[_] = row
+            _ = _ + 1
+        end
+        stmt:finalize()
+    end
+    return m
+end
+
+-- easily write to the database
+function SQLWrite(query, ...)
+    local stmt = db:prepare(query)
+    if stmt then
+        local bind_res = stmt:bind_values(...)
+        assert(bind_res, "❌[bind error] " .. db:errmsg())
+        local step = stmt:step()
+        assert(step == sqlite3.DONE, "❌[write error] " .. db:errmsg())
+        stmt:finalize()
+    end
+    return db:changes()
+end
+
 DEFAULT_PFP = "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo"
 
 db:exec([[
     CREATE TABLE IF NOT EXISTS profiles (
         id TEXT PRIMARY KEY,
-        username TEXT,
+        username TEXT DEFAULT "",
         pfp TEXT DEFAULT "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo",
         servers_joined TEXT DEFAULT "{}"
     )
@@ -33,7 +64,7 @@ function UpdateServers(id, servers)
 end
 
 app.get("/profile", function(req, res)
-    local id = req.query.id or req.msg.From
+    local id = req.body.id or req.msg.From
     local profile = GetProfile(id)
     if profile then
         res:json({
@@ -41,10 +72,17 @@ app.get("/profile", function(req, res)
             profile = profile
         })
     else
-        res:status(404):send({
-            success = false,
-            error = "Profile not found"
+        -- create profile if it doesn't exist
+        UpdateProfile(id, nil, DEFAULT_PFP)
+        profile = GetProfile(id)
+        res:json({
+            success = true,
+            profile = profile
         })
+        -- res:status(404):json({
+        --     success = false,
+        --     error = "Profile not found"
+        -- })
     end
 end)
 
@@ -160,3 +198,4 @@ end)
 
 
 app.listen()
+print(ao.id)

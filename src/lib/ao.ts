@@ -6,11 +6,12 @@ import aoxpressSource from "@/lib/lua/aoxpress"
 import serverSource from "@/lib/lua/server"
 // import { TurboFactory } from "@ardrive/turbo-sdk/web";
 import Arweave from "arweave";
+import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 
 const SCHEDULER = "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA"
 const MODULE = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw"
 
-export const PROFILES = "_N6UYJmLpVBYWlNWlOTG7saz7Ot3XCse3IyyWbXOJxk"
+export const PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 
 const CommonTags: Tag[] = [
     { name: "App-Name", value: "BetterIDEa" },
@@ -24,6 +25,18 @@ const ao = connect({
     MODE: "legacy",
     CU_URL: `https://cu.ardrive.io`,
 })
+
+// Helper function to refresh data after operations
+// This can be called by components using these functions
+export async function refreshCurrentServerData() {
+    try {
+        const globalState = useGlobalState.getState();
+        return await globalState.refreshServerData();
+    } catch (error) {
+        console.error("Failed to refresh server data:", error);
+        throw new Error("Failed to refresh server data. Please try again or reload the application.");
+    }
+}
 
 export function to(file: File): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
@@ -203,7 +216,8 @@ export async function getJoinedServers(address: string): Promise<string[]> {
     console.log(`[getJoinedServers] Response:`, res);
 
     if (res.status == 200) {
-        const servers = JSON.parse((res.json as any).profile.servers_joined || "[]");
+        const joinedServersString = (res.json as any).profile.servers_joined == "{}" ? "[]" : (res.json as any).profile.servers_joined;
+        const servers = JSON.parse(joinedServersString);
         console.log(`[getJoinedServers] Parsed servers:`, servers);
         return servers;
     } else {
@@ -233,6 +247,12 @@ export async function updateServer(id: string, name: string, icon: string) {
     });
     console.log(`[updateServer] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[updateServer] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -260,6 +280,12 @@ export async function createCategory(serverId: string, name: string, order?: num
     });
     console.log(`[createCategory] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[createCategory] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -286,6 +312,12 @@ export async function updateCategory(serverId: string, id: number, name: string,
     });
     console.log(`[updateCategory] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[updateCategory] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -302,6 +334,12 @@ export async function deleteCategory(serverId: string, id: number) {
     });
     console.log(`[deleteCategory] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[deleteCategory] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -318,12 +356,11 @@ export async function createChannel(serverId: string, name: string, categoryId?:
         body.category_id = categoryId;
     }
 
-    // Use order_id instead of order to match the database schema
+    // Only include order_id if explicitly specified
     if (order !== undefined) {
         body.order_id = order;
-    } else {
-        body.order_id = 1; // Default value
     }
+    // Let the server determine the next appropriate order_id
 
     console.log(`[createChannel] Sending request with body:`, body);
 
@@ -333,13 +370,19 @@ export async function createChannel(serverId: string, name: string, categoryId?:
     });
     console.log(`[createChannel] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[createChannel] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
     }
 }
 
-export async function updateChannel(serverId: string, id: number, name?: string, categoryId?: number, order?: number) {
+export async function updateChannel(serverId: string, id: number, name?: string, categoryId?: number | null, order?: number) {
     console.log(`[updateChannel] Updating channel in server: ${serverId}`, { id, name, categoryId, order });
     const body: any = {
         id: id
@@ -349,8 +392,14 @@ export async function updateChannel(serverId: string, id: number, name?: string,
         body.name = name;
     }
 
+    // Only include category_id if it's a valid number or explicitly null/undefined
     if (categoryId !== undefined) {
-        body.category_id = categoryId;
+        if (categoryId === null) {
+            // When explicitly setting to null, use an empty string as the backend expects a string or number
+            body.category_id = "";
+        } else {
+            body.category_id = categoryId;
+        }
     }
 
     // Use order_id instead of order to match the database schema
@@ -366,6 +415,12 @@ export async function updateChannel(serverId: string, id: number, name?: string,
     });
     console.log(`[updateChannel] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[updateChannel] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -382,6 +437,12 @@ export async function deleteChannel(serverId: string, id: number) {
     });
     console.log(`[deleteChannel] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[deleteChannel] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);
@@ -495,6 +556,12 @@ export async function joinServer(serverId: string) {
     });
     console.log(`[joinServer] Response:`, res);
     if (res.status == 200) {
+        // Trigger refresh after successful operation
+        try {
+            await refreshCurrentServerData();
+        } catch (error) {
+            console.warn('[joinServer] Failed to refresh data:', error);
+        }
         return res.json;
     } else {
         throw new Error(res.error);

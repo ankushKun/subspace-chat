@@ -23,7 +23,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-import { createServer, getJoinedServers, getServerInfo } from "@/lib/ao";
+import { createServer, getJoinedServers, getServerInfo, joinServer } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
@@ -274,7 +274,35 @@ export default function ServerList() {
 
     async function runJoinServer() {
         if (!joinInput) return toast.error("Please enter a server ID or invite link.");
-        console.log("joining server", joinInput);
+
+        // Extract server ID from invite link or use as is
+        let serverId = joinInput.trim();
+
+        // Handle invite links
+        if (serverId.includes('/')) {
+            const parts = serverId.split('/');
+            serverId = parts[parts.length - 1];
+        }
+
+        console.log("Joining server", serverId);
+
+        try {
+            toast.loading("Joining server...");
+            await joinServer(serverId);
+            toast.dismiss();
+            toast.success("Server joined successfully!");
+
+            // Refresh joined servers list
+            await runGetJoinedServers();
+
+            // Close dialog and navigate to the server
+            setJoinDialogOpen(false);
+            navigate(`/app/${serverId}`);
+        } catch (error) {
+            console.error("Error joining server:", error);
+            toast.dismiss();
+            toast.error(error instanceof Error ? error.message : "Failed to join server");
+        }
     }
 
     async function runCreateServer() {
@@ -287,23 +315,23 @@ export default function ServerList() {
         }
 
         try {
-            toast.promise(createServer(serverName, serverIcon), {
-                loading: "Creating server... Don't close this window!",
-                success: (serverId) => {
-                    console.log(serverId)
-                    setCreateDialogOpen(false);
-                    setServerName("");
-                    setServerIcon(null);
-                    return "Server created successfully!"
-                },
-                error: "Failed to create server"
-            })
-            // const serverId = await createServer(serverName, serverIcon);
-            // toast.success("Server created successfully!");
-            // console.log(serverId);
+            toast.loading("Creating server... Don't close this window!");
+            const serverId = await createServer(serverName, serverIcon);
+            toast.dismiss();
+            toast.success("Server created successfully!");
+
+            // Refresh joined servers list
+            await runGetJoinedServers();
+
+            // Close dialog and navigate to the server
+            setCreateDialogOpen(false);
+            setServerName("");
+            setServerIcon(null);
+            navigate(`/app/${serverId}`);
         } catch (error) {
-            toast.error("Failed to create server");
-            console.error(error);
+            console.error("Error creating server:", error);
+            toast.dismiss();
+            toast.error(error instanceof Error ? error.message : "Failed to create server");
         }
     }
 

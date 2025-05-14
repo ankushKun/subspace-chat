@@ -81,6 +81,7 @@ export interface GlobalState {
     activeChannelId: number | null
     setActiveChannelId: (channelId: number | null) => void
     fetchServerInfo: (serverId: string, forceRefresh?: boolean) => Promise<void>
+    refreshServerData: () => Promise<void>  // New helper function
     isLoadingServer: boolean
     refreshingServers: Set<string>
     serverCache: Map<string, CachedServer>
@@ -185,6 +186,17 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     clearMessageCache: () => {
         set({ messageCache: new Map<string, CachedMessages>() });
         localStorage.removeItem(MESSAGE_CACHE_KEY);
+    },
+
+    // Convenience method to refresh the current active server
+    refreshServerData: async () => {
+        const { activeServerId } = get();
+        if (activeServerId) {
+            console.log(`[refreshServerData] Refreshing server data for ${activeServerId}`);
+            await get().fetchServerInfo(activeServerId, true);
+        } else {
+            console.log(`[refreshServerData] No active server to refresh`);
+        }
     },
 
     fetchServerInfo: async (serverId: string, isBackgroundRefresh = false) => {

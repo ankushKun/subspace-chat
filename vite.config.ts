@@ -33,4 +33,19 @@ export default defineConfig({
       URL: process.env.URL,
     },
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        // Ensure service worker is included in the build
+        'service-worker': path.resolve(__dirname, 'public/service-worker.js'),
+        'register-sw': path.resolve(__dirname, 'public/register-sw.js'),
+      },
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
 })

@@ -357,7 +357,14 @@ export default function ChannelList() {
         }
 
         toast.info("TODO: Delete server")
+    }
 
+    const handleServerLeave = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
+        toast.info("TODO: Leave server")
     }
 
     // Organize channels by categories in a clean, performant way
@@ -461,21 +468,23 @@ export default function ChannelList() {
                     className="w-full min-w-[333px] max-w-[333px] p-2 space-y-1 bg-background/95 backdrop-blur-sm"
                     sideOffset={4}
                 >
+                    {/* Copy Invite available to all users */}
+                    <DropdownMenuItem
+                        onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/#/invite/${activeServerId}`)
+                            toast.success("Invite link copied to clipboard")
+                        }}
+                        className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                    >
+                        <LinkIcon className="h-5 w-5" />
+                        <div>
+                            <p className="font-medium">Copy Invite</p>
+                            <p className="text-xs text-muted-foreground">Use this link to invite others to the server</p>
+                        </div>
+                    </DropdownMenuItem>
+
                     {isServerOwner && (
                         <>
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    navigator.clipboard.writeText(`${window.location.origin}/#/invite/${activeServerId}`)
-                                    toast.success("Invite link copied to clipboard")
-                                }}
-                                className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
-                            >
-                                <LinkIcon className="h-5 w-5" />
-                                <div>
-                                    <p className="font-medium">Copy Invite</p>
-                                    <p className="text-xs text-muted-foreground">Use this link to invite others to the server</p>
-                                </div>
-                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() => setCreateCategoryOpen(true)}
                                 className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
@@ -529,9 +538,16 @@ export default function ChannelList() {
                         </>
                     )}
                     {!isServerOwner && (
-                        <div className="px-4 py-3 text-sm text-muted-foreground">
-                            You need to be the server owner to manage this server.
-                        </div>
+                        <DropdownMenuItem
+                            onClick={handleServerLeave}
+                            className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                        >
+                            <TrashIcon className="h-5 w-5" />
+                            <div>
+                                <p className="font-medium">Leave Server</p>
+                                <p className="text-xs text-muted-foreground">Leave this server</p>
+                            </div>
+                        </DropdownMenuItem>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>

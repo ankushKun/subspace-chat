@@ -10,7 +10,12 @@ import { uploadFileAndGetId } from '@/lib/ao';
 
 export default function App() {
     const { serverId, channelId, userId } = useParams();
-    const { setActiveServerId, activeServerId, isLoadingServer } = useGlobalState();
+    const {
+        setActiveServerId,
+        activeServerId,
+        isLoadingServer,
+        setActiveChannelId
+    } = useGlobalState();
 
     // Use hooks for server synchronization and cache persistence
     useServerSync();
@@ -18,12 +23,21 @@ export default function App() {
 
     useEffect(() => {
         console.log('URL params:', serverId, channelId, userId);
+
         // Set server ID from URL params
         setActiveServerId(serverId ? serverId : null);
-    }, [serverId, channelId, userId, setActiveServerId]);
 
-    useEffect(() => {
-    }, []);
+        // Set channel ID from URL params if present
+        if (channelId) {
+            const channelIdNum = parseInt(channelId, 10);
+            if (!isNaN(channelIdNum)) {
+                setActiveChannelId(channelIdNum);
+            }
+        } else {
+            // Clear active channel if not in URL
+            setActiveChannelId(null);
+        }
+    }, [serverId, channelId, userId, setActiveServerId, setActiveChannelId]);
 
     return (
         <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>
@@ -35,7 +49,7 @@ export default function App() {
                 {activeServerId === null ? <DmList /> : <ChannelList />}
             </div>
             {/* main view */}
-            <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
+            <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
                 {activeServerId === null ? <Hero /> : <Chat />}
             </div>
             {activeServerId !== null && <div className='w-80 bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>

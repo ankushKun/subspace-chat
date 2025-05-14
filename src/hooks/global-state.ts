@@ -6,12 +6,20 @@ import { persist } from 'zustand/middleware'
 
 // Storage keys
 const STORAGE_KEY = 'subspace-server-cache'
+const MESSAGE_CACHE_KEY = 'subspace-message-cache'
 
 // Cache TTL in milliseconds (24 hours)
 const CACHE_TTL = 24 * 60 * 60 * 1000
+// Message cache TTL (5 minutes)
+const MESSAGE_CACHE_TTL = 5 * 60 * 1000
 
 interface CachedServer {
     data: Server
+    timestamp: number
+}
+
+interface CachedMessages {
+    data: any[]  // Message array
     timestamp: number
 }
 
@@ -40,16 +48,48 @@ const saveServerCache = (cache: Map<string, CachedServer>): void => {
     }
 }
 
+// Helper functions for message cache persistence
+const loadMessageCache = (): Map<string, CachedMessages> => {
+    try {
+        const storedCache = localStorage.getItem(MESSAGE_CACHE_KEY)
+        if (storedCache) {
+            // Convert from JSON object to Map
+            const parsed = JSON.parse(storedCache)
+            return new Map(Object.entries(parsed))
+        }
+    } catch (error) {
+        console.error('Failed to load message cache from storage:', error)
+    }
+    return new Map<string, CachedMessages>()
+}
+
+const saveMessageCache = (cache: Map<string, CachedMessages>): void => {
+    try {
+        // Convert Map to an object for storage
+        const cacheObj = Object.fromEntries(cache.entries())
+        localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(cacheObj))
+    } catch (error) {
+        console.error('Failed to save message cache to storage:', error)
+    }
+}
+
 export interface GlobalState {
     activeServerId: string | null
-    setActiveServerId: (serverId: string | null) => void
+    setActiveServerId: (server: string | null) => void
     activeServer: Server | null
     setActiveServer: (server: Server | null) => void
+    activeChannelId: number | null
+    setActiveChannelId: (channelId: number | null) => void
     fetchServerInfo: (serverId: string, forceRefresh?: boolean) => Promise<void>
     isLoadingServer: boolean
     refreshingServers: Set<string>
     serverCache: Map<string, CachedServer>
     clearServerCache: () => void
+    // Message caching
+    messageCache: Map<string, CachedMessages>
+    getChannelMessages: (channelId: number | null) => any[] | null
+    cacheChannelMessages: (channelId: number | null, messages: any[]) => void
+    clearMessageCache: () => void
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -59,7 +99,10 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         // Clear active server when serverId is null
         if (serverId === null) {
-            set({ activeServer: null });
+            set({
+                activeServer: null,
+                activeChannelId: null  // Also clear active channel when changing servers
+            });
             return;
         }
 
@@ -89,6 +132,11 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     },
     activeServer: null,
     setActiveServer: (server: Server | null) => set({ activeServer: server }),
+
+    // Add active channel state
+    activeChannelId: null,
+    setActiveChannelId: (channelId: number | null) => set({ activeChannelId: channelId }),
+
     isLoadingServer: false,
     refreshingServers: new Set<string>(),
     // Initialize with cached data from storage
@@ -98,6 +146,47 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         set({ serverCache: new Map<string, CachedServer>() });
         localStorage.removeItem(STORAGE_KEY);
     },
+
+    // Message cache implementation
+    messageCache: loadMessageCache(),
+    getChannelMessages: (channelId: number | null) => {
+        if (!channelId) return null;
+        const { activeServerId, messageCache } = get();
+        if (!activeServerId) return null;
+
+        const cacheKey = `${activeServerId}-${channelId}`;
+        if (messageCache.has(cacheKey)) {
+            const cachedMessages = messageCache.get(cacheKey);
+            if (cachedMessages) {
+                // Check if cache is still valid
+                const now = Date.now();
+                if (now - cachedMessages.timestamp <= MESSAGE_CACHE_TTL) {
+                    return cachedMessages.data;
+                }
+            }
+        }
+        return null;
+    },
+    cacheChannelMessages: (channelId: number | null, messages: any[]) => {
+        if (!channelId || !messages) return;
+        const { activeServerId, messageCache } = get();
+        if (!activeServerId) return;
+
+        const cacheKey = `${activeServerId}-${channelId}`;
+        const updatedCache = new Map(messageCache);
+        updatedCache.set(cacheKey, {
+            data: messages,
+            timestamp: Date.now()
+        });
+
+        set({ messageCache: updatedCache });
+        saveMessageCache(updatedCache);
+    },
+    clearMessageCache: () => {
+        set({ messageCache: new Map<string, CachedMessages>() });
+        localStorage.removeItem(MESSAGE_CACHE_KEY);
+    },
+
     fetchServerInfo: async (serverId: string, isBackgroundRefresh = false) => {
         if (!serverId) return;
 
@@ -181,11 +270,16 @@ export function useServerSync() {
 
 // Hook to manage cache persistence
 export function useCachePersistence() {
-    const { serverCache } = useGlobalState();
+    const { serverCache, messageCache } = useGlobalState();
 
     // Save cache to localStorage whenever it changes
     useEffect(() => {
         saveServerCache(serverCache);
     }, [serverCache]);
+
+    // Save message cache to localStorage whenever it changes
+    useEffect(() => {
+        saveMessageCache(messageCache);
+    }, [messageCache]);
 }
 

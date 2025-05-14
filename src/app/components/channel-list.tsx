@@ -158,7 +158,7 @@ const FileDropzone = ({
 };
 
 export default function ChannelList() {
-    const { activeServer, setActiveServer, activeServerId } = useGlobalState();
+    const { activeServer, setActiveServer, activeServerId, activeChannelId } = useGlobalState();
     const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
     const [createChannelOpen, setCreateChannelOpen] = useState(false);
     const [updateServerOpen, setUpdateServerOpen] = useState(false);
@@ -544,7 +544,8 @@ export default function ChannelList() {
                                             channels: activeServer.channels.length,
                                             categories: categories.length,
                                             uncategorized: uncategorizedChannels.length,
-                                            categorized: Array.from(categorizedChannels.keys())
+                                            categorized: Array.from(categorizedChannels.keys()),
+                                            activeChannelId: activeChannelId
                                         }, null, 2)}
                                     </pre>
                                 </details>
@@ -783,11 +784,26 @@ function CategoryHeader({
 // Channel Item Component
 function ChannelItem({ channel }: { channel: Channel }) {
     const navigate = useNavigate();
-    const { activeServerId } = useGlobalState();
+    const { activeServerId, activeChannelId, setActiveChannelId } = useGlobalState();
+
+    // Check if this channel is the active one
+    const isActive = activeChannelId === channel.id;
+
+    const handleChannelClick = () => {
+        // Update global state
+        setActiveChannelId(channel.id);
+        // Navigate to the channel
+        navigate(`/app/${activeServerId}/${channel.id}`);
+    };
+
     return (
         <div
-            className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-accent/40 cursor-pointer group text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => navigate(`/app/${activeServerId}/${channel.id}`)}
+            className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-colors
+                ${isActive
+                    ? 'bg-primary/20 text-foreground'
+                    : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
+            }
+            onClick={handleChannelClick}
         >
             <HashIcon className="h-4 w-4" />
             <span className="text-sm font-medium truncate">{channel.name}</span>

@@ -1,4 +1,4 @@
-import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2 } from "lucide-react"
+import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2, Download } from "lucide-react"
 import type { Server } from "@/lib/types"
 
 import { Button } from "@/components/ui/button";
@@ -364,8 +364,55 @@ export default function ServerList() {
     const [serverIcon, setServerIcon] = useState<File | null>(null);
     const [fetchingJoinedServers, setFetchingJoinedServers] = useState(false);
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+    const [isInstallable, setIsInstallable] = useState(false);
     const address = useActiveAddress();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        // Listen for the beforeinstallprompt event
+        const handleBeforeInstallPrompt = (e: Event) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            setDeferredPrompt(e);
+            // Update UI to notify the user they can install the PWA
+            setIsInstallable(true);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        // Check if app is already installed
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            setIsInstallable(false);
+        }
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
+    }, []);
+
+    // Handle install button click
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+
+        // Show the installation prompt
+        deferredPrompt.prompt();
+
+        // Wait for the user to respond to the prompt
+        const choiceResult = await deferredPrompt.userChoice;
+
+        if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted the install prompt');
+            toast.success("App installed successfully!");
+        } else {
+            console.log('User dismissed the install prompt');
+        }
+
+        // Clear the saved prompt since it can't be used again
+        setDeferredPrompt(null);
+        setIsInstallable(false);
+    };
 
     useEffect(() => {
         console.log("address", address);
@@ -478,10 +525,26 @@ export default function ServerList() {
                     />
                 ))
             )}
+
+            <div className="mt-auto" />
+
+            {/* Install app button - only shown when installable */}
+            {isInstallable && (
+                <Button
+                    variant='outline'
+                    size='icon'
+                    className='w-10 h-10 rounded-lg hover:bg-primary/10 transition-colors'
+                    onClick={handleInstallClick}
+                    title="Install App"
+                >
+                    <Download className="h-5 w-5" />
+                </Button>
+            )}
+
             {/* add server button */}
             <DropdownMenu>
-                <DropdownMenuTrigger className="mt-auto">
-                    <Button variant='outline' size='icon' className='w-10 h-10 rounded-lg mt-auto hover:bg-primary/10 transition-colors'>
+                <DropdownMenuTrigger className="">
+                    <Button variant='outline' size='icon' className='w-10 h-10 rounded-lg hover:bg-primary/10 transition-colors'>
                         <Plus className="h-5 w-5" />
                     </Button>
                 </DropdownMenuTrigger>

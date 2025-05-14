@@ -6,8 +6,6 @@ import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
 
-
-
 const packageJson = JSON.parse(fs.readFileSync("package.json", { encoding: "utf-8" }))
 
 // https://vite.dev/config/

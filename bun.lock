@@ -41,6 +41,7 @@
         "@types/node": "^22.15.17",
         "@types/react": "^19.1.2",
         "@types/react-dom": "^19.1.2",
+        "@vitejs/plugin-basic-ssl": "^2.0.0",
         "@vitejs/plugin-react": "^4.4.1",
         "eslint": "^9.25.0",
         "eslint-plugin-react-hooks": "^5.2.0",
@@ -782,6 +783,8 @@
     "@vela-ventures/ao-sync-sdk": ["@vela-ventures/ao-sync-sdk@1.1.27", "", { "dependencies": { "@fontsource/sora": "^5.2.5", "arconnect": "^1.0.4", "arweave": "^1.15.5", "buffer": "^6.0.3", "lottie-web": "^5.12.2", "mqtt": "^5.10.3", "qrcode": "^1.5.4", "uuid": "^11.0.3" } }, "sha512-htFMCbBubE0Oop6SISTbGQM+dZmaX1VQleVMI65mYwIlgroFo0B+hSDMFwgzPeL6Q4gAlgvvY2f8dqnivx1fMg=="],
 
     "@vela-ventures/aosync-strategy": ["@vela-ventures/aosync-strategy@1.0.12", "", { "dependencies": { "@arweave-wallet-kit/core": "^0.1.1", "@vela-ventures/ao-sync-sdk": "^1.1.27" } }, "sha512-dq/pDimJpN5yZ7AITv0NkYBAbNaqqhKZnQ2Hzt1br3q3gYDDOXbAiG3iYvbqySkwoKwUbTM0msvig6V1Nf667Q=="],
+
+    "@vitejs/plugin-basic-ssl": ["@vitejs/plugin-basic-ssl@2.0.0", "", { "peerDependencies": { "vite": "^6.0.0" } }, "sha512-gc9Tjg8bUxBVSTzeWT3Njc0Cl3PakHFKdNfABnZWiUgbxqmHDEn7uECv3fHVylxoYgNzAcmU7ZrILz+BwSo3sA=="],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@4.4.1", "", { "dependencies": { "@babel/core": "^7.26.10", "@babel/plugin-transform-react-jsx-self": "^7.25.9", "@babel/plugin-transform-react-jsx-source": "^7.25.9", "@types/babel__core": "^7.20.5", "react-refresh": "^0.17.0" }, "peerDependencies": { "vite": "^4.2.0 || ^5.0.0 || ^6.0.0" } }, "sha512-IpEm5ZmeXAP/osiBXVVP5KjFMzbWOonMs0NaQQl+xYnUAcq4oHUBsF2+p4MgKWG4YMmFYJU8A6sxRPuowllm6w=="],
 

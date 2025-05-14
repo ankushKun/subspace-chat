@@ -1,7 +1,24 @@
 import { ModeToggle } from "@/components/mode-toggle";
 import sLogo from "@/assets/s.png"
+import { useEffect, useState } from "react";
 
 export default function Hero() {
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    console.log(isOnline)
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
     return (
         <div className='w-full h-full flex flex-col items-center justify-center select-none'>
             <ModeToggle className="absolute top-4 right-4" />
@@ -10,9 +27,16 @@ export default function Hero() {
             <p className="text-sm mt-2 text-muted-foreground">Your intergalactic communications system</p>
             <div className="h-20" />
 
-            <p className="text-sm text-muted-foreground">
-                Join a server to start talking
-            </p>
+            {!isOnline ? (
+                <div className="flex flex-col items-center gap-2">
+                    <p className="text-sm font-medium text-destructive">No internet connection</p>
+                    <p className="text-xs text-muted-foreground">Please check your connection and try again</p>
+                </div>
+            ) : (
+                <p className="text-sm text-muted-foreground">
+                    Join a server to start talking
+                </p>
+            )}
         </div>
     )
 }

@@ -4,13 +4,35 @@ import tailwindcss from '@tailwindcss/vite'
 import path from "path"
 import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { VitePWA } from 'vite-plugin-pwa'
+
 
 
 const packageJson = JSON.parse(fs.readFileSync("package.json", { encoding: "utf-8" }))
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), nodePolyfills()],
+  plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
+    registerType: 'autoUpdate',
+    manifest: {
+      name: "Subspace Chat",
+      short_name: "Subspace",
+      description: "Intergalactic communication app",
+      theme_color: "#000000",
+      icons: [
+        {
+          src: 's.png',
+          sizes: '192x192',
+          type: 'image/png'
+        },
+        {
+          src: 's.png',
+          sizes: '512x512',
+          type: 'image/png'
+        }
+      ],
+    }
+  })],
   base: "./",
   resolve: {
     alias: {

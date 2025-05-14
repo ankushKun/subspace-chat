@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Input } from "@/components/ui/input";
-import { FaApple, FaDiscord, FaGoogle, FaXTwitter } from "react-icons/fa6"
+import { FaApple, FaDiscord, FaGoogle, FaPuzzlePiece, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
 import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
 import { useNavigate } from "react-router-dom"
 import BackgroundStars from "@/components/background-stars";
+import { CornerDownLeftIcon, WalletCards, WalletCardsIcon } from "lucide-react";
+import { useGlobalState } from "@/hooks";
+import { useLocalStorage } from "@uidotdev/usehooks";
+import { Switch } from "@/components/ui/switch"
 
 
 enum LoginStep {
@@ -22,16 +25,18 @@ export default function Landing() {
   const { setOpen } = useProfileModal();
   const address = useActiveAddress();
   const navigate = useNavigate();
+  const { wanderInstance } = useGlobalState();
+  const [useWC, setUseWC] = useLocalStorage("useWC", true);
 
   useEffect(() => {
-    if (connected) {
+    if (connected && address) {
       console.log("connected", address);
       navigate("/app");
     }
   }, [connected, address]);
 
   async function start() {
-    if (connected) {
+    if (connected && address) {
       console.log("connected", address);
       navigate("/app");
     }
@@ -42,14 +47,28 @@ export default function Landing() {
   async function loginWithArweave() {
     if (connected)
       setOpen(true);
-    else
-      connect().then(() => navigate("/app"));
+    else {
+      connect()
+    }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center font-mono relative" >
       <BackgroundStars />
       <ModeToggle className="absolute top-4 right-4" />
+      <Button
+        disabled={!useWC}
+        variant="outline" size="icon"
+        className="absolute top-16 right-4"
+        onClick={() => wanderInstance.open()}>
+        <WalletCardsIcon />
+      </Button>
+      <Switch
+        className="absolute top-26 right-4 mr-0.5"
+        checked={useWC}
+        onCheckedChange={setUseWC}
+        onClick={() => setInterval(() => window.location.reload(), 200)}
+      />
       <div className="rounded-lg w-full max-w-5xl mx-4 p-12 flex flex-col items-center justify-center" style={{ minHeight: '70vh' }}>
         <h1 className="text-6xl md:text-8xl font-bold mb-6 flex items-center space-x-2 select-none">
           <span className="font-normal text-outline">SUB</span>
@@ -64,26 +83,11 @@ export default function Landing() {
         )}
         {loginStep === LoginStep.Login && (
           <div className="flex flex-col items-center justify-center gap-5">
-            {/* <div className="flex flex-col gap-4 w-full">
-              <Input
-                type="email"
-                placeholder="email"
-                id="email"
-                disabled
-              />
-              <Input
-                type="password"
-                placeholder="password"
-                id="password"
-                disabled
-              />
-            </div>
-            <TextWLine className="w-[269px] opacity-70" /> */}
             <div className="flex flex-col gap-4">
               <Button variant="outline" className="items-center justify-center gap-2" onClick={loginWithArweave}>
-                <div>Arweave</div> <BiWallet />
+                <div>CONNECT</div> <CornerDownLeftIcon />
               </Button>
-              <TextWLine className="w-[269px] opacity-70" />
+              {/* <TextWLine className="w-[269px] opacity-70" />
               <div className="flex items-center justify-center gap-2">
                 <Button variant="outline" size="icon" disabled>
                   <FaGoogle />
@@ -97,7 +101,7 @@ export default function Landing() {
                 <Button variant="outline" size="icon" disabled>
                   <FaApple />
                 </Button>
-              </div>
+              </div> */}
             </div>
             {/* <div className="flex items-center justify-center gap-2 text-muted-foreground">
               Dont have an account?
@@ -108,12 +112,7 @@ export default function Landing() {
             </div> */}
           </div>
         )}
-        {loginStep === LoginStep.Register && (
-          <div>
-            {/* Registration form will go here */}
-          </div>
-        )}
-        <div className="text-xs text-muted-foreground/60 p-0 mt-2">
+        <div className="text-xs text-muted-foreground/60 p-0 mt-4">
           {/* @ts-ignore */}
           v{__APP_VERSION__}
         </div>

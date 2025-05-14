@@ -3,6 +3,7 @@ import type { Server } from '@/lib/types'
 import { useEffect } from 'react'
 import { getServerInfo } from '@/lib/ao'
 import { persist } from 'zustand/middleware'
+import type { WanderConnect } from '@wanderapp/connect'
 
 // Storage keys
 const STORAGE_KEY = 'subspace-server-cache'
@@ -98,6 +99,9 @@ export interface GlobalState {
 
     showUsers: boolean
     setShowUsers: (show: boolean) => void
+
+    wanderInstance: WanderConnect | null
+    setWanderInstance: (instance: WanderConnect | null) => void
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -320,7 +324,10 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
     },
     showUsers: false,
-    setShowUsers: (show: boolean) => set({ showUsers: show })
+    setShowUsers: (show: boolean) => set({ showUsers: show }),
+
+    wanderInstance: null,
+    setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance })
 }))
 
 // Hook to synchronize server ID with server data

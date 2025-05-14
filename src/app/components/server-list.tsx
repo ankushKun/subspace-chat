@@ -1,4 +1,4 @@
-import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2, Download } from "lucide-react"
+import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2, Download, WalletCards } from "lucide-react"
 import type { Server } from "@/lib/types"
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
 import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { useNavigate } from "react-router-dom";
+import { useLocalStorage } from "@uidotdev/usehooks";
 
 const sampleInvites = [
     "abcxyz",
@@ -368,7 +369,7 @@ if (typeof window !== 'undefined') {
 }
 
 export default function ServerList() {
-    const { activeServerId, isServerValid } = useGlobalState();
+    const { activeServerId, isServerValid, wanderInstance } = useGlobalState();
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [joinInput, setJoinInput] = useState("");
@@ -378,6 +379,7 @@ export default function ServerList() {
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
     const [deferredPrompt, setDeferredPrompt] = useState<any>(deferredPromptEvent);
     const [isInstallable, setIsInstallable] = useState(!!deferredPromptEvent);
+    const [useWC, setUseWC] = useLocalStorage("useWC", true);
     const address = useActiveAddress();
     const navigate = useNavigate();
 
@@ -532,6 +534,10 @@ export default function ServerList() {
         }
     }
 
+    async function openWallet() {
+        wanderInstance.open()
+    }
+
     return (
         <>
             <Button
@@ -557,6 +563,17 @@ export default function ServerList() {
             )}
 
             <div className="mt-auto" />
+
+            <Button
+                disabled={!useWC}
+                variant='outline'
+                size='icon'
+                className='w-10 h-10 rounded-lg hover:bg-primary/10 transition-colors'
+                onClick={openWallet}
+                title="Open Wallet"
+            >
+                <WalletCards className="h-5 w-5" />
+            </Button>
 
             {/* Install app button - only shown when installable */}
             {isInstallable && (

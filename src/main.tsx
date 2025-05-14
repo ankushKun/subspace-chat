@@ -5,16 +5,59 @@ import { Toaster } from "@/components/ui/sonner"
 import { ArweaveWalletKit } from "@arweave-wallet-kit/react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
+import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
 import Settings from '@/settings'
 import Invite from '@/invite'
+import { useEffect, useRef } from 'react'
+import { WanderConnect } from '@wanderapp/connect'
+import { useConnection } from "@arweave-wallet-kit/react"
+import { useGlobalState } from '@/hooks'
+import { useLocalStorage } from '@uidotdev/usehooks'
+
+function Main() {
+  const { wanderInstance, setWanderInstance } = useGlobalState()
+  const [useWC, setUseWC] = useLocalStorage("useWC", true);
+  const { connect } = useConnection();
+
+  useEffect(() => {
+    if (!useWC) {
+      if (wanderInstance) {
+        wanderInstance.destroy();
+      }
+      return;
+    }
+    const wander = new WanderConnect({
+      clientId: "FREE_TRIAL",
+      button: {
+        position: "static",
+        theme: "dark"
+      },
+
+      onAuth: async (userDetails) => {
+        console.log(userDetails)
+        if (!!userDetails) {
+          try {
+            await window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION"]);
+            await connect();
+          } catch (e) {
+            console.error("Error", e);
+          }
+        }
+      }
+    })
 
 
+    setWanderInstance(wander);
 
-createRoot(document.getElementById('root')!).render(
-  <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
+    return () => { wander.destroy() }
+  }, [useWC])
+
+  const wc = useWC ? new BrowserWalletStrategy() : new WanderStrategy();
+
+  return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     {/* <Toaster /> */}
     <ArweaveWalletKit
       config={{
@@ -28,7 +71,10 @@ createRoot(document.getElementById('root')!).render(
           "SIGN_TRANSACTION"
         ],
         ensurePermissions: true,
-        strategies: [new WanderStrategy(), new AoSyncStrategy()]
+        strategies: [
+          wc,
+          new AoSyncStrategy(),
+        ]
       }}
       theme={{
         accent: { r: 160, g: 160, b: 220 },
@@ -51,4 +97,6 @@ createRoot(document.getElementById('root')!).render(
       </HashRouter>
     </ArweaveWalletKit>
   </ThemeProvider>
-)
+}
+
+createRoot(document.getElementById('root')!).render(<Main />)

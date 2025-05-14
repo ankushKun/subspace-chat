@@ -7,6 +7,7 @@ import Chat from '@/app/components/chat';
 import ServerList from '@/app/components/server-list';
 import { useEffect } from 'react';
 import { uploadFileAndGetId } from '@/lib/ao';
+import Profile from './components/profile';
 
 export default function App() {
     const { serverId, channelId, userId } = useParams();
@@ -47,6 +48,7 @@ export default function App() {
             {/* channels / dm list */}
             <div className='w-[333px] max-w-[333px] min-w-[333px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
                 {activeServerId === null ? <DmList /> : <ChannelList />}
+                <Profile />
             </div>
             {/* main view */}
             <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>

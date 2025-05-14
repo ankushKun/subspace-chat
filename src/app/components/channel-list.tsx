@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight, Link } from "lucide-react";
+import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight, Link as LinkIcon } from "lucide-react";
 import type { Server, Category, Channel } from "@/lib/types";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
@@ -25,7 +25,7 @@ import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua
 import { useActiveAddress } from "@arweave-wallet-kit/react";
 import serverCode from "@/lib/lua/server";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -473,7 +473,7 @@ export default function ChannelList() {
                                 }}
                                 className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
                             >
-                                <Link className="h-5 w-5" />
+                                <LinkIcon className="h-5 w-5" />
                                 <div>
                                     <p className="font-medium">Copy Invite</p>
                                     <p className="text-xs text-muted-foreground">Use this link to invite others to the server</p>

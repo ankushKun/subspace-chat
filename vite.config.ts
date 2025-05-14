@@ -12,6 +12,10 @@ const packageJson = JSON.parse(fs.readFileSync("package.json", { encoding: "utf-
 export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
+    workbox: {
+      globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+      maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+    },
     manifest: {
       name: "Subspace Chat",
       short_name: "Subspace",

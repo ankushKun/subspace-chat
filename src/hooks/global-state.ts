@@ -15,6 +15,8 @@ interface MembersResponse {
 const STORAGE_KEY = 'subspace-server-cache'
 const MESSAGE_CACHE_KEY = 'subspace-message-cache'
 const MEMBERS_CACHE_KEY = 'subspace-members-cache'
+const USER_PROFILE_CACHE_KEY = 'subspace-user-profile-cache'
+const SERVER_LIST_CACHE_KEY = 'subspace-server-list-cache'
 
 // Cache TTL in milliseconds (24 hours)
 const CACHE_TTL = 24 * 60 * 60 * 1000
@@ -22,6 +24,10 @@ const CACHE_TTL = 24 * 60 * 60 * 1000
 const MESSAGE_CACHE_TTL = 5 * 60 * 1000
 // Members cache TTL (10 minutes)
 const MEMBERS_CACHE_TTL = 10 * 60 * 1000
+// User profile cache TTL (30 minutes)
+const USER_PROFILE_CACHE_TTL = 30 * 60 * 1000
+// Server list cache TTL (15 minutes)
+const SERVER_LIST_CACHE_TTL = 15 * 60 * 1000
 
 interface CachedServer {
     data: Server
@@ -36,6 +42,19 @@ interface CachedMessages {
 interface CachedMembers {
     data: Member[]
     timestamp: number
+}
+
+// Define interface for cached user profile
+interface CachedUserProfile {
+    data: any;  // Profile data
+    timestamp: number;
+}
+
+// Define interface for cached server list
+interface CachedServerList {
+    data: string[];  // Array of server IDs
+    address: string; // The address this list belongs to
+    timestamp: number;
 }
 
 // Helper functions for cache persistence
@@ -113,6 +132,50 @@ const saveMembersCache = (cache: Map<string, CachedMembers>): void => {
     }
 }
 
+// Helper function to load user profile from storage
+const loadUserProfileCache = (): CachedUserProfile | null => {
+    try {
+        const storedCache = localStorage.getItem(USER_PROFILE_CACHE_KEY)
+        if (storedCache) {
+            return JSON.parse(storedCache)
+        }
+    } catch (error) {
+        console.error('Failed to load user profile cache from storage:', error)
+    }
+    return null
+}
+
+// Helper function to save user profile to storage
+const saveUserProfileCache = (cache: CachedUserProfile): void => {
+    try {
+        localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(cache))
+    } catch (error) {
+        console.error('Failed to save user profile cache to storage:', error)
+    }
+}
+
+// Helper function to load server list from storage
+const loadServerListCache = (): CachedServerList | null => {
+    try {
+        const storedCache = localStorage.getItem(SERVER_LIST_CACHE_KEY)
+        if (storedCache) {
+            return JSON.parse(storedCache)
+        }
+    } catch (error) {
+        console.error('Failed to load server list cache from storage:', error)
+    }
+    return null
+}
+
+// Helper function to save server list to storage
+const saveServerListCache = (cache: CachedServerList): void => {
+    try {
+        localStorage.setItem(SERVER_LIST_CACHE_KEY, JSON.stringify(cache))
+    } catch (error) {
+        console.error('Failed to save server list cache to storage:', error)
+    }
+}
+
 export interface GlobalState {
     activeServerId: string | null
     setActiveServerId: (server: string | null) => void
@@ -154,6 +217,19 @@ export interface GlobalState {
 
     // Track servers with invalid member endpoints
     invalidMemberServers: Set<string>
+
+    // User profile management
+    userProfile: CachedUserProfile | null
+    setUserProfile: (profileData: any) => void
+    getUserProfile: () => any | null
+    clearUserProfileCache: () => void
+    fetchUserProfile: (address: string) => Promise<any | null>
+
+    // Server list caching
+    serverListCache: CachedServerList | null
+    fetchJoinedServers: (address: string, forceRefresh?: boolean) => Promise<string[]>
+    cacheServerList: (address: string, serverIds: string[]) => void
+    clearServerListCache: () => void
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -216,6 +292,61 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         // Clear both in-memory cache and storage
         set({ serverCache: new Map<string, CachedServer>() });
         localStorage.removeItem(STORAGE_KEY);
+    },
+
+    // Server list cache implementation
+    serverListCache: loadServerListCache(),
+
+    fetchJoinedServers: async (address: string, forceRefresh = false) => {
+        if (!address) return [];
+
+        const { serverListCache } = get();
+        const now = Date.now();
+
+        // Use cache if available and not expired, and if this is the same user
+        if (!forceRefresh &&
+            serverListCache &&
+            serverListCache.address === address &&
+            now - serverListCache.timestamp <= SERVER_LIST_CACHE_TTL) {
+            console.log(`[fetchJoinedServers] Using cached server list for ${address}`);
+            return serverListCache.data;
+        }
+
+        try {
+            console.log(`[fetchJoinedServers] Fetching joined servers for ${address}`);
+            const serverIds = await getJoinedServers(address);
+
+            // Cache the result
+            get().cacheServerList(address, serverIds);
+
+            return serverIds;
+        } catch (error) {
+            console.error(`[fetchJoinedServers] Error fetching joined servers:`, error);
+
+            // If we have cached data for this user, return it even if expired
+            if (serverListCache && serverListCache.address === address) {
+                console.log(`[fetchJoinedServers] Using expired cache as fallback`);
+                return serverListCache.data;
+            }
+
+            return [];
+        }
+    },
+
+    cacheServerList: (address: string, serverIds: string[]) => {
+        const cachedServerList = {
+            data: serverIds,
+            address: address,
+            timestamp: Date.now()
+        };
+
+        set({ serverListCache: cachedServerList });
+        saveServerListCache(cachedServerList);
+    },
+
+    clearServerListCache: () => {
+        set({ serverListCache: null });
+        localStorage.removeItem(SERVER_LIST_CACHE_KEY);
     },
 
     // Message cache implementation
@@ -410,7 +541,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     isPrefetchingData: false,
 
     prefetchAllServerData: async (address: string) => {
-        const { isPrefetchingData, isServerValid, serverCache, fetchServerInfo, fetchServerMembers } = get();
+        const { isPrefetchingData, isServerValid, serverCache, fetchServerInfo, fetchServerMembers, fetchJoinedServers } = get();
 
         // Avoid multiple concurrent prefetches
         if (isPrefetchingData) return;
@@ -420,7 +551,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             console.log('[prefetchAllServerData] Starting background prefetch of all server data');
 
             // Get list of joined servers
-            const serverIds = await getJoinedServers(address);
+            const serverIds = await fetchJoinedServers(address, false);
             console.log(`[prefetchAllServerData] Found ${serverIds.length} servers to prefetch`);
 
             if (serverIds.length === 0) {
@@ -557,7 +688,59 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     setShowUsers: (show: boolean) => set({ showUsers: show }),
 
     wanderInstance: null,
-    setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance })
+    setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
+
+    // User profile state implementation
+    userProfile: loadUserProfileCache(),
+
+    setUserProfile: (profileData: any) => {
+        const userProfile = {
+            data: profileData,
+            timestamp: Date.now()
+        };
+
+        set({ userProfile });
+        saveUserProfileCache(userProfile);
+    },
+
+    getUserProfile: () => {
+        const { userProfile } = get();
+        if (!userProfile) return null;
+
+        // Check if cache is still valid
+        const now = Date.now();
+        if (now - userProfile.timestamp <= USER_PROFILE_CACHE_TTL) {
+            return userProfile.data;
+        }
+
+        return null;
+    },
+
+    clearUserProfileCache: () => {
+        set({ userProfile: null });
+        localStorage.removeItem(USER_PROFILE_CACHE_KEY);
+    },
+
+    fetchUserProfile: async (address: string) => {
+        if (!address) return null;
+
+        try {
+            console.log(`[fetchUserProfile] Fetching profile for ${address}`);
+            // Import getProfile from ao.ts without causing circular dependencies
+            const { getProfile } = require('@/lib/ao');
+            const profileData = await getProfile(address);
+
+            if (profileData) {
+                // Cache the profile data
+                get().setUserProfile(profileData);
+                return profileData;
+            }
+        } catch (error) {
+            console.error(`[fetchUserProfile] Error fetching profile for ${address}:`, error);
+        }
+
+        return null;
+    }
 }))
 
 // Hook to synchronize server ID with server data
@@ -595,17 +778,22 @@ export function useCachePersistence() {
 
 // Hook to prefetch all server data when user logs in
 export function useBackgroundPreload() {
-    const { prefetchAllServerData } = useGlobalState();
+    const { prefetchAllServerData, fetchUserProfile } = useGlobalState();
     const activeAddress = useActiveWalletAddress();
 
     useEffect(() => {
         if (activeAddress) {
+            // Prefetch user profile immediately
+            fetchUserProfile(activeAddress).catch(err =>
+                console.warn('[useBackgroundPreload] Failed to prefetch profile:', err)
+            );
+
             // Start background prefetch after a short delay to avoid blocking app startup
             setTimeout(() => {
                 prefetchAllServerData(activeAddress);
             }, 1000);
         }
-    }, [activeAddress, prefetchAllServerData]);
+    }, [activeAddress, prefetchAllServerData, fetchUserProfile]);
 
     return null;
 }

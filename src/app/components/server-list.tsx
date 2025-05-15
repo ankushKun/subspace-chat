@@ -24,7 +24,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-import { createServer, getJoinedServers, getServerInfo, joinServer, leaveServer } from "@/lib/ao";
+import { createServer, getServerInfo, joinServer, leaveServer } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
@@ -32,6 +32,7 @@ import * as Progress from "@radix-ui/react-progress";
 import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "@uidotdev/usehooks";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 
 const sampleInvites = [
     "abcxyz",
@@ -125,7 +126,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
     return (
         <div className="relative group">
             <Button
-                className={`w-12 h-12 p-0 rounded-lg relative ${isInvalid ? 'opacity-80 grayscale' : ''}`}
+                className={`w-12 h-12 p-0 rounded-lg bg-transparent hover:bg-primary/5 relative ${isInvalid ? 'opacity-80 grayscale' : ''}`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={clicked}
@@ -250,136 +251,6 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
     )
 }
 
-// File dropzone component
-const FileDropzone = ({
-    onFileChange
-}: {
-    onFileChange: (file: File | null) => void
-}) => {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [preview, setPreview] = useState<string | null>(null);
-    const [fileError, setFileError] = useState<string | null>(null);
-
-    // 100KB size limit in bytes
-    const MAX_FILE_SIZE = 100 * 1024;
-
-    const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
-        // Clear previous errors
-        setFileError(null);
-
-        // Handle file rejections (e.g., file size, type)
-        if (fileRejections.length > 0) {
-            const { code, message } = fileRejections[0].errors[0];
-            if (code === 'file-too-large') {
-                setFileError(`File is too large. Maximum size is 100KB.`);
-            } else {
-                setFileError(message);
-            }
-            return;
-        }
-
-        if (acceptedFiles && acceptedFiles.length > 0) {
-            const file = acceptedFiles[0];
-            setSelectedFile(file);
-            onFileChange(file);
-
-            // Create preview for image
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
-    }, [onFileChange]);
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        accept: {
-            'image/*': ['.jpeg', '.jpg', '.png', '.gif']
-        },
-        maxFiles: 1,
-        maxSize: MAX_FILE_SIZE,
-    });
-
-    const removeFile = () => {
-        setSelectedFile(null);
-        setPreview(null);
-        setFileError(null);
-        onFileChange(null);
-    };
-
-    const formatFileSize = (bytes: number) => {
-        if (bytes < 1024) return bytes + ' bytes';
-        else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    };
-
-    return (
-        <div className="w-full space-y-2">
-            <div className="flex justify-between items-center">
-                <label className="text-sm font-medium text-foreground">Server Icon</label>
-                <span className="text-xs text-muted-foreground">Max 100KB</span>
-            </div>
-
-            {!selectedFile ? (
-                <div
-                    {...getRootProps()}
-                    className={`
-                        border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer
-                        flex flex-col items-center justify-center min-h-[120px]
-                        ${isDragActive
-                            ? 'border-primary bg-primary/5'
-                            : fileError
-                                ? 'border-destructive/50 bg-destructive/5'
-                                : 'border-muted-foreground/20 hover:border-muted-foreground/50'
-                        }
-                    `}
-                >
-                    <input {...getInputProps()} />
-                    <Upload className={`h-6 w-6 mb-2 ${fileError ? 'text-destructive' : 'text-muted-foreground'}`} />
-
-                    {fileError ? (
-                        <div className="text-center">
-                            <p className="text-sm text-destructive font-medium">{fileError}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Try a smaller image (maximum 100KB)
-                            </p>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground">
-                            {isDragActive ? 'Drop your image here' : 'Drag & drop server icon or click to select'}
-                        </p>
-                    )}
-                </div>
-            ) : (
-                <div className="relative bg-muted rounded-lg p-1">
-                    <div className="relative aspect-square w-full overflow-hidden rounded-md">
-                        {preview && (
-                            <img
-                                src={preview}
-                                alt="Preview"
-                                className="h-full w-full object-cover"
-                            />
-                        )}
-                    </div>
-                    {selectedFile && (
-                        <div className="absolute bottom-2 left-2 text-xs bg-black/70 text-white px-2 py-1 rounded-md">
-                            {formatFileSize(selectedFile.size)}
-                        </div>
-                    )}
-                    <button
-                        type="button"
-                        onClick={removeFile}
-                        className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-xs text-white shadow-sm"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-};
-
 // Global variable to capture the install prompt event before component mounts
 let deferredPromptEvent: any = null;
 
@@ -393,7 +264,14 @@ if (typeof window !== 'undefined') {
 }
 
 export default function ServerList() {
-    const { activeServerId, isServerValid, wanderInstance, fetchServerInfo } = useGlobalState();
+    const {
+        activeServerId,
+        isServerValid,
+        wanderInstance,
+        fetchServerInfo,
+        fetchJoinedServers,
+        serverListCache
+    } = useGlobalState();
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [joinInput, setJoinInput] = useState("");
@@ -470,22 +348,57 @@ export default function ServerList() {
         setIsInstallable(false);
     };
 
+    // Fetch servers list when address changes or component mounts
     useEffect(() => {
-        console.log("address", address);
-        if (!address) return
+        if (!address) return;
         runGetJoinedServers();
     }, [address]);
 
+    // Check if we have cached data and use it immediately
+    useEffect(() => {
+        if (serverListCache && address && serverListCache.address === address) {
+            // Use cached server list immediately to prevent flickering
+            setJoinedServers(serverListCache.data);
+
+            // Only show loading state if we don't have cached data
+            if (serverListCache.data.length === 0) {
+                setFetchingJoinedServers(true);
+            } else {
+                // If we have cached data, still refresh in the background
+                const silentRefresh = async () => {
+                    try {
+                        // Force refresh only if the cache is older than 10 minutes
+                        const cacheAge = Date.now() - serverListCache.timestamp;
+                        const shouldForceRefresh = cacheAge > 10 * 60 * 1000;
+
+                        // Silent background refresh
+                        const servers = await fetchJoinedServers(address, shouldForceRefresh);
+                        setJoinedServers(servers);
+                    } catch (error) {
+                        console.error("[ServerList] Error in silent refresh:", error);
+                    }
+                };
+
+                // Wait a short delay before doing the background refresh
+                setTimeout(silentRefresh, 2000);
+            }
+        }
+    }, [serverListCache, address]);
+
     async function runGetJoinedServers() {
         if (!address) return;
-        setFetchingJoinedServers(true);
+
+        // Show loading state only if we don't have cached data
+        if (!serverListCache || serverListCache.address !== address || serverListCache.data.length === 0) {
+            setFetchingJoinedServers(true);
+        }
 
         try {
             console.log("[ServerList] Fetching joined servers list");
-            const res = await getJoinedServers(address);
+            const res = await fetchJoinedServers(address, false);
             setJoinedServers(res);
 
-            // After we have the servers list, start prefetching their data
+            // After we have the servers list, start prefetching their data in the background
             for (const serverId of res) {
                 if (!isServerValid(serverId)) continue;
 
@@ -747,7 +660,10 @@ export default function ServerList() {
 
                     <div className="flex gap-4 py-2">
                         <div className="w-1/3">
-                            <FileDropzone onFileChange={setServerIcon} />
+                            <FileDropzone
+                                onFileChange={setServerIcon}
+                                label="Server Icon"
+                            />
                         </div>
 
                         <div className="flex-1 space-y-2">

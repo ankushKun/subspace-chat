@@ -1,4 +1,4 @@
-import { Mic, Headphones, Settings, LogOut } from 'lucide-react'
+import { Mic, Headphones, Settings, LogOut, User, Upload, X, Pencil, Save, Loader2 } from 'lucide-react'
 import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -9,11 +9,159 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMobile } from "@/hooks";
+import {
+    AlertDialog,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogFooter,
+    AlertDialogAction,
+    AlertDialogCancel
+} from '@/components/ui/alert-dialog';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { getProfile, updateProfile, uploadFileAndGetId } from '@/lib/ao';
+import { toast } from 'sonner';
+import { useDropzone } from 'react-dropzone';
+import { useGlobalState } from '@/hooks/global-state';
+import { FileDropzone } from '@/components/ui/file-dropzone';
 
 export default function Profile() {
     const activeAddress = useActiveAddress();
     const { disconnect } = useConnection();
     const isMobile = useMobile();
+    const [profileOpen, setProfileOpen] = useState(false);
+    const { activeServerId, activeServer, getUserProfile, fetchUserProfile } = useGlobalState();
+    const previousAddressRef = useRef<string | null>(null);
+
+    // Profile state
+    const [isLoading, setIsLoading] = useState(false);
+    const [profileData, setProfileData] = useState<any>(null);
+    const [username, setUsername] = useState("");
+    const [profilePic, setProfilePic] = useState<File | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Watch for address changes
+    useEffect(() => {
+        // If address changed, reset and fetch new profile data
+        if (activeAddress !== previousAddressRef.current) {
+            console.log(`[Profile] Wallet address changed from ${previousAddressRef.current} to ${activeAddress}`);
+            // Reset profile data
+            setProfileData(null);
+            setUsername("");
+
+            // Update the ref to current address
+            previousAddressRef.current = activeAddress;
+
+            // If we have an address, fetch new profile data
+            if (activeAddress) {
+                fetchProfile();
+            }
+        }
+    }, [activeAddress]);
+
+    // Load cached profile data when component mounts
+    useEffect(() => {
+        if (activeAddress) {
+            // Try to get profile from cache first
+            const cachedProfile = getUserProfile();
+            if (cachedProfile) {
+                console.log(`[Profile] Using cached profile data`);
+                setProfileData(cachedProfile);
+                setUsername(cachedProfile.profile?.username || "");
+            }
+        }
+    }, [activeAddress, getUserProfile]);
+
+    // Fetch profile when dialog opens if no cached data
+    useEffect(() => {
+        if (profileOpen && activeAddress && !profileData) {
+            fetchProfile();
+        }
+    }, [profileOpen, activeAddress, profileData]);
+
+    // Reset edit mode when dialog closes
+    useEffect(() => {
+        if (!profileOpen) {
+            setIsEditing(false);
+        }
+    }, [profileOpen]);
+
+    // Fetch user profile
+    const fetchProfile = async () => {
+        if (!activeAddress) return;
+
+        setIsLoading(true);
+        try {
+            // Try to get from global state first
+            let result = getUserProfile();
+
+            // If no cached data or cache is stale, fetch fresh data
+            if (!result) {
+                console.log(`[Profile] No cached profile data, fetching from server`);
+                result = await fetchUserProfile(activeAddress);
+            }
+
+            if (result && 'profile' in result) {
+                setProfileData(result);
+                setUsername(result.profile?.username || "");
+            }
+        } catch (error) {
+            console.error("Error fetching profile:", error);
+            toast.error("Failed to load profile");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Save profile changes
+    const handleSaveProfile = async () => {
+        if (!activeAddress) return;
+
+        setIsSaving(true);
+        try {
+            let pfpId = profileData?.profile?.pfp;
+
+            // Upload new profile picture if one was selected
+            if (profilePic) {
+                toast.loading("Uploading profile picture...");
+                pfpId = await uploadFileAndGetId(profilePic);
+                toast.dismiss();
+            }
+
+            // Update profile
+            toast.loading("Saving profile...");
+            await updateProfile(username, pfpId);
+            toast.dismiss();
+            toast.success("Profile updated successfully");
+
+            // Refresh profile data and update cache
+            const updatedProfile = await fetchUserProfile(activeAddress);
+            if (updatedProfile) {
+                setProfileData(updatedProfile);
+            }
+
+            setIsEditing(false);
+            setProfilePic(null);
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            toast.dismiss();
+            toast.error("Failed to update profile");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Cancel editing
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setUsername(profileData?.profile?.username || "");
+        setProfilePic(null);
+    };
 
     return (
         <div className="mt-auto w-full border-t flex items-center justify-between border-border/30 p-2 bg-background/50 backdrop-blur-[2px]">
@@ -24,7 +172,15 @@ export default function Profile() {
                         <div className="relative">
                             <div className="w-10 h-10 rounded-full bg-primary/20 overflow-hidden flex items-center justify-center">
                                 {activeAddress ? (
-                                    <span className="text-xs font-medium">{activeAddress.substring(0, 2)}</span>
+                                    profileData?.profile?.pfp ? (
+                                        <img
+                                            src={`https://arweave.net/${profileData.profile.pfp}`}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-xs font-medium">{activeAddress.substring(0, 2)}</span>
+                                    )
                                 ) : (
                                     <span className="text-xs">?</span>
                                 )}
@@ -35,22 +191,15 @@ export default function Profile() {
                         {/* User info */}
                         <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">
-                                {activeAddress ?
+                                {profileData?.profile?.username || (activeAddress ?
                                     `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`
-                                    : 'Not Connected'}
+                                    : 'Not Connected')}
                             </div>
                             <div className="flex flex-col">
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                                     <span>Online</span>
                                 </div>
-                                {/* <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <svg viewBox="0 0 24 24" className="w-3 h-3 mr-0.5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M17.5 12C17.5 13.576 16.8415 14.9977 15.7746 16C14.7077 17.0023 13.2389 17.625 11.5834 17.625C9.92789 17.625 8.45435 17.0047 7.38296 16.0047C6.31158 15.0047 5.66667 13.5767 5.66667 12C5.66667 10.4233 6.31158 8.9953 7.38296 7.9953C8.45435 6.9953 9.92789 6.375 11.5834 6.375C13.2389 6.375 14.7134 6.9953 15.7769 7.9953C16.8403 8.9953 17.5 10.424 17.5 12Z" fill="currentColor"></path>
-                                        <path d="M21.25 11.6137C21.25 9.57811 20.3984 7.625 18.8659 6.16819C17.3335 4.71137 15.2671 3.90625 13.125 3.90625H5.78125L2.75 6.85228L5.78125 9.79831H7.94956C7.81603 10.3386 7.75 10.9018 7.75 11.4741V11.6137C7.75 14.1895 9.90956 16.25 12.5991 16.25H21.25V11.6137Z" fill="currentColor"></path>
-                                    </svg>
-                                    <span>Playing Code</span>
-                                </div> */}
                             </div>
                         </div>
                     </div>
@@ -61,6 +210,13 @@ export default function Profile() {
                     className="p-2 -ml-2 data-[mobile=true]:!w-[calc(100vw-88px)] data-[mobile=false]:!min-w-[333px] space-y-1 bg-background/95 backdrop-blur-sm"
                     sideOffset={4}
                 >
+                    <DropdownMenuItem
+                        onClick={() => setProfileOpen(true)}
+                        className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
+                    >
+                        <User className="h-4 w-4" />
+                        <span>Profile</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                         onClick={disconnect}
                         className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
@@ -79,6 +235,135 @@ export default function Profile() {
                     </Button>
                 </Link>
             </div>
+
+            <AlertDialog open={profileOpen} onOpenChange={setProfileOpen}>
+                <AlertDialogContent className="max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center justify-between">
+                            <span>Your Profile</span>
+                            {!isEditing && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-1"
+                                    onClick={() => setIsEditing(true)}
+                                    disabled={isLoading}
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    <span>Edit</span>
+                                </Button>
+                            )}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Your profile information is visible to other members.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <div className="py-4">
+                        {isLoading ? (
+                            <div className="space-y-4">
+                                <div className="flex justify-center">
+                                    <Skeleton className="w-24 h-24 rounded-full" />
+                                </div>
+                                <Skeleton className="h-10 w-full" />
+                                <Skeleton className="h-10 w-full" />
+                            </div>
+                        ) : isEditing ? (
+                            <div className="space-y-4">
+                                <FileDropzone
+                                    onFileChange={setProfilePic}
+                                    currentFile={profileData?.profile?.pfp}
+                                    label="Profile Picture"
+                                    previewType="circle"
+                                    placeholder="Drag & drop profile picture or click to select"
+                                />
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="username">Display Name</Label>
+                                    <Input
+                                        id="username"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        placeholder="Enter a global display name"
+                                    />
+                                    <p className="text-xs text-muted-foreground">This name will be shown across all servers.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="flex flex-col items-center justify-center">
+                                    <div className="w-24 h-24 rounded-full overflow-hidden mb-2 bg-muted flex items-center justify-center">
+                                        {profileData?.profile?.pfp ? (
+                                            <img
+                                                src={`https://arweave.net/${profileData.profile.pfp}`}
+                                                alt="Profile picture"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            activeAddress ? (
+                                                <span className="text-xl font-medium">{activeAddress.substring(0, 2)}</span>
+                                            ) : (
+                                                <User className="h-10 w-10 text-muted-foreground" />
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <h3 className="text-sm font-medium text-muted-foreground">Display Name</h3>
+                                        <p className="text-base">
+                                            {profileData?.profile?.username || (
+                                                <span className="text-muted-foreground italic">No display name set</span>
+                                            )}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-sm font-medium text-muted-foreground">Wallet Address</h3>
+                                        <p className="text-sm font-mono bg-muted rounded-md p-2 overflow-x-auto">
+                                            {activeAddress || 'Not connected'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <AlertDialogFooter>
+                        {isEditing ? (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleCancelEdit}
+                                    disabled={isSaving}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSaveProfile}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-2"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="h-4 w-4" />
+                                            Save Changes
+                                        </>
+                                    )}
+                                </Button>
+                            </>
+                        ) : (
+                            <Button onClick={() => setProfileOpen(false)}>Close</Button>
+                        )}
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

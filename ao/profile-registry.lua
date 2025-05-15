@@ -56,11 +56,31 @@ function GetProfile(id)
 end
 
 function UpdateProfile(id, username, pfp)
-    SQLWrite("INSERT OR REPLACE INTO profiles (id, username, pfp) VALUES (?, ?, ?)", id, username, pfp)
+    local profile = GetProfile(id)
+    local servers_joined = "{}"
+
+    -- Preserve servers_joined from existing profile
+    if profile and profile.servers_joined then
+        servers_joined = profile.servers_joined
+    end
+
+    SQLWrite("INSERT OR REPLACE INTO profiles (id, username, pfp, servers_joined) VALUES (?, ?, ?, ?)",
+        id, username, pfp, servers_joined)
 end
 
 function UpdateServers(id, servers)
-    SQLWrite("INSERT OR REPLACE INTO profiles (id, servers_joined) VALUES (?, ?)", id, json.encode(servers))
+    local profile = GetProfile(id)
+    local username = nil
+    local pfp = DEFAULT_PFP
+
+    -- Preserve existing profile data
+    if profile then
+        username = profile.username
+        pfp = profile.pfp
+    end
+
+    SQLWrite("INSERT OR REPLACE INTO profiles (id, username, pfp, servers_joined) VALUES (?, ?, ?, ?)",
+        id, username, pfp, json.encode(servers))
 end
 
 app.get("/profile", function(req, res)
@@ -112,7 +132,7 @@ app.post("/join-server", function(req, res)
     if not profile then
         -- Create profile if it doesn't exist
         UpdateProfile(id, nil, DEFAULT_PFP)
-        profile = { servers_joined = "{}" }
+        profile = GetProfile(id)
     end
 
     local servers_joined = json.decode(profile.servers_joined or "{}") or {}
@@ -136,6 +156,7 @@ app.post("/join-server", function(req, res)
     -- Add server to the list
     table.insert(servers_joined, server_id)
 
+    -- Update the servers list while preserving other profile data
     UpdateServers(id, servers_joined)
 
     ao.send({
@@ -189,6 +210,7 @@ app.post("/leave-server", function(req, res)
         return
     end
 
+    -- Update the servers list while preserving other profile data (username and pfp)
     UpdateServers(id, new_servers)
 
     ao.send({

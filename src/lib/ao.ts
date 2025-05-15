@@ -216,7 +216,24 @@ export async function getJoinedServers(address: string): Promise<string[]> {
     console.log(`[getJoinedServers] Response:`, res);
 
     if (res.status == 200) {
-        const joinedServersString = (res.json as any).profile.servers_joined == "{}" ? "[]" : (res.json as any).profile.servers_joined;
+        // Cache the entire profile response in global state
+        try {
+            // Get the global state without using hooks
+            const globalState = useGlobalState.getState();
+
+            // Cache the profile data - use type assertion for the response
+            const responseData = res.json as { profile: { servers_joined: string, [key: string]: any } };
+            if (responseData && responseData.profile) {
+                console.log(`[getJoinedServers] Caching user profile data for ${address}`);
+                globalState.setUserProfile(responseData);
+            }
+        } catch (error) {
+            console.warn(`[getJoinedServers] Failed to cache profile data:`, error);
+        }
+
+        // Extract and return the joined servers
+        const responseData = res.json as { profile: { servers_joined: string } };
+        const joinedServersString = responseData.profile.servers_joined === "{}" ? "[]" : responseData.profile.servers_joined;
         const servers = JSON.parse(joinedServersString);
         console.log(`[getJoinedServers] Parsed servers:`, servers);
         return servers;

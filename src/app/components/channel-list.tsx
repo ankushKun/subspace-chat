@@ -29,136 +29,7 @@ import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";
 import { useMobile } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
-
-// File dropzone component for server icon
-const FileDropzone = ({
-    onFileChange
-}: {
-    onFileChange: (file: File | null) => void
-}) => {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [preview, setPreview] = useState<string | null>(null);
-    const [fileError, setFileError] = useState<string | null>(null);
-
-    // 100KB size limit in bytes
-    const MAX_FILE_SIZE = 100 * 1024;
-
-    const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
-        // Clear previous errors
-        setFileError(null);
-
-        // Handle file rejections (e.g., file size, type)
-        if (fileRejections.length > 0) {
-            const { code, message } = fileRejections[0].errors[0];
-            if (code === 'file-too-large') {
-                setFileError(`File is too large. Maximum size is 100KB.`);
-            } else {
-                setFileError(message);
-            }
-            return;
-        }
-
-        if (acceptedFiles && acceptedFiles.length > 0) {
-            const file = acceptedFiles[0];
-            setSelectedFile(file);
-            onFileChange(file);
-
-            // Create preview for image
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
-    }, [onFileChange]);
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        accept: {
-            'image/*': ['.jpeg', '.jpg', '.png', '.gif']
-        },
-        maxFiles: 1,
-        maxSize: MAX_FILE_SIZE,
-    });
-
-    const removeFile = () => {
-        setSelectedFile(null);
-        setPreview(null);
-        setFileError(null);
-        onFileChange(null);
-    };
-
-    const formatFileSize = (bytes: number) => {
-        if (bytes < 1024) return bytes + ' bytes';
-        else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    };
-
-    return (
-        <div className="w-full space-y-2">
-            <div className="flex justify-between items-center">
-                <label className="text-sm font-medium text-foreground">Server Icon</label>
-                <span className="text-xs text-muted-foreground">Max 100KB</span>
-            </div>
-
-            {!selectedFile ? (
-                <div
-                    {...getRootProps()}
-                    className={`
-                        border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer
-                        flex flex-col items-center justify-center min-h-[120px]
-                        ${isDragActive
-                            ? 'border-primary bg-primary/5'
-                            : fileError
-                                ? 'border-destructive/50 bg-destructive/5'
-                                : 'border-muted-foreground/20 hover:border-muted-foreground/50'
-                        }
-                    `}
-                >
-                    <input {...getInputProps()} />
-                    <Upload className={`h-6 w-6 mb-2 ${fileError ? 'text-destructive' : 'text-muted-foreground'}`} />
-
-                    {fileError ? (
-                        <div className="text-center">
-                            <p className="text-sm text-destructive font-medium">{fileError}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Try a smaller image (maximum 100KB)
-                            </p>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground">
-                            {isDragActive ? 'Drop your image here' : 'Drag & drop server icon or click to select'}
-                        </p>
-                    )}
-                </div>
-            ) : (
-                <div className="relative bg-muted rounded-lg p-1">
-                    <div className="relative aspect-square w-full overflow-hidden rounded-md">
-                        {preview && (
-                            <img
-                                src={preview}
-                                alt="Preview"
-                                className="h-full w-full object-cover"
-                            />
-                        )}
-                    </div>
-                    {selectedFile && (
-                        <div className="absolute bottom-2 left-2 text-xs bg-black/70 text-white px-2 py-1 rounded-md">
-                            {formatFileSize(selectedFile.size)}
-                        </div>
-                    )}
-                    <button
-                        type="button"
-                        onClick={removeFile}
-                        className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-xs text-white shadow-sm"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-};
+import { FileDropzone } from "@/components/ui/file-dropzone";
 
 export default function ChannelList() {
     const { activeServer, setActiveServer, activeServerId, activeChannelId } = useGlobalState();
@@ -703,7 +574,11 @@ export default function ChannelList() {
 
                     <div className="flex gap-4 py-4">
                         <div className="w-1/3">
-                            <FileDropzone onFileChange={setServerIcon} />
+                            <FileDropzone
+                                onFileChange={setServerIcon}
+                                label="Server Icon"
+                                currentFile={activeServer?.icon}
+                            />
                         </div>
 
                         <div className="flex-1 space-y-2">

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Server, Member } from '@/lib/types'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { getServerInfo, getMembers, getJoinedServers } from '@/lib/ao'
 import { persist } from 'zustand/middleware'
 import type { WanderConnect } from '@wanderapp/connect'
@@ -223,7 +223,7 @@ export interface GlobalState {
     setUserProfile: (profileData: any) => void
     getUserProfile: () => any | null
     clearUserProfileCache: () => void
-    fetchUserProfile: (address: string) => Promise<any | null>
+    fetchUserProfile: (address: string, forceRefresh?: boolean) => Promise<any | null>
 
     // Server list caching
     serverListCache: CachedServerList | null
@@ -444,10 +444,21 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             return;
         }
 
-        // Skip if this server is known to have an invalid members endpoint
-        if (invalidMemberServers.has(serverId)) {
+        // When forceRefresh is true, we'll retry even if previously marked as invalid
+        if (invalidMemberServers.has(serverId) && !forceRefresh) {
             console.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
             return;
+        }
+
+        // If this is a force refresh for a server previously marked as invalid,
+        // remove it from the invalid set to allow retrying
+        if (forceRefresh && invalidMemberServers.has(serverId)) {
+            console.log(`[fetchServerMembers] Retrying previously invalid member server: ${serverId}`);
+            const updatedInvalidMemberServers = new Set(invalidMemberServers);
+            updatedInvalidMemberServers.delete(serverId);
+            set({
+                invalidMemberServers: updatedInvalidMemberServers
+            });
         }
 
         // Check if we have cached members and if the cache is still valid
@@ -509,14 +520,18 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         if (!serverId) return null;
 
         const { serverMembers, invalidMemberServers } = get();
+        const cachedMembers = serverMembers.get(serverId);
 
         // If this server is known to have an invalid members endpoint,
-        // return empty array instead of null to prevent further fetching
+        // BUT we have cached data, return the cached data instead
         if (invalidMemberServers.has(serverId)) {
+            if (cachedMembers) {
+                console.log(`[getServerMembers] Using cached data for server with invalid members endpoint: ${serverId}`);
+                return cachedMembers.data;
+            }
+            // Only return empty array if we have no cached data
             return [];
         }
-
-        const cachedMembers = serverMembers.get(serverId);
 
         if (cachedMembers) {
             // Check if cache is still valid
@@ -721,11 +736,21 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         localStorage.removeItem(USER_PROFILE_CACHE_KEY);
     },
 
-    fetchUserProfile: async (address: string) => {
+    fetchUserProfile: async (address: string, forceRefresh = false) => {
         if (!address) return null;
 
         try {
             console.log(`[fetchUserProfile] Fetching profile for ${address}`);
+
+            // Check for cached profile data first
+            if (!forceRefresh) {
+                const cachedProfile = get().getUserProfile();
+                if (cachedProfile) {
+                    console.log(`[fetchUserProfile] Using cached profile data for ${address}`);
+                    return cachedProfile;
+                }
+            }
+
             // Import getProfile from ao.ts without causing circular dependencies
             const { getProfile } = require('@/lib/ao');
             const profileData = await getProfile(address);
@@ -781,14 +806,33 @@ export function useBackgroundPreload() {
     const { prefetchAllServerData, fetchUserProfile } = useGlobalState();
     const activeAddress = useActiveWalletAddress();
 
+    // Track if initial load has happened
+    const initialLoadCompleted = useRef(false);
+
     useEffect(() => {
         if (activeAddress) {
-            // Prefetch user profile immediately
-            fetchUserProfile(activeAddress).catch(err =>
-                console.warn('[useBackgroundPreload] Failed to prefetch profile:', err)
-            );
+            // Only log on first load or address change
+            if (!initialLoadCompleted.current) {
+                console.log(`[useBackgroundPreload] Initial load for address: ${activeAddress}`);
+                initialLoadCompleted.current = true;
+            } else {
+                console.log(`[useBackgroundPreload] Address changed to: ${activeAddress}`);
+            }
 
-            // Start background prefetch after a short delay to avoid blocking app startup
+            // Prefetch user profile immediately with higher priority
+            const loadProfileData = async () => {
+                try {
+                    console.log(`[useBackgroundPreload] Prefetching profile for ${activeAddress}`);
+                    await fetchUserProfile(activeAddress, true);
+                } catch (err) {
+                    console.warn('[useBackgroundPreload] Failed to prefetch profile:', err);
+                }
+            };
+
+            // Execute profile fetch immediately with high priority
+            loadProfileData();
+
+            // Start background server data prefetch after a short delay to avoid blocking app startup
             setTimeout(() => {
                 prefetchAllServerData(activeAddress);
             }, 1000);

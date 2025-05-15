@@ -1,7 +1,7 @@
 import { Mic, Headphones, Settings, LogOut, User, Upload, X, Pencil, Save, Loader2 } from 'lucide-react'
 import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -34,8 +34,15 @@ export default function Profile() {
     const { disconnect } = useConnection();
     const isMobile = useMobile();
     const [profileOpen, setProfileOpen] = useState(false);
-    const { activeServerId, activeServer, getUserProfile, fetchUserProfile } = useGlobalState();
+    const {
+        activeServerId,
+        activeServer,
+        getUserProfile,
+        fetchUserProfile,
+        userProfile
+    } = useGlobalState();
     const previousAddressRef = useRef<string | null>(null);
+    const navigate = useNavigate();
 
     // Profile state
     const [isLoading, setIsLoading] = useState(false);
@@ -50,32 +57,62 @@ export default function Profile() {
         // If address changed, reset and fetch new profile data
         if (activeAddress !== previousAddressRef.current) {
             console.log(`[Profile] Wallet address changed from ${previousAddressRef.current} to ${activeAddress}`);
-            // Reset profile data
+            // Reset profile data immediately
             setProfileData(null);
             setUsername("");
 
             // Update the ref to current address
             previousAddressRef.current = activeAddress;
 
-            // If we have an address, fetch new profile data
+            // If we have a previous address (not initial load), navigate to /app
+            if (previousAddressRef.current !== null) {
+                console.log(`[Profile] Navigating to /app due to wallet address change`);
+                navigate('/app');
+            }
+
+            // If we have a new address, immediately fetch fresh profile data
+            // This ensures we don't show stale data from the previous wallet
             if (activeAddress) {
-                fetchProfile();
+                setIsLoading(true);
+                fetchUserProfile(activeAddress, true)
+                    .then(result => {
+                        if (result && 'profile' in result) {
+                            console.log(`[Profile] Updated profile data for new wallet ${activeAddress}`);
+                            setProfileData(result);
+                            setUsername(result.profile?.username || "");
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`[Profile] Error fetching profile for new wallet:`, error);
+                    })
+                    .finally(() => {
+                        setIsLoading(false);
+                    });
             }
         }
-    }, [activeAddress]);
+    }, [activeAddress, fetchUserProfile, navigate]);
 
     // Load cached profile data when component mounts
     useEffect(() => {
         if (activeAddress) {
             // Try to get profile from cache first
             const cachedProfile = getUserProfile();
-            if (cachedProfile) {
-                console.log(`[Profile] Using cached profile data`);
+
+            // Make sure the cached profile is for the current wallet address
+            const profileAddress = userProfile?.data?.json?.id ||
+                userProfile?.data?.profile?.id;
+
+            if (cachedProfile && profileAddress === activeAddress) {
+                console.log(`[Profile] Using cached profile data for ${activeAddress}`);
                 setProfileData(cachedProfile);
                 setUsername(cachedProfile.profile?.username || "");
+            } else if (!profileData && !isLoading) {
+                // If no matching cache, start a fetch
+                console.log(`[Profile] No matching cached profile, fetching new data`);
+                fetchProfile();
             }
         }
-    }, [activeAddress, getUserProfile]);
+    }, [activeAddress, getUserProfile, userProfile]);
 
     // Fetch profile when dialog opens if no cached data
     useEffect(() => {
@@ -97,14 +134,10 @@ export default function Profile() {
 
         setIsLoading(true);
         try {
-            // Try to get from global state first
-            let result = getUserProfile();
-
-            // If no cached data or cache is stale, fetch fresh data
-            if (!result) {
-                console.log(`[Profile] No cached profile data, fetching from server`);
-                result = await fetchUserProfile(activeAddress);
-            }
+            // Always force a fresh fetch when the profile dialog is opened
+            // This ensures we get the latest data for the current wallet
+            console.log(`[Profile] Forcing fresh profile data fetch for ${activeAddress}`);
+            const result = await fetchUserProfile(activeAddress, true);
 
             if (result && 'profile' in result) {
                 setProfileData(result);
@@ -139,10 +172,38 @@ export default function Profile() {
             toast.dismiss();
             toast.success("Profile updated successfully");
 
-            // Refresh profile data and update cache
-            const updatedProfile = await fetchUserProfile(activeAddress);
+            // Add a small delay to ensure backend has processed the update
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Explicitly fetch the latest profile data with cache bypass
+            console.log(`[Profile] Fetching updated profile data after profile update`);
+            const updatedProfile = await fetchUserProfile(activeAddress, true);
+
             if (updatedProfile) {
+                console.log(`[Profile] Profile data refreshed successfully after update`);
                 setProfileData(updatedProfile);
+                setUsername(updatedProfile.profile?.username || "");
+
+                // Make sure global state cache is updated too
+                if (updatedProfile !== userProfile?.data) {
+                    console.log(`[Profile] Ensuring global state cache is updated with fresh data`);
+                    // The fetchUserProfile call above should have already updated the cache,
+                    // but we can verify the global state has the updated data
+                }
+            } else {
+                console.warn(`[Profile] Failed to get updated profile data after update`);
+                // Fallback to fetching profile directly if the global state method failed
+                try {
+                    const freshProfileData = await getProfile(activeAddress);
+                    if (freshProfileData && typeof freshProfileData === 'object' && 'profile' in freshProfileData) {
+                        setProfileData(freshProfileData);
+                        // Type assertion to tell TypeScript this is a record with a profile property
+                        const typedProfile = freshProfileData as Record<string, any>;
+                        setUsername(typedProfile.profile?.username || "");
+                    }
+                } catch (err) {
+                    console.error(`[Profile] Error in fallback profile fetch:`, err);
+                }
             }
 
             setIsEditing(false);
@@ -198,7 +259,8 @@ export default function Profile() {
                             <div className="flex flex-col">
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                    <span>Online</span>
+                                    {/* <span>Online</span> */}
+                                    {profileData?.profile?.username ? `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}` : "Online"}
                                 </div>
                             </div>
                         </div>
@@ -218,7 +280,10 @@ export default function Profile() {
                         <span>Profile</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                        onClick={disconnect}
+                        onClick={() => {
+                            disconnect();
+                            navigate('/app');
+                        }}
                         className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md"
                     >
                         <LogOut className="h-4 w-4" />

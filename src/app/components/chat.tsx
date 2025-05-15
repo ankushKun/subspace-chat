@@ -322,7 +322,17 @@ export default function Chat() {
                     <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}
                         className="!p-0 ml-auto data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                         onClick={() => {
+                            // Toggle users panel visibility
                             setShowUsers(!showUsers);
+
+                            // If we're opening the panel, refresh member data in the background
+                            if (!showUsers && activeServerId) {
+                                console.log(`[Chat] Refreshing members data for ${activeServerId}`);
+                                // Use the global state's fetchServerMembers with forceRefresh=true to bypass cache
+                                const globalState = useGlobalState.getState();
+                                globalState.fetchServerMembers(activeServerId, true)
+                                    .catch(error => console.warn("Failed to refresh members:", error));
+                            }
                         }}>
                         <Users size={20} className="!h-5 !w-5" />
                     </Button>

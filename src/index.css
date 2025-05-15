@@ -7,6 +7,44 @@ html,body{
   overflow:hidden;
 }
 
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(200, 200, 200, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 140, 0.5);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.7);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-color: rgba(140, 140, 140, 0.5) rgba(200, 200, 200, 0.2);
+  scrollbar-width: thin;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(60, 60, 60, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 140, 0.7);
+}
+
 @theme inline {
   --color-palette-lavender: #ccc9fd;
   

@@ -35,9 +35,8 @@ import { useLocalStorage } from "@uidotdev/usehooks";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 
 const sampleInvites = [
-    "abcxyz",
-    "https://subspace.ar.io/#/join/abcxyz",
-    "https://join_subspace.ar.io/abcxyz",
+    "wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8",
+    "subspace.ar.io/#/invite/wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8"
 ]
 
 const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: () => void }) => {
@@ -428,7 +427,7 @@ export default function ServerList() {
         // Handle invite links
         if (serverId.includes('/')) {
             const parts = serverId.split('/');
-            serverId = parts[parts.length - 1];
+            serverId = parts[parts.length - 1].trim();
         }
 
         console.log("Joining server", serverId);
@@ -591,7 +590,7 @@ export default function ServerList() {
 
             {/* Moved AlertDialog outside of DropdownMenuItem */}
             <AlertDialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
-                <AlertDialogContent>
+                <AlertDialogContent className="w-full">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Join a Server</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -600,14 +599,14 @@ export default function ServerList() {
                     </AlertDialogHeader>
 
                     <div className="py-2 space-y-4">
-                        <div className="space-y-2">
+                        <div className="">
                             <label htmlFor="join-input" className="text-sm font-medium text-foreground">
                                 Server Invite
                             </label>
                             <div className="relative">
                                 <Input
                                     id="join-input"
-                                    placeholder="https://subspace.ar.io/#/join/abcxyz"
+                                    placeholder="wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8"
                                     value={joinInput}
                                     onChange={(e) => setJoinInput(e.target.value)}
                                     className="pl-9"
@@ -625,11 +624,11 @@ export default function ServerList() {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="justify-start h-8 px-2 text-muted-foreground hover:text-foreground transition-colors"
+                                        className="justify-start truncate h-8 px-2 text-muted-foreground hover:text-foreground transition-colors"
                                         key={invite}
                                         onClick={() => setJoinInput(invite)}
                                     >
-                                        <code className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
+                                        <code className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono truncate">
                                             {invite}
                                         </code>
                                     </Button>

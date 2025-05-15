@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";
+import { MentionsInput, Mention } from 'react-mentions';
 
 // Message type from server
 interface Message {
@@ -28,6 +29,44 @@ interface MessagesResponse {
     success: boolean;
     messages: Message[];
 }
+
+// Style for mentions input
+const mentionsInputStyle = {
+    control: {
+        backgroundColor: 'transparent',
+        // fontSize: 14,
+        fontWeight: 'normal',
+    },
+    input: {
+        margin: 0,
+        padding: '8px 10px',
+        overflow: 'auto',
+        height: '40px',
+        borderRadius: '6px',
+    },
+    suggestions: {
+        backgroundColor: 'transparent',
+        list: {
+            backgroundColor: 'var(--secondary)',
+            padding: '4px 8px',
+            borderRadius: '6px',
+            // border: '1px solid rgba(0,0,0,0.15)',
+            // fontSize: 14,
+        },
+        item: {
+            // padding: '10px',
+            borderRadius: '6px',
+            margin: '4px 0px',
+            // borderBottom: '1px solid rgba(0,0,0,0.15)',
+            '&focused': {
+                backgroundColor: 'var(--input)',
+            },
+        },
+    },
+    highlighter: {
+        overflow: 'hidden',
+    },
+};
 
 export default function Chat() {
     const {
@@ -290,6 +329,11 @@ export default function Chat() {
         }
     };
 
+    // Handle mention input value change
+    const handleMentionInputChange = (event: any, newValue: string, newPlainTextValue: string, mentions: any[]) => {
+        setMessageInput(newValue);
+    };
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -380,6 +424,75 @@ export default function Chat() {
         return profileData?.pfp;
     };
 
+    // Function to get members data for mentions
+    const getMembersData = (query: string, callback: (data: any[]) => void) => {
+        if (!activeServerId) {
+            callback([]);
+            return;
+        }
+
+        // Get server members
+        const members = getServerMembers(activeServerId);
+        if (!members || members.length === 0) {
+            callback([]);
+            return;
+        }
+
+        // Filter and format members for the mentions component
+        const filteredMembers = members
+            .filter(member => {
+                const displayName = getDisplayName(member.id);
+                return displayName.toLowerCase().includes(query.toLowerCase());
+            })
+            .map(member => {
+                const displayName = getDisplayName(member.id);
+                return {
+                    id: member.id,
+                    display: displayName
+                };
+            });
+
+        callback(filteredMembers);
+    };
+
+    // Custom renderer for the mention suggestions
+    const renderMemberSuggestion = (
+        suggestion: { id: string; display: string },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        const profilePic = getProfilePicture(suggestion.id);
+
+        return (
+            <div className={`flex items-center gap-3 py-1.5 px-2 ${focused ? 'bg-accent/20' : ''} hover:bg-accent/10 transition-colors`}>
+                <div className="w-8 h-8 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden">
+                    {profilePic ? (
+                        <img
+                            src={`https://arweave.net/${profilePic}`}
+                            alt={suggestion.display}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                e.currentTarget.src = '';
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.parentElement!.innerHTML = suggestion.display.substring(0, 2).toUpperCase();
+                            }}
+                        />
+                    ) : (
+                        <span className="text-xs font-medium">{suggestion.display.substring(0, 2).toUpperCase()}</span>
+                    )}
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-medium text-foreground">{highlightedDisplay}</span>
+                    <span className="text-xs text-muted-foreground">
+                        {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 4)}
+                    </span>
+                </div>
+            </div>
+        );
+    };
+
     // Generate placeholder messages for empty state or loading state
     const renderPlaceholderMessages = () => (
         <div className="space-y-4">
@@ -402,6 +515,67 @@ export default function Chat() {
             ))}
         </div>
     );
+
+    // Function to format mentions in message text
+    const formatMessageWithMentions = (content: string) => {
+        // Check if the content contains mentions in the format @[display](id)
+        if (!content.includes('@[')) {
+            return content;
+        }
+
+        // Regular expression to match mentions in the format @[display](id)
+        const mentionRegex = /@\[(.*?)\]\((.*?)\)/g;
+
+        // Split the content by mentions
+        const parts = content.split(mentionRegex);
+
+        // If no matches found, return the original content
+        if (parts.length === 1) {
+            return content;
+        }
+
+        // Build the result with formatted mentions
+        const result: React.ReactNode[] = [];
+        let i = 0;
+
+        let match;
+        let lastIndex = 0;
+        const regex = new RegExp(mentionRegex);
+
+        // Process each match
+        while ((match = regex.exec(content)) !== null) {
+            // Add text before the match
+            if (match.index > lastIndex) {
+                result.push(content.substring(lastIndex, match.index));
+            }
+
+            // Extract display name and user ID
+            const displayName = match[1];
+            const userId = match[2];
+
+            // Add the mention with the proper styling
+            result.push(
+                <UserProfilePopover key={`mention-${i++}`} userId={userId} side="top" align="center">
+                    <PopoverTrigger asChild>
+                        <span
+                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200"
+                        >
+                            @{displayName}
+                        </span>
+                    </PopoverTrigger>
+                </UserProfilePopover>
+            );
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add any remaining text
+        if (lastIndex < content.length) {
+            result.push(content.substring(lastIndex));
+        }
+
+        return result;
+    };
 
     // Loading or no server selected - show placeholder
     if (!activeServer) {
@@ -520,7 +694,9 @@ export default function Chat() {
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="mt-1 text-sm break-words">{message.content}</p>
+                                        <p className="mt-1 text-sm break-words">
+                                            {formatMessageWithMentions(message.content)}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -532,15 +708,27 @@ export default function Chat() {
 
             {/* Message Input */}
             <div className="p-3 border-t border-border/30">
-                <form onSubmit={handleSendMessage} className="relative rounded-md overflow-hidden">
-                    <input
-                        type="text"
-                        placeholder={`Message #${activeChannel.name}`}
-                        className="w-full py-2 px-3 pr-10 bg-muted/50 rounded-md border-none focus:outline-none"
+                <form onSubmit={handleSendMessage} className="relative rounded-md">
+                    <MentionsInput
                         value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
+                        onChange={handleMentionInputChange}
+                        style={mentionsInputStyle}
+                        placeholder={`Message #${activeChannel.name}`}
+                        a11ySuggestionsListLabel={"Suggested mentions"}
+                        className="w-full py-2 px-3 pr-10 bg-muted/50 rounded-md border-none focus:outline-none"
                         disabled={isSending}
-                    />
+                        singleLine
+                        forceSuggestionsAboveCursor
+                    >
+                        <Mention
+                            trigger="@"
+                            data={getMembersData}
+                            renderSuggestion={renderMemberSuggestion}
+                            markup="@[__display__](__id__)"
+                            displayTransform={(id, display) => `@${display}`}
+                            appendSpaceOnAdd
+                        />
+                    </MentionsInput>
                     <button
                         type="submit"
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"

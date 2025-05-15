@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
-import { User, Loader2, Copy, CheckIcon, ExternalLink } from 'lucide-react';
-import { useGlobalState } from '@/hooks/global-state';
-import { Popover, PopoverContent } from "@/components/ui/popover";
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
+import { useState, useEffect, useRef } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Copy, CheckIcon, ArrowUpRight, Badge, MessagesSquare } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
+import { useGlobalState } from "@/hooks/global-state";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
 
 interface UserProfilePopoverProps {
-    userId: string | null;
+    userId: string;
     children: React.ReactNode;
     side?: "top" | "right" | "bottom" | "left";
     align?: "start" | "center" | "end";
@@ -23,87 +24,114 @@ export default function UserProfilePopover({
 }: UserProfilePopoverProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [profileData, setProfileData] = useState<any>(null);
-    const [hasCopied, setHasCopied] = useState(false);
     const [open, setOpen] = useState(false);
-
+    const [hasCopied, setHasCopied] = useState(false);
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const loadAttemptRef = useRef(0);
+    const profileFetchedRef = useRef(false);
+    const navigate = useNavigate();
+    const activeAddress = useActiveAddress();
     const {
         getUserProfileFromCache,
-        updateUserProfileCache,
         fetchUserProfileAndCache,
         activeServerId,
         getServerMembers
     } = useGlobalState();
 
-    // Fetch user profile data when the popover opens or userId changes
+    // Load profile data when popover opens
     useEffect(() => {
-        if (open && userId) {
-            // Try to get from cache for initial display
-            const cachedData = getUserProfileFromCache(userId);
-            if (cachedData) {
+        // Use loading timeout to avoid flashing skeleton for fast loads
+        if (open && !profileData) {
+            // Show loading state only after a small delay
+            loadingTimeoutRef.current = setTimeout(() => {
+                if (!profileData && !profileFetchedRef.current) {
+                    setIsLoading(true);
+                }
+            }, 100);
+
+            // Try to get from cache first
+            const cachedProfile = getUserProfileFromCache(userId);
+            if (cachedProfile) {
                 console.log(`[UserProfilePopover] Using cached profile for ${userId}`);
+                setProfileData(cachedProfile);
+                setIsLoading(false);
+            } else {
+                // If not in cache, fetch it (with debouncing to avoid spam)
+                if (!profileFetchedRef.current) {
+                    profileFetchedRef.current = true;
+                    fetchUserProfile();
+                }
             }
-
-            // Fetch fresh data regardless of cache
-            setIsLoading(true);
-            fetchLatestProfileData();
         }
 
-        // Reset state when popover closes
-        if (!open) {
-            setHasCopied(false);
-        }
-    }, [open, userId]);
+        // Cleanup on unmount or when popover closes
+        return () => {
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+                loadingTimeoutRef.current = null;
+            }
+        };
+    }, [open, userId, profileData, getUserProfileFromCache]);
 
-    // Function to fetch the latest profile data
-    const fetchLatestProfileData = async () => {
+    // Fetch user profile
+    const fetchUserProfile = async () => {
         if (!userId) return;
 
         try {
-            console.log(`[UserProfilePopover] Fetching latest profile for ${userId}`);
+            loadAttemptRef.current += 1;
+            const currentAttempt = loadAttemptRef.current;
 
-            // Always force a fresh fetch to get the latest data
+            console.log(`[UserProfilePopover] Fetching profile for ${userId}`);
             const result = await fetchUserProfileAndCache(userId, true);
 
-            if (result) {
-                console.log(`[UserProfilePopover] Successfully fetched profile data`);
-                setProfileData(result);
-            } else {
-                console.warn(`[UserProfilePopover] No profile data found for ${userId}`);
-                // Still set minimal data even if the fetch failed
-                setProfileData({ profile: {}, id: userId });
+            // Ensure this is still the most recent request
+            if (currentAttempt === loadAttemptRef.current) {
+                if (result) {
+                    setProfileData({
+                        username: result.profile?.username,
+                        pfp: result.profile?.pfp,
+                        primaryName: result.primaryName,
+                        timestamp: Date.now()
+                    });
+                } else {
+                    // If we couldn't fetch profile, set default data
+                    setProfileData({
+                        username: null,
+                        pfp: null,
+                        primaryName: null,
+                        timestamp: Date.now()
+                    });
+                }
             }
         } catch (error) {
-            console.error(`[UserProfilePopover] Error fetching profile:`, error);
-            setProfileData({ profile: {}, id: userId });
+            console.error(`[UserProfilePopover] Error fetching profile for ${userId}:`, error);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Function to copy user ID to clipboard
-    const copyUserId = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!userId) return;
-
+    // Copy user ID to clipboard
+    const copyUserId = () => {
         navigator.clipboard.writeText(userId);
         setHasCopied(true);
-        toast.success("Wallet address copied to clipboard");
-
-        // Reset copy state after 2 seconds
-        setTimeout(() => {
-            setHasCopied(false);
-        }, 2000);
+        setTimeout(() => setHasCopied(false), 2000);
     };
 
-    // Get server-specific nickname if available
+    // Navigate to direct message with this user
+    const openDirectMessage = () => {
+        navigate(`/user/${userId}`);
+        setOpen(false);
+    };
+
+    // Get nickname from current server
     const getServerNickname = () => {
-        if (!userId || !activeServerId) return null;
+        if (!activeServerId) return null;
 
         const members = getServerMembers(activeServerId);
         if (!members) return null;
 
-        const member = members.find(m => m.id === userId);
-        return member?.nickname || null;
+        const userMember = members.find(m => m.id === userId);
+        return userMember?.nickname || null;
     };
 
     // Get display name from profile data or fall back to wallet address
@@ -119,6 +147,11 @@ export default function UserProfilePopover({
         // Use primaryName if available
         if (profileData.primaryName) {
             return profileData.primaryName;
+        }
+
+        // Use username if available (typically not used in this app)
+        if (profileData.username) {
+            return profileData.username;
         }
 
         // Fallback to truncated wallet address
@@ -139,40 +172,42 @@ export default function UserProfilePopover({
                 side={side}
                 align={align}
                 sideOffset={sideOffset}
-                className="p-0 w-[280px]"
+                className="w-80 p-0 shadow-lg flex flex-col"
             >
-                <div className="p-4 space-y-4">
-                    {isLoading && !profileData ? (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                                <Skeleton className="w-12 h-12 rounded-full" />
-                                <div className="flex-1">
-                                    <Skeleton className="h-4 w-24 mb-2" />
-                                    <Skeleton className="h-3 w-32" />
-                                </div>
+                {isLoading ? (
+                    <div className="p-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="h-12 w-12 rounded-full" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-5 w-32" />
+                                <Skeleton className="h-4 w-24" />
                             </div>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center">
-                                    {profileData?.profile?.pfp ? (
+                        <Skeleton className="h-10 w-full mt-2" />
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {/* User info header */}
+                        <div className="p-4 space-y-4">
+                            <div className="flex gap-3">
+                                <div className="h-12 w-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center text-primary">
+                                    {profileData?.pfp ? (
                                         <img
-                                            src={`https://arweave.net/${profileData.profile.pfp}`}
-                                            alt="Profile"
-                                            className="w-full h-full object-cover"
+                                            src={`https://arweave.net/${profileData.pfp}`}
+                                            alt={getDisplayName()}
+                                            className="object-cover w-full h-full"
                                             onError={(e) => {
+                                                // Handle broken images
                                                 e.currentTarget.src = '';
                                                 e.currentTarget.style.display = 'none';
-                                                e.currentTarget.parentElement!.innerHTML = getDisplayName().substring(0, 2).toUpperCase();
+                                                e.currentTarget.parentElement!.innerHTML = getDisplayName().charAt(0).toUpperCase();
                                             }}
                                         />
                                     ) : (
-                                        <span className="text-lg font-medium">
-                                            {getDisplayName().substring(0, 2).toUpperCase()}
-                                        </span>
+                                        getDisplayName().charAt(0).toUpperCase()
                                     )}
                                 </div>
+
                                 <div>
                                     <h3 className="font-medium text-base">{getDisplayName()}</h3>
                                     {getServerNickname() && profileData?.primaryName && (
@@ -198,27 +233,53 @@ export default function UserProfilePopover({
                                 </div>
                             </div>
 
-                            {userId && (
+                            {/* Actions */}
+                            <div className="flex gap-2">
                                 <Button
                                     variant="outline"
-                                    size="sm"
-                                    className="text-xs w-full"
+                                    className="flex-1 gap-2"
+                                    onClick={openDirectMessage}
+                                    disabled={userId === activeAddress}
+                                >
+                                    <MessagesSquare className="h-4 w-4" />
+                                    Message
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 gap-2"
                                     onClick={() => window.open(`https://viewblock.io/arweave/address/${userId}`, '_blank')}
                                 >
-                                    <ExternalLink className="h-3 w-3 mr-1" />
-                                    View on ViewBlock
+                                    <ArrowUpRight className="h-4 w-4" />
+                                    View on Block
                                 </Button>
-                            )}
+                            </div>
 
-                            {isLoading && (
-                                <div className="flex justify-center text-xs text-muted-foreground">
-                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                    <span>Refreshing profile data...</span>
+                            {/* Status/badges section - placeholder for future use */}
+                            {/*
+                            <div className="mt-2">
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Badge className="h-3 w-3" />
+                                    <span>Offline</span>
                                 </div>
-                            )}
+                            </div>
+                            */}
                         </div>
-                    )}
-                </div>
+
+                        <div className="border-t border-border"></div>
+
+                        {/* Relationship section - placeholder for future use */}
+                        {/*
+                        <div className="p-4">
+                            <h4 className="font-medium text-sm mb-2">Note</h4>
+                            <input 
+                                type="text"
+                                className="w-full p-2 bg-muted/50 rounded text-sm"
+                                placeholder="Click to add a note"
+                            />
+                        </div>
+                        */}
+                    </div>
+                )}
             </PopoverContent>
         </Popover>
     );

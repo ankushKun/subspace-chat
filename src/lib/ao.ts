@@ -624,6 +624,20 @@ export async function getProfile(address?: string) {
 
                     // Add primaryName to the profile data
                     profileData.primaryName = primaryNameData.name;
+
+                    // Synchronize with the global state immediately
+                    try {
+                        const globalState = useGlobalState.getState();
+                        globalState.updateUserProfileCache(address, {
+                            username: profileData.profile?.username,
+                            pfp: profileData.profile?.pfp,
+                            primaryName: primaryNameData.name,
+                            timestamp: Date.now()
+                        });
+                        console.log(`[getProfile] Updated user profiles cache with primary name directly`);
+                    } catch (syncError) {
+                        console.warn(`[getProfile] Failed to sync primary name to cache:`, syncError);
+                    }
                 }
             } catch (error) {
                 console.warn(`[getProfile] Failed to fetch primary name:`, error);

@@ -839,10 +839,23 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
             if (profileData) {
                 // Type assertion to ensure safe access
-                const typedProfile = profileData as { profile?: { username?: string, pfp?: string } };
+                const typedProfile = profileData as { profile?: { username?: string, pfp?: string }, primaryName?: string };
 
-                // Cache the profile data
+                // Cache the profile data in the main user profile cache
                 get().setUserProfile(profileData);
+
+                // Importantly: also update the user profiles cache to ensure consistency
+                // This ensures the primary name is available in both caching systems
+                if (typedProfile.primaryName) {
+                    console.log(`[fetchUserProfile] Synchronizing primary name "${typedProfile.primaryName}" to profiles cache`);
+                    get().updateUserProfileCache(address, {
+                        username: typedProfile.profile?.username,
+                        pfp: typedProfile.profile?.pfp,
+                        primaryName: typedProfile.primaryName,
+                        timestamp: Date.now()
+                    });
+                }
+
                 return profileData;
             }
         } catch (error) {
@@ -947,11 +960,18 @@ export function useCachePersistence() {
 
 // Hook to prefetch all server data when user logs in
 export function useBackgroundPreload() {
-    const { prefetchAllServerData, fetchUserProfile } = useGlobalState();
+    const {
+        prefetchAllServerData,
+        fetchUserProfile,
+        fetchUserProfileAndCache,
+        fetchJoinedServers
+    } = useGlobalState();
     const activeAddress = useActiveWalletAddress();
 
     // Track if initial load has happened
     const initialLoadCompleted = useRef(false);
+    const profileLoadAttempts = useRef(0);
+    const MAX_RETRY_ATTEMPTS = 3;
 
     useEffect(() => {
         if (activeAddress) {
@@ -959,29 +979,75 @@ export function useBackgroundPreload() {
             if (!initialLoadCompleted.current) {
                 console.log(`[useBackgroundPreload] Initial load for address: ${activeAddress}`);
                 initialLoadCompleted.current = true;
+                profileLoadAttempts.current = 0;
             } else {
                 console.log(`[useBackgroundPreload] Address changed to: ${activeAddress}`);
+                profileLoadAttempts.current = 0;
             }
 
-            // Prefetch user profile immediately with higher priority
-            const loadProfileData = async () => {
+            // Critical data loading function with retries
+            const loadCriticalData = async () => {
                 try {
-                    console.log(`[useBackgroundPreload] Prefetching profile for ${activeAddress}`);
-                    await fetchUserProfile(activeAddress, true);
+                    console.log(`[useBackgroundPreload] Loading critical user data for ${activeAddress}`);
+
+                    // Step 1: Fetch user profile with retry logic
+                    let profileData = null;
+                    try {
+                        console.log(`[useBackgroundPreload] Fetching user profile for ${activeAddress}`);
+                        profileData = await fetchUserProfile(activeAddress, true);
+                        if (profileData) {
+                            console.log(`[useBackgroundPreload] Successfully loaded user profile`);
+                        } else {
+                            throw new Error("Profile data is null");
+                        }
+                    } catch (err) {
+                        console.warn(`[useBackgroundPreload] Profile fetch attempt ${profileLoadAttempts.current + 1} failed:`, err);
+
+                        // Attempt to retry profile fetch if needed
+                        if (profileLoadAttempts.current < MAX_RETRY_ATTEMPTS) {
+                            profileLoadAttempts.current++;
+                            console.log(`[useBackgroundPreload] Retrying profile fetch (attempt ${profileLoadAttempts.current})`);
+
+                            // Retry after a short delay
+                            setTimeout(() => {
+                                loadCriticalData();
+                            }, 1500);
+                            return;
+                        }
+                    }
+
+                    // Step 2: Ensure the user's primary name is cached in their profile
+                    // (This happens as part of fetchUserProfile, but we ensure it's there)
+                    if (profileData && !profileData.primaryName) {
+                        console.log(`[useBackgroundPreload] Ensuring user primary name is fetched`);
+                        await fetchUserProfileAndCache(activeAddress, true);
+                    }
+
+                    // Step 3: Load joined servers list
+                    try {
+                        console.log(`[useBackgroundPreload] Fetching user's joined servers`);
+                        const serverIds = await fetchJoinedServers(activeAddress, true);
+                        console.log(`[useBackgroundPreload] Loaded ${serverIds.length} joined servers`);
+                    } catch (err) {
+                        console.warn('[useBackgroundPreload] Failed to fetch joined servers:', err);
+                    }
+
+                    // Step 4: Start background prefetch of all server data
+                    // This includes server info and members with lower priority
+                    console.log(`[useBackgroundPreload] Starting background server data prefetch`);
+                    setTimeout(() => {
+                        prefetchAllServerData(activeAddress);
+                    }, 500);
+
                 } catch (err) {
-                    console.warn('[useBackgroundPreload] Failed to prefetch profile:', err);
+                    console.error('[useBackgroundPreload] Critical data loading failed:', err);
                 }
             };
 
-            // Execute profile fetch immediately with high priority
-            loadProfileData();
-
-            // Start background server data prefetch after a short delay to avoid blocking app startup
-            setTimeout(() => {
-                prefetchAllServerData(activeAddress);
-            }, 1000);
+            // Execute critical data loading immediately
+            loadCriticalData();
         }
-    }, [activeAddress, prefetchAllServerData, fetchUserProfile]);
+    }, [activeAddress, prefetchAllServerData, fetchUserProfile, fetchUserProfileAndCache, fetchJoinedServers]);
 
     return null;
 }

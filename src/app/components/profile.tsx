@@ -46,6 +46,7 @@ export default function Profile() {
         getServerMembers
     } = useGlobalState();
     const previousAddressRef = useRef<string | null>(null);
+    const primaryNameCheckedRef = useRef<boolean>(false);
     const navigate = useNavigate();
 
     // Profile state
@@ -57,6 +58,16 @@ export default function Profile() {
     const [isSaving, setIsSaving] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
+    // Stabilize profile display when hovering by caching profile name
+    const [cachedDisplayName, setCachedDisplayName] = useState<string | null>(null);
+
+    // Update cached display name whenever profile data changes
+    useEffect(() => {
+        if (profileData?.primaryName) {
+            setCachedDisplayName(profileData.primaryName);
+        }
+    }, [profileData]);
+
     // Watch for address changes
     useEffect(() => {
         // If address changed, reset and fetch new profile data
@@ -65,6 +76,8 @@ export default function Profile() {
             // Reset profile data immediately
             setProfileData(null);
             setNickname("");
+            primaryNameCheckedRef.current = false;
+            setCachedDisplayName(null);
 
             // Update the ref to current address
             previousAddressRef.current = activeAddress;
@@ -84,7 +97,18 @@ export default function Profile() {
                         if (result && 'profile' in result) {
                             console.log(`[Profile] Updated profile data for new wallet ${activeAddress}`);
                             setProfileData(result);
-                            // We don't set nickname from global profile anymore
+
+                            // Ensure primary name is in the user profiles cache
+                            if (result.primaryName) {
+                                updateUserProfileCache(activeAddress, {
+                                    username: result.profile?.username,
+                                    pfp: result.profile?.pfp,
+                                    primaryName: result.primaryName,
+                                    timestamp: Date.now()
+                                });
+                                primaryNameCheckedRef.current = true;
+                                setCachedDisplayName(result.primaryName);
+                            }
                         }
                     })
                     .catch(error => {
@@ -95,7 +119,7 @@ export default function Profile() {
                     });
             }
         }
-    }, [activeAddress, fetchUserProfile, navigate]);
+    }, [activeAddress, fetchUserProfile, navigate, updateUserProfileCache]);
 
     // Load cached profile data when component mounts
     useEffect(() => {
@@ -110,14 +134,59 @@ export default function Profile() {
             if (cachedProfile && profileAddress === activeAddress) {
                 console.log(`[Profile] Using cached profile data for ${activeAddress}`);
                 setProfileData(cachedProfile);
-                // We don't set nickname from global profile anymore
+
+                // Check if cached profile has primaryName
+                if (cachedProfile.primaryName) {
+                    // Ensure it's also in the user profiles cache for consistent display
+                    updateUserProfileCache(activeAddress, {
+                        username: cachedProfile.profile?.username,
+                        pfp: cachedProfile.profile?.pfp,
+                        primaryName: cachedProfile.primaryName,
+                        timestamp: Date.now()
+                    });
+                    primaryNameCheckedRef.current = true;
+                    setCachedDisplayName(cachedProfile.primaryName);
+                }
             } else if (!profileData && !isLoading) {
                 // If no matching cache, start a fetch
                 console.log(`[Profile] No matching cached profile, fetching new data`);
                 fetchProfile();
             }
         }
-    }, [activeAddress, getUserProfile, userProfile]);
+    }, [activeAddress, getUserProfile, userProfile, updateUserProfileCache]);
+
+    // Check for primary name if not already loaded
+    useEffect(() => {
+        if (activeAddress && profileData && !primaryNameCheckedRef.current && !isLoading) {
+            // If we have profile data but no primary name, try to fetch it specifically
+            if (!profileData.primaryName) {
+                console.log(`[Profile] No primary name found, fetching it specifically`);
+                fetchUserProfileAndCache(activeAddress, true)
+                    .then(result => {
+                        if (result && result.primaryName) {
+                            console.log(`[Profile] Successfully fetched primary name: ${result.primaryName}`);
+                            // Update the current profile data with the primary name
+                            setProfileData(prev => ({
+                                ...prev,
+                                primaryName: result.primaryName
+                            }));
+                            // Also update the cached display name
+                            setCachedDisplayName(result.primaryName);
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`[Profile] Error fetching primary name:`, error);
+                    })
+                    .finally(() => {
+                        primaryNameCheckedRef.current = true;
+                    });
+            } else {
+                primaryNameCheckedRef.current = true;
+                // Ensure cached display name is set from profile data
+                setCachedDisplayName(profileData.primaryName);
+            }
+        }
+    }, [activeAddress, profileData, isLoading, fetchUserProfileAndCache]);
 
     // Get server-specific nickname when active server changes
     useEffect(() => {
@@ -157,6 +226,8 @@ export default function Profile() {
         if (!activeAddress) return;
 
         setIsLoading(true);
+        primaryNameCheckedRef.current = false;
+
         try {
             // Always force a fresh fetch when the profile dialog is opened
             // This ensures we get the latest data for the current wallet
@@ -165,7 +236,18 @@ export default function Profile() {
 
             if (result && 'profile' in result) {
                 setProfileData(result);
-                // We don't set nickname from global profile anymore
+
+                // Ensure primary name is also in the user profiles cache
+                if (result.primaryName) {
+                    updateUserProfileCache(activeAddress, {
+                        username: result.profile?.username,
+                        pfp: result.profile?.pfp,
+                        primaryName: result.primaryName,
+                        timestamp: Date.now()
+                    });
+                    primaryNameCheckedRef.current = true;
+                    setCachedDisplayName(result.primaryName);
+                }
             }
         } catch (error) {
             console.error("Error fetching profile:", error);
@@ -296,10 +378,17 @@ export default function Profile() {
 
     // Get display name prioritizing primaryName (AR name) or wallet address
     const getDisplayName = () => {
+        // First priority: use cached display name to prevent flickering
+        if (cachedDisplayName) {
+            return cachedDisplayName;
+        }
+
+        // Second priority: use current profile data if available
         if (profileData?.primaryName) {
             return profileData.primaryName;
         }
 
+        // Last resort: truncated wallet address
         if (activeAddress) {
             return `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
         }
@@ -331,7 +420,7 @@ export default function Profile() {
                     <div className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/40 transition-colors cursor-pointer">
                         {/* User avatar */}
                         <div className="relative">
-                            <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ${profileData?.primaryName ? 'bg-amber-800/30' : 'bg-primary/20'
+                            <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ${(cachedDisplayName || profileData?.primaryName) ? 'bg-amber-800/30' : 'bg-primary/20'
                                 }`}>
                                 {activeAddress ? (
                                     profileData?.profile?.pfp ? (
@@ -361,7 +450,7 @@ export default function Profile() {
 
                                     {/* Always show nickname or wallet address, then swap with wallet address on hover */}
                                     <span className={isHovered ? 'hidden' : ''}>
-                                        {getServerNickname() ? `${getServerNickname()}` : getWalletAddress()}
+                                        {getServerNickname() || getWalletAddress()}
                                     </span>
 
                                     {/* Show wallet address on hover */}
@@ -466,7 +555,7 @@ export default function Profile() {
                         ) : (
                             <div className="space-y-6">
                                 <div className="flex flex-col items-center justify-center">
-                                    <div className={`w-24 h-24 rounded-full overflow-hidden mb-2 flex items-center justify-center ${profileData?.primaryName ? 'bg-amber-800/30' : 'bg-muted'
+                                    <div className={`w-24 h-24 rounded-full overflow-hidden mb-2 flex items-center justify-center ${(cachedDisplayName || profileData?.primaryName) ? 'bg-amber-800/30' : 'bg-muted'
                                         }`}>
                                         {profileData?.profile?.pfp ? (
                                             <img
@@ -488,11 +577,11 @@ export default function Profile() {
                                     <div>
                                         <h3 className="text-sm font-medium text-muted-foreground">Primary Name</h3>
                                         <p className="text-base">
-                                            {profileData?.primaryName ||
+                                            {cachedDisplayName || profileData?.primaryName ||
                                                 <span className="text-muted-foreground">None</span>
                                             }
                                         </p>
-                                        {!profileData?.primaryName && (
+                                        {!(cachedDisplayName || profileData?.primaryName) && (
                                             <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
                                                 <span className="text-amber-500">ℹ️</span>
                                                 <span>You can get your own Primary Name at <a href="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">arns.ar.io</a></span>
@@ -516,7 +605,7 @@ export default function Profile() {
                                         <p className="text-sm font-mono bg-muted rounded-md p-2 overflow-x-auto">
                                             {activeAddress || 'Not connected'}
                                         </p>
-                                        {profileData?.primaryName && (
+                                        {(cachedDisplayName || profileData?.primaryName) && (
                                             <div className="mt-1 text-xs text-muted-foreground">
                                                 {/* Using non-breaking space between words */}
                                                 <span className="text-green-500">✓</span> Primary&#8209;Name registered

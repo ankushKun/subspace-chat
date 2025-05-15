@@ -40,9 +40,29 @@ export default function UsersList() {
     const abortControllerRef = useRef<AbortController | null>(null);
     const hasLoadedProfilesRef = useRef(false);
     const processedMembersRef = useRef<string>('');
+    const lastFetchAttemptRef = useRef<number>(0);
+    const fetchFailedRef = useRef<boolean>(false);
+    const firstRenderRef = useRef(true);
+    const serverRequestsRef = useRef<Map<string, number>>(new Map());
+    const MAX_REQUESTS_PER_SERVER = 3; // Maximum number of fetch attempts per server per session
 
     // Get members from global state
     const members = activeServerId ? getServerMembers(activeServerId) : null;
+
+    // Check if we've exceeded fetch attempts for this server
+    const checkServerRequestLimit = (serverId: string): boolean => {
+        if (!serverId) return false;
+
+        const currentCount = serverRequestsRef.current.get(serverId) || 0;
+        if (currentCount >= MAX_REQUESTS_PER_SERVER) {
+            console.log(`[UsersList] Server ${serverId} has reached the maximum request limit (${MAX_REQUESTS_PER_SERVER})`);
+            return true;
+        }
+
+        // Increment the counter
+        serverRequestsRef.current.set(serverId, currentCount + 1);
+        return false;
+    };
 
     // This function loads profiles for all members in batches
     const loadMembersProfiles = useCallback(async (membersList: Member[]) => {
@@ -135,50 +155,123 @@ export default function UsersList() {
         fetchUserProfileAndCache
     ]);
 
-    // Fix the useEffect that triggers profile loading when panel becomes visible
+    // Setup on first render
     useEffect(() => {
-        // When the users panel becomes visible, refresh member data
-        if (showUsers && activeServerId) {
-            console.log(`[UsersList] Panel became visible, refreshing members for ${activeServerId}`);
-
-            // Get a reference to the global state
-            const globalState = useGlobalState.getState();
-
-            // Background refresh members with slight delay to allow UI to render first
-            setTimeout(() => {
-                if (!hasLoadedProfilesRef.current) {
-                    globalState.fetchServerMembers(activeServerId, true)
-                        .then(() => {
-                            // Check if we have members and need to load their profiles
-                            if (members && members.length > 0) {
-                                loadMembersProfiles(members);
-                                hasLoadedProfilesRef.current = true;
-                            }
-                        })
-                        .catch(error => console.warn("[UsersList] Failed to refresh members data:", error));
-                }
-            }, 150);
-        }
-
-        // Clean up abort controller on unmount
+        // Reset on component unmount
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
             }
+
+            // Clear tracked requests on unmount
+            serverRequestsRef.current.clear();
         };
+    }, []);
+
+    // Fix the useEffect that triggers profile loading when panel becomes visible
+    useEffect(() => {
+        // Only trigger a fetch when the panel is shown and we have an active server
+        if (showUsers && activeServerId) {
+            const now = Date.now();
+            const timeSinceLastFetch = now - lastFetchAttemptRef.current;
+            const minFetchInterval = 60000; // Increase to 60 seconds to be more conservative
+
+            // Skip under these conditions:
+            // 1. We're in first render - let the app stabilize
+            if (firstRenderRef.current) {
+                firstRenderRef.current = false;
+                return;
+            }
+
+            // 2. Previous fetch failed and hasn't been manually retried
+            if (fetchFailedRef.current) {
+                console.log(`[UsersList] Previous fetch failed, waiting for user retry`);
+                return;
+            }
+
+            // 3. We've tried too recently
+            if (timeSinceLastFetch < minFetchInterval) {
+                console.log(`[UsersList] Skipping fetch, last attempt was ${timeSinceLastFetch}ms ago`);
+                return;
+            }
+
+            // 4. We've already loaded members for this server
+            if (hasLoadedProfilesRef.current && members && members.length > 0) {
+                console.log(`[UsersList] Already loaded ${members.length} members, using existing data`);
+                return;
+            }
+
+            // 5. We've made too many requests to this server
+            if (checkServerRequestLimit(activeServerId)) {
+                fetchFailedRef.current = true; // Mark as failed to prevent future automatic attempts
+                return;
+            }
+
+            console.log(`[UsersList] Panel visible, fetching members for ${activeServerId}`);
+            lastFetchAttemptRef.current = now;
+
+            // Get a reference to the global state
+            const globalState = useGlobalState.getState();
+
+            // Background refresh members with slight delay to allow UI to render first
+            const timerId = setTimeout(() => {
+                // Do one more check to make sure the component is still mounted
+                if (abortControllerRef.current === null) return;
+
+                globalState.fetchServerMembers(activeServerId, true)
+                    .then(() => {
+                        // Only try to load profiles if we actually got members
+                        const currentMembers = globalState.getServerMembers(activeServerId);
+                        if (currentMembers && currentMembers.length > 0) {
+                            loadMembersProfiles(currentMembers);
+                        }
+                        // Mark as loaded regardless of result to prevent repeated attempts
+                        hasLoadedProfilesRef.current = true;
+                        fetchFailedRef.current = false;
+                    })
+                    .catch(error => {
+                        console.warn("[UsersList] Failed to refresh members data:", error);
+                        // Mark as failed to prevent automatic retries
+                        fetchFailedRef.current = true;
+                        // Mark as loaded to prevent spam
+                        hasLoadedProfilesRef.current = true;
+                    });
+            }, 300);
+
+            // Clean up the timer if the component unmounts
+            return () => clearTimeout(timerId);
+        }
     }, [showUsers, activeServerId, members, loadMembersProfiles]);
 
-    // Add a separate effect to monitor for member changes
+    // Add a separate effect to monitor for member changes - with safety checks
     useEffect(() => {
-        // Load profiles when members change and panel is visible
+        // Only run this if we have members and the panel is visible
         if (showUsers && members && members.length > 0 && !isLoadingProfiles) {
-            // Track this set of members
+            // Create a fingerprint of the current member list
             const memberIds = members.map(m => m.id).join(',');
 
+            // Only process if this is a new set of members we haven't seen before
             if (processedMembersRef.current !== memberIds) {
+                const now = Date.now();
+                const timeSinceLastFetch = now - lastFetchAttemptRef.current;
+                const minFetchInterval = 30000; // Increase to 30 seconds between profile loads
+
+                if (timeSinceLastFetch < minFetchInterval) {
+                    console.log(`[UsersList] Skipping profile load, too soon after last fetch (${timeSinceLastFetch}ms)`);
+                    // Still update the processed members ref so we don't keep checking
+                    processedMembersRef.current = memberIds;
+                    return;
+                }
+
+                console.log(`[UsersList] Member list changed (${members.length} members), loading profiles`);
                 processedMembersRef.current = memberIds;
-                loadMembersProfiles(members);
+                lastFetchAttemptRef.current = now;
+
+                // Use a timeout to prevent rapid successive loads
+                setTimeout(() => {
+                    loadMembersProfiles(members);
+                }, 100);
             }
         }
     }, [showUsers, members, isLoadingProfiles, loadMembersProfiles]);
@@ -197,8 +290,13 @@ export default function UsersList() {
             if (currentMembers && currentMembers.length > 0) {
                 await loadMembersProfiles(currentMembers);
             }
+            // Reset failure flag when user manually retries
+            fetchFailedRef.current = false;
+            hasLoadedProfilesRef.current = true;
+            lastFetchAttemptRef.current = Date.now();
         } catch (error) {
             console.error("[UsersList] Error retrying member fetch:", error);
+            fetchFailedRef.current = true;
         } finally {
             setIsRetrying(false);
         }
@@ -270,6 +368,35 @@ export default function UsersList() {
 
     // Check if this server is in the invalid members list
     const isServerMarkedInvalid = activeServerId ? invalidMemberServers.has(activeServerId) : false;
+
+    // Ensure primary names for all displayed members
+    useEffect(() => {
+        if (members && members.length > 0 && !isLoadingProfiles) {
+            // Find members without primary names in the cache
+            const membersNeedingPrimaryName = members.filter(member => {
+                const cachedProfile = getUserProfileFromCache(member.id);
+                return !cachedProfile?.primaryName;
+            });
+
+            if (membersNeedingPrimaryName.length > 0) {
+                console.log(`[UsersList] Fetching primary names for ${membersNeedingPrimaryName.length} members`);
+
+                // Load primary names for these members (one at a time to avoid overwhelming the network)
+                const loadPrimaryNames = async () => {
+                    for (const member of membersNeedingPrimaryName) {
+                        // Skip if component unmounted
+                        if (abortControllerRef.current?.signal.aborted) break;
+
+                        await fetchUserProfileAndCache(member.id, true);
+                        // Add a small delay between requests
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                };
+
+                loadPrimaryNames();
+            }
+        }
+    }, [members, isLoadingProfiles, getUserProfileFromCache, fetchUserProfileAndCache]);
 
     return (
         <div className="h-full w-full flex flex-col">

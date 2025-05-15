@@ -11,6 +11,7 @@ import { CornerDownLeftIcon, WalletCards, WalletCardsIcon } from "lucide-react";
 import { useGlobalState } from "@/hooks";
 import { useLocalStorage } from "@uidotdev/usehooks";
 import { Switch } from "@/components/ui/switch"
+import s from "@/assets/s.png"
 
 
 enum LoginStep {
@@ -27,6 +28,8 @@ export default function Landing() {
   const navigate = useNavigate();
   const { wanderInstance } = useGlobalState();
   const [useWC, setUseWC] = useLocalStorage("useWC", false);
+  const [sClickCount, setSClickCount] = useState(0);
+  const [showClickCount, setShowClickCount] = useState(false);
 
   useEffect(() => {
     if (connected && address) {
@@ -52,17 +55,60 @@ export default function Landing() {
     }
   }
 
+  useEffect(() => {
+    // reset click count if not clicked for 3 seconds
+    const interval = setInterval(() => {
+      setShowClickCount(false);
+      setSClickCount(0);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [sClickCount]);
+
+  function updateColor() {
+    const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+    document.getElementById("random-color")?.setAttribute("style", `color: #${randomColor}`);
+  }
+
+  async function sClicked() {
+    setSClickCount(prev => prev + 1);
+    if (sClickCount == 4) {
+      setShowClickCount(true);
+    }
+    if (sClickCount >= 4) {
+      const audio = new Audio("/audio/dum.wav");
+      audio.play();
+    }
+    if (sClickCount == 68) {
+      const audio = new Audio("/audio/laugh.wav");
+      audio.volume = 1;
+      audio.play();
+    }
+    if (sClickCount == 69) {
+      setSClickCount(0);
+    }
+
+    updateColor();
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center font-mono relative" >
       <BackgroundStars />
-      <ModeToggle className="absolute top-4 right-4" />
-      <Button
-        disabled={!useWC}
-        variant="outline" size="icon"
-        className="absolute top-16 right-4"
-        onClick={() => wanderInstance.open()}>
-        <WalletCardsIcon />
-      </Button>
+      <div className="absolute top-4 right-4 flex flex-col gap-2 justify-center items-end">
+        <div className="relative flex items-center justify-end gap-2">
+          {showClickCount && <div className="text-muted-foreground/60 p-0 text-xl shadow-lg backdrop-blur-sm rounded mb-1.5" id="random-color">
+            {sClickCount}
+          </div>}
+          <img src={s} className="w-8 h-8 mb-2.5 mr-1 cursor-pointer" onClick={sClicked} draggable={false} />
+        </div>
+        <ModeToggle />
+        <Button
+          disabled={!useWC}
+          variant="outline" size="icon"
+          className=""
+          onClick={() => wanderInstance.open()}>
+          <WalletCardsIcon />
+        </Button>
+      </div>
 
       <div className="rounded-lg w-full max-w-5xl mx-4 p-12 flex flex-col items-center justify-center" style={{ minHeight: '70vh' }}>
         <h1 className="text-6xl md:text-8xl font-bold mb-6 flex items-center space-x-2 select-none">
@@ -71,15 +117,15 @@ export default function Landing() {
         </h1>
         <p className="text-foreground/70 text-lg mb-12 tracking-wide text-center">Your intergalactic communications system</p>
         {loginStep === LoginStep.Landing && (
-          <Button variant="outline" className="text-lg p-6"
+          <Button variant="outline" className="text-lg p-6 animate-bounce"
             onClick={start}>
-            PRESS START
+            PRESS START ⓐ
           </Button>
         )}
         {loginStep === LoginStep.Login && (
           <div className="flex flex-col items-center justify-center gap-5">
             <div className="flex flex-col gap-4">
-              <Button variant="outline" className="items-center justify-center gap-2" onClick={loginWithArweave}>
+              <Button variant="outline" className="items-center justify-center gap-2 text-lg p-6 !px-8" onClick={loginWithArweave}>
                 <div>CONNECT</div> <CornerDownLeftIcon />
               </Button>
               {/* <TextWLine className="w-[269px] opacity-70" />

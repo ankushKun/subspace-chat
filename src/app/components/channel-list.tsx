@@ -23,13 +23,15 @@ import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
 import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua } from "@/lib/ao";
 import { useActiveAddress } from "@arweave-wallet-kit/react";
-import serverCode from "@/lib/lua/server";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";
 import { useMobile } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileDropzone } from "@/components/ui/file-dropzone";
+
+// @ts-ignore
+const serverSource = `${__SERVER_SRC__}`
 
 export default function ChannelList() {
     const { activeServer, setActiveServer, activeServerId, activeChannelId } = useGlobalState();
@@ -196,7 +198,7 @@ export default function ChannelList() {
         }
 
         async function updateServerProcessCode() {
-            await runLua(serverCode, activeServerId, [{ name: "Subspace-Chat-Function", value: "Update-Server-Code" }])
+            await runLua(serverSource, activeServerId, [{ name: "Subspace-Chat-Function", value: "Update-Server-Code" }])
         }
 
         // toast that has a button to confirm if user wants to update the server process code

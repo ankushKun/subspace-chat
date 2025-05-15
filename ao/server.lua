@@ -91,6 +91,14 @@ app.get("/", function(req, res)
     })
 end)
 
+app.get("/get-members", function(req, res)
+    local members = SQLRead("SELECT * FROM members")
+    res:json({
+        success = true,
+        members = members
+    })
+end)
+
 app.post("/update-server", function(req, res)
     assert(isOwner(req.msg.From), "You are not the owner of this server")
     local name = req.body.name or nil
@@ -669,6 +677,35 @@ app.post("/edit-message", function(req, res)
     else
         res:status(404):json({
             error = "Message not found",
+            success = false
+        })
+    end
+end)
+
+app.post("/update-nickname", function(req, res)
+    local member_id = req.msg.From
+    local nickname = req.body.nickname
+
+    -- Check if member exists
+    local member = SQLRead("SELECT * FROM members WHERE id = ?", member_id)
+    if not member or #member == 0 then
+        -- Auto-register the member if they don't exist
+        SQLWrite("INSERT INTO members (id, nickname) VALUES (?, ?)", member_id, nickname)
+        res:json({
+            success = true
+        })
+        return
+    end
+
+    -- Update the nickname
+    local rows_updated = SQLWrite("UPDATE members SET nickname = ? WHERE id = ?", nickname, member_id)
+    if rows_updated == 1 then
+        res:json({
+            success = true
+        })
+    else
+        res:status(500):json({
+            error = "Failed to update nickname",
             success = false
         })
     end

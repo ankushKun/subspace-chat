@@ -43,7 +43,8 @@ export default function Chat() {
         userProfilesCache,
         getUserProfileFromCache,
         updateUserProfileCache,
-        fetchUserProfileAndCache
+        fetchUserProfileAndCache,
+        getServerMembers
     } = useGlobalState();
     const isMobile = useMobile();
     const navigate = useNavigate();
@@ -349,15 +350,19 @@ export default function Chat() {
         });
     };
 
-    // Get the display name for a user
+    // Get display name for a user
     const getDisplayName = (userId: string) => {
+        // First try to get nickname from server members
+        const members = getServerMembers(activeServerId || "");
+        if (members) {
+            const member = members.find(m => m.id === userId);
+            if (member && member.nickname) {
+                return member.nickname;
+            }
+        }
+
         // Check profile cache from global state
         const profileData = getUserProfileFromCache(userId);
-
-        // Prioritize username if available
-        if (profileData?.username) {
-            return profileData.username;
-        }
 
         // Use primaryName if available
         if (profileData?.primaryName) {

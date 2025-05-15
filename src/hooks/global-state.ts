@@ -239,6 +239,7 @@ export interface GlobalState {
     isLoadingMembers: boolean
     fetchServerMembers: (serverId: string, forceRefresh?: boolean) => Promise<void>
     getServerMembers: (serverId: string) => Member[] | null
+    updateMemberNickname: (serverId: string, memberId: string, nickname: string) => void
 
     // Background loading
     prefetchAllServerData: (address: string) => Promise<void>
@@ -475,6 +476,46 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     isLoadingMembers: false,
     // Track servers with invalid member endpoints
     invalidMemberServers: new Set<string>(),
+
+    // Add function to update a single member's nickname in the cache
+    updateMemberNickname: (serverId: string, memberId: string, nickname: string) => {
+        if (!serverId || !memberId) return;
+
+        const { serverMembers } = get();
+        const cachedServerMembers = serverMembers.get(serverId);
+
+        // If we don't have cached members for this server, do nothing
+        if (!cachedServerMembers || !cachedServerMembers.data) return;
+
+        // Find and update the member's nickname
+        const updatedMembers = [...cachedServerMembers.data];
+        const memberIndex = updatedMembers.findIndex(m => m.id === memberId);
+
+        if (memberIndex !== -1) {
+            // Update the nickname
+            updatedMembers[memberIndex] = {
+                ...updatedMembers[memberIndex],
+                nickname: nickname
+            };
+
+            // Update the cache with the new members array
+            const updatedCache = new Map(serverMembers);
+            updatedCache.set(serverId, {
+                data: updatedMembers,
+                timestamp: Date.now() // Update timestamp to reflect the change
+            });
+
+            // Save to storage
+            saveMembersCache(updatedCache);
+
+            // Update state
+            set({ serverMembers: updatedCache });
+
+            console.log(`[updateMemberNickname] Updated nickname for member ${memberId} in server ${serverId}`);
+        } else {
+            console.log(`[updateMemberNickname] Member ${memberId} not found in server ${serverId} cache`);
+        }
+    },
 
     fetchServerMembers: async (serverId: string, forceRefresh = false) => {
         if (!serverId) return;

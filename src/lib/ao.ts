@@ -2,12 +2,16 @@ import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
 import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
 import type { Tag } from "@/lib/types"
-import aoxpressSource from "@/lib/lua/aoxpress"
-import serverSource from "@/lib/lua/server"
 // import { TurboFactory } from "@ardrive/turbo-sdk/web";
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
+import { toast } from "sonner";  // Use sonner for toast messages
+
+// @ts-ignore
+const serverSource = `${__SERVER_SRC__}`
+// @ts-ignore
+const aoxpressSource = `${__AOXPRESS_SRC__}`
 
 // Initialize AR.IO client
 const ario = ARIO.mainnet();
@@ -544,6 +548,51 @@ export async function deleteMessage(serverId: string, msgId: string) {
         return res.json;
     } else {
         throw new Error(res.error);
+    }
+}
+
+export async function updateNickname(serverId: string, nickname: string) {
+    console.log(`[updateNickname] Updating nickname in server: ${serverId}`, { nickname });
+
+    try {
+        // Use an empty string if nickname is null or undefined to clear the nickname
+        const safeNickname = nickname || "";
+
+        const res = await aofetch(`${serverId}/update-nickname`, {
+            method: "POST",
+            body: {
+                nickname: safeNickname
+            }
+        });
+        console.log(`[updateNickname] Response:`, res);
+
+        if (res.status == 200) {
+            // Directly update local cache for instant UI updates
+            try {
+                const activeAddress = await window.arweaveWallet.getActiveAddress();
+                const globalState = useGlobalState.getState();
+                globalState.updateMemberNickname(serverId, activeAddress, safeNickname);
+            } catch (error) {
+                console.warn('[updateNickname] Failed to update local cache:', error);
+            }
+
+            // Still trigger the standard refresh as a fallback
+            try {
+                await refreshCurrentServerData();
+            } catch (error) {
+                console.warn('[updateNickname] Failed to refresh data:', error);
+            }
+            return res.json;
+        } else {
+            console.error(`[updateNickname] Server error:`, res.error || res.status);
+            toast.error("Server does not support nickname updates");
+            return { success: false, error: res.error || "Server error" };
+        }
+    } catch (error) {
+        console.error('[updateNickname] Error updating nickname:', error);
+        toast.error("Server does not support nickname updates yet");
+        // Return a safe response instead of throwing
+        return { success: false, error: "Endpoint not available" };
     }
 }
 

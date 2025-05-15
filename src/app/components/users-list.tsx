@@ -38,43 +38,21 @@ export default function UsersList() {
     const isMobile = useMobile();
     const activeAddress = useActiveAddress();
     const abortControllerRef = useRef<AbortController | null>(null);
+    const hasLoadedProfilesRef = useRef(false);
+    const processedMembersRef = useRef<string>('');
 
     // Get members from global state
     const members = activeServerId ? getServerMembers(activeServerId) : null;
 
-    // Refresh member data when the panel becomes visible
-    useEffect(() => {
-        // When the users panel becomes visible, refresh member data
-        if (showUsers && activeServerId) {
-            console.log(`[UsersList] Panel became visible, refreshing members for ${activeServerId}`);
-
-            // Get a reference to the global state
-            const globalState = useGlobalState.getState();
-
-            // Background refresh members with slight delay to allow UI to render first
-            setTimeout(() => {
-                globalState.fetchServerMembers(activeServerId, true)
-                    .catch(error => console.warn("[UsersList] Failed to refresh members data:", error));
-            }, 150);
-
-            // Check if we have members and need to load their profiles
-            if (members && members.length > 0) {
-                loadMembersProfiles(members);
-            }
-        }
-
-        // Clean up abort controller on unmount
-        return () => {
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                abortControllerRef.current = null;
-            }
-        };
-    }, [showUsers, activeServerId, members]);
-
     // This function loads profiles for all members in batches
-    const loadMembersProfiles = async (membersList: Member[]) => {
+    const loadMembersProfiles = useCallback(async (membersList: Member[]) => {
         if (!membersList || membersList.length === 0) return;
+
+        // Avoid multiple concurrent loading operations
+        if (isLoadingProfiles) {
+            console.log(`[UsersList] Profile loading already in progress, skipping`);
+            return;
+        }
 
         setIsLoadingProfiles(true);
 
@@ -104,12 +82,19 @@ export default function UsersList() {
 
             console.log(`[UsersList] Need to load ${membersToLoad.length} member profiles`);
 
+            // Track loaded profiles to avoid repeated requests
+            const loadedIds = new Set<string>();
+
             // Process members in batches to avoid rate limiting
             for (let i = 0; i < membersToLoad.length; i++) {
                 // Break if component unmounted or fetch aborted
                 if (signal.aborted) break;
 
                 const member = membersToLoad[i];
+
+                // Skip if already processed in this batch
+                if (loadedIds.has(member.id)) continue;
+                loadedIds.add(member.id);
 
                 // Prioritize loading the current user's profile from global state
                 if (member.id === activeAddress) {
@@ -118,6 +103,7 @@ export default function UsersList() {
                         updateUserProfileCache(member.id, {
                             username: currentUserProfile.profile.username,
                             pfp: currentUserProfile.profile.pfp,
+                            primaryName: currentUserProfile.primaryName,
                             timestamp: Date.now()
                         });
                         continue;
@@ -139,7 +125,63 @@ export default function UsersList() {
                 setIsLoadingProfiles(false);
             }
         }
-    };
+    }, [
+        isLoadingProfiles,
+        setIsLoadingProfiles,
+        getUserProfileFromCache,
+        activeAddress,
+        getUserProfile,
+        updateUserProfileCache,
+        fetchUserProfileAndCache
+    ]);
+
+    // Fix the useEffect that triggers profile loading when panel becomes visible
+    useEffect(() => {
+        // When the users panel becomes visible, refresh member data
+        if (showUsers && activeServerId) {
+            console.log(`[UsersList] Panel became visible, refreshing members for ${activeServerId}`);
+
+            // Get a reference to the global state
+            const globalState = useGlobalState.getState();
+
+            // Background refresh members with slight delay to allow UI to render first
+            setTimeout(() => {
+                if (!hasLoadedProfilesRef.current) {
+                    globalState.fetchServerMembers(activeServerId, true)
+                        .then(() => {
+                            // Check if we have members and need to load their profiles
+                            if (members && members.length > 0) {
+                                loadMembersProfiles(members);
+                                hasLoadedProfilesRef.current = true;
+                            }
+                        })
+                        .catch(error => console.warn("[UsersList] Failed to refresh members data:", error));
+                }
+            }, 150);
+        }
+
+        // Clean up abort controller on unmount
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+        };
+    }, [showUsers, activeServerId, members, loadMembersProfiles]);
+
+    // Add a separate effect to monitor for member changes
+    useEffect(() => {
+        // Load profiles when members change and panel is visible
+        if (showUsers && members && members.length > 0 && !isLoadingProfiles) {
+            // Track this set of members
+            const memberIds = members.map(m => m.id).join(',');
+
+            if (processedMembersRef.current !== memberIds) {
+                processedMembersRef.current = memberIds;
+                loadMembersProfiles(members);
+            }
+        }
+    }, [showUsers, members, isLoadingProfiles, loadMembersProfiles]);
 
     // Handle retrying the member fetch for servers previously marked as invalid
     const handleRetryFetch = async () => {
@@ -164,22 +206,15 @@ export default function UsersList() {
 
     // Get display name for a member
     const getDisplayName = (member: Member) => {
-        // Try to get username from profile cache
-        const profileData = getUserProfileFromCache(member.id);
-
-        // Prioritize username if available
-        if (profileData?.username) {
-            return profileData.username;
-        }
-
-        // Try to use primaryName if available
-        if (profileData?.primaryName) {
-            return profileData.primaryName;
-        }
-
-        // Fall back to nickname if available
+        // Prioritize server nickname if available
         if (member.nickname) {
             return member.nickname;
+        }
+
+        // Try to get primaryName if available
+        const profileData = getUserProfileFromCache(member.id);
+        if (profileData?.primaryName) {
+            return profileData.primaryName;
         }
 
         // Fall back to truncated ID
@@ -346,43 +381,6 @@ export default function UsersList() {
                                 </PopoverTrigger>
                             </UserProfilePopover>
                         ))}
-
-                        {/* Show retry button below the list if the server is marked invalid but we have cached data */}
-                        {isServerMarkedInvalid && members.length > 0 && (
-                            <div className="pt-2 pb-1 flex flex-col items-center">
-                                <div className="text-xs text-muted-foreground mb-1">
-                                    Using cached member data
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleRetryFetch}
-                                    disabled={isRetrying}
-                                >
-                                    {isRetrying ? (
-                                        <>
-                                            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                                            Refreshing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <RefreshCcw className="h-3 w-3 mr-2" />
-                                            Refresh
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        )}
-
-                        {/* Loading indicator when refreshing profiles */}
-                        {isLoadingProfiles && (
-                            <div className="pt-2 pb-1 flex flex-col items-center">
-                                <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    Loading user profiles...
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>

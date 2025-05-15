@@ -7,13 +7,16 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
 
 // More robust way to get package version
-let packageVersion = '1.0.0'; // Default fallback version
+let packageVersion = 'DEV-FALLBACK'; // Default fallback version
 try {
   const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), { encoding: "utf-8" }));
   packageVersion = packageJson.version || packageVersion;
 } catch (error) {
   console.warn('Could not read package.json version, using fallback version', error);
 }
+
+const serverSrc = fs.readFileSync("./ao/server.lua", { encoding: "utf-8" });
+const aoxpressSrc = fs.readFileSync("./ao/aoxpress.lua", { encoding: "utf-8" });
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -92,10 +95,8 @@ export default defineConfig({
   // define global env variables
   define: {
     "__APP_VERSION__": JSON.stringify(packageVersion),
-    'process.env': {
-      // DO NOT EXPOSE THE ENTIRE process.env HERE - sensitive information on CI/CD could be exposed.
-      URL: process.env.URL,
-    },
+    "__SERVER_SRC__": JSON.stringify(serverSrc),
+    "__AOXPRESS_SRC__": JSON.stringify(aoxpressSrc),
   },
   build: {
     rollupOptions: {

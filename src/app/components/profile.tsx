@@ -23,7 +23,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getProfile, updateProfile, uploadFileAndGetId } from '@/lib/ao';
+import { getProfile, updateProfile, uploadFileAndGetId, updateNickname } from '@/lib/ao';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { useGlobalState } from '@/hooks/global-state';
@@ -42,7 +42,8 @@ export default function Profile() {
         userProfile,
         getUserProfileFromCache,
         updateUserProfileCache,
-        fetchUserProfileAndCache
+        fetchUserProfileAndCache,
+        getServerMembers
     } = useGlobalState();
     const previousAddressRef = useRef<string | null>(null);
     const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function Profile() {
     // Profile state
     const [isLoading, setIsLoading] = useState(false);
     const [profileData, setProfileData] = useState<any>(null);
-    const [username, setUsername] = useState("");
+    const [nickname, setNickname] = useState("");
     const [profilePic, setProfilePic] = useState<File | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -63,7 +64,7 @@ export default function Profile() {
             console.log(`[Profile] Wallet address changed from ${previousAddressRef.current} to ${activeAddress}`);
             // Reset profile data immediately
             setProfileData(null);
-            setUsername("");
+            setNickname("");
 
             // Update the ref to current address
             previousAddressRef.current = activeAddress;
@@ -83,7 +84,7 @@ export default function Profile() {
                         if (result && 'profile' in result) {
                             console.log(`[Profile] Updated profile data for new wallet ${activeAddress}`);
                             setProfileData(result);
-                            setUsername(result.profile?.username || "");
+                            // We don't set nickname from global profile anymore
                         }
                     })
                     .catch(error => {
@@ -109,7 +110,7 @@ export default function Profile() {
             if (cachedProfile && profileAddress === activeAddress) {
                 console.log(`[Profile] Using cached profile data for ${activeAddress}`);
                 setProfileData(cachedProfile);
-                setUsername(cachedProfile.profile?.username || "");
+                // We don't set nickname from global profile anymore
             } else if (!profileData && !isLoading) {
                 // If no matching cache, start a fetch
                 console.log(`[Profile] No matching cached profile, fetching new data`);
@@ -117,6 +118,25 @@ export default function Profile() {
             }
         }
     }, [activeAddress, getUserProfile, userProfile]);
+
+    // Get server-specific nickname when active server changes
+    useEffect(() => {
+        if (activeServerId && activeAddress) {
+            // Get members from current server
+            const members = getServerMembers(activeServerId);
+            if (members) {
+                // Find current user in members
+                const currentMember = members.find(m => m.id === activeAddress);
+                if (currentMember) {
+                    // Set nickname from server data
+                    setNickname(currentMember.nickname || "");
+                } else {
+                    // Reset nickname if not found
+                    setNickname("");
+                }
+            }
+        }
+    }, [activeServerId, activeAddress, getServerMembers]);
 
     // Fetch profile when dialog opens if no cached data
     useEffect(() => {
@@ -145,7 +165,7 @@ export default function Profile() {
 
             if (result && 'profile' in result) {
                 setProfileData(result);
-                setUsername(result.profile?.username || "");
+                // We don't set nickname from global profile anymore
             }
         } catch (error) {
             console.error("Error fetching profile:", error);
@@ -157,11 +177,12 @@ export default function Profile() {
 
     // Save profile changes
     const handleSaveProfile = async () => {
-        if (!activeAddress) return;
+        if (!activeAddress || !activeServerId) return;
 
         setIsSaving(true);
         try {
             let pfpId = profileData?.profile?.pfp;
+            let nicknameUpdated = false;
 
             // Upload new profile picture if one was selected
             if (profilePic) {
@@ -170,11 +191,31 @@ export default function Profile() {
                 toast.dismiss();
             }
 
-            // Update profile
-            toast.loading("Saving profile...");
-            await updateProfile(username, pfpId);
-            toast.dismiss();
-            toast.success("Profile updated successfully");
+            // Update global profile picture
+            if (profilePic) {
+                toast.loading("Updating profile picture...");
+                await updateProfile(undefined, pfpId);
+                toast.dismiss();
+            }
+
+            // Update server-specific nickname
+            if (nickname !== getServerNickname()) {
+                toast.loading("Updating server nickname...");
+                const nicknameResult = await updateNickname(activeServerId, nickname);
+                toast.dismiss();
+                // Type-safe check if the result has a success property that is false
+                nicknameUpdated = !!(nicknameResult && typeof nicknameResult === 'object' && 'success' in nicknameResult ? nicknameResult.success !== false : true);
+            }
+
+            // Show success toast only if something was updated
+            if (profilePic || nicknameUpdated) {
+                toast.success("Profile updated successfully");
+            }
+
+            // Local state update for immediate UI feedback if nickname update appears successful
+            if (nicknameUpdated) {
+                setNickname(nickname);
+            }
 
             // Add a small delay to ensure backend has processed the update
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -186,18 +227,18 @@ export default function Profile() {
             if (updatedProfile) {
                 console.log(`[Profile] Profile data refreshed successfully after update`);
                 setProfileData(updatedProfile);
-                setUsername(updatedProfile.profile?.username || "");
 
                 // Also update the user profiles cache to ensure it's reflected everywhere in the app
                 if (activeAddress) {
                     console.log(`[Profile] Updating user profiles cache with latest data`);
                     updateUserProfileCache(activeAddress, {
-                        username: updatedProfile.profile?.username,
                         pfp: updatedProfile.profile?.pfp,
                         primaryName: updatedProfile.primaryName,
                         timestamp: Date.now()
                     });
                 }
+
+                // The server members should already be updated through the optimized caching in updateNickname
             } else {
                 console.warn(`[Profile] Failed to get updated profile data after update`);
                 // Fallback to fetching profile directly if the global state method failed
@@ -207,11 +248,9 @@ export default function Profile() {
                         setProfileData(freshProfileData);
                         // Type assertion to tell TypeScript this is a record with a profile property
                         const typedProfile = freshProfileData as Record<string, any>;
-                        setUsername(typedProfile.profile?.username || "");
 
                         // Update user profiles cache here too for the fallback
                         updateUserProfileCache(activeAddress, {
-                            username: typedProfile.profile?.username,
                             pfp: typedProfile.profile?.pfp,
                             primaryName: typedProfile.primaryName,
                             timestamp: Date.now()
@@ -236,7 +275,14 @@ export default function Profile() {
     // Cancel editing
     const handleCancelEdit = () => {
         setIsEditing(false);
-        setUsername(profileData?.profile?.username || "");
+        // Reload nickname from server members
+        if (activeServerId && activeAddress) {
+            const members = getServerMembers(activeServerId);
+            if (members) {
+                const currentMember = members.find(m => m.id === activeAddress);
+                setNickname(currentMember?.nickname || "");
+            }
+        }
         setProfilePic(null);
     };
 
@@ -246,6 +292,36 @@ export default function Profile() {
 
     const unhovered = () => {
         setIsHovered(false);
+    };
+
+    // Get display name prioritizing primaryName (AR name) or wallet address
+    const getDisplayName = () => {
+        if (profileData?.primaryName) {
+            return profileData.primaryName;
+        }
+
+        if (activeAddress) {
+            return `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+        }
+
+        return 'Not Connected';
+    };
+
+    // Get formatted wallet address
+    const getWalletAddress = () => {
+        if (!activeAddress) return 'Not Connected';
+        return `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+    };
+
+    // Get nickname from current server
+    const getServerNickname = () => {
+        if (!activeServerId || !activeAddress) return null;
+
+        const members = getServerMembers(activeServerId);
+        if (!members) return null;
+
+        const currentMember = members.find(m => m.id === activeAddress);
+        return currentMember?.nickname || null;
     };
 
     return (
@@ -277,39 +353,21 @@ export default function Profile() {
                         {/* User info */}
                         <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">
-                                {profileData?.profile?.username ?
-                                    profileData.profile.username :
-                                    (profileData?.primaryName ?
-                                        profileData.primaryName :
-                                        (activeAddress ?
-                                            `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`
-                                            : 'Not Connected'))}
+                                {getDisplayName()}
                             </div>
                             <div className="flex flex-col">
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
 
-                                    {profileData?.profile?.username ? (
-                                        // If custom username is shown above, show primary name (if exists) or wallet address
-                                        <span className={isHovered ? 'hidden' : ''}>
-                                            {profileData?.primaryName || 'Online'}
-                                        </span>
-                                    ) : (
-                                        // If primary name is shown above, just show wallet address
-                                        <span>
-                                            {activeAddress ?
-                                                `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}` :
-                                                'Online'
-                                            }
-                                        </span>
-                                    )}
+                                    {/* Always show nickname or wallet address, then swap with wallet address on hover */}
+                                    <span className={isHovered ? 'hidden' : ''}>
+                                        {getServerNickname() ? `${getServerNickname()}` : getWalletAddress()}
+                                    </span>
 
-                                    {/* Show wallet address on hover only if custom username is displayed */}
-                                    {profileData?.profile?.username && activeAddress && (
-                                        <span className={!isHovered ? 'hidden' : ''}>
-                                            {`${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`}
-                                        </span>
-                                    )}
+                                    {/* Show wallet address on hover */}
+                                    <span className={!isHovered ? 'hidden' : ''}>
+                                        {getWalletAddress()}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -355,7 +413,7 @@ export default function Profile() {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center justify-between">
                             <span>Your Profile</span>
-                            {!isEditing && (
+                            {!isEditing && activeServerId && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -369,7 +427,9 @@ export default function Profile() {
                             )}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Your profile information is visible to other members.
+                            {activeServerId
+                                ? "Your server nickname and profile picture are visible to other members."
+                                : "Select a server first to set your server-specific nickname."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
 
@@ -382,7 +442,7 @@ export default function Profile() {
                                 <Skeleton className="h-10 w-full" />
                                 <Skeleton className="h-10 w-full" />
                             </div>
-                        ) : isEditing ? (
+                        ) : isEditing && activeServerId ? (
                             <div className="space-y-4">
                                 <FileDropzone
                                     onFileChange={setProfilePic}
@@ -393,14 +453,14 @@ export default function Profile() {
                                 />
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="username">Display Name</Label>
+                                    <Label htmlFor="nickname">Server Nickname</Label>
                                     <Input
-                                        id="username"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        placeholder="Enter a global display name"
+                                        id="nickname"
+                                        value={nickname}
+                                        onChange={(e) => setNickname(e.target.value)}
+                                        placeholder="Enter a nickname for this server"
                                     />
-                                    <p className="text-xs text-muted-foreground">This name will be shown across all servers.</p>
+                                    <p className="text-xs text-muted-foreground">This nickname will only be shown in {activeServer?.name || "this server"}.</p>
                                 </div>
                             </div>
                         ) : (
@@ -422,38 +482,31 @@ export default function Profile() {
                                             )
                                         )}
                                     </div>
-                                    {profileData?.primaryName && (
-                                        <div className="text-xs bg-amber-800/20 text-amber-400 px-2 py-0.5 rounded-full">
-                                            {profileData.primaryName}
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div className="space-y-4">
                                     <div>
-                                        <h3 className="text-sm font-medium text-muted-foreground">Display Name</h3>
+                                        <h3 className="text-sm font-medium text-muted-foreground">Primary Name</h3>
                                         <p className="text-base">
-                                            {profileData?.profile?.username ?
-                                                profileData.profile.username :
-                                                (profileData?.primaryName ?
-                                                    `${profileData.primaryName}` :
-                                                    <span className="text-muted-foreground italic">No display name set</span>
-                                                )}
+                                            {profileData?.primaryName ||
+                                                <span className="text-muted-foreground">None</span>
+                                            }
                                         </p>
+                                        {!profileData?.primaryName && (
+                                            <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                                                <span className="text-amber-500">ℹ️</span>
+                                                <span>You can get your own Primary Name at <a href="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">arns.ar.io</a></span>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {profileData?.primaryName && profileData?.profile?.username && (
+                                    {activeServerId && (
                                         <div>
-                                            <h3 className="text-sm font-medium text-muted-foreground">Primary Name</h3>
-                                            <p className="text-base">{profileData.primaryName}</p>
-                                        </div>
-                                    )}
-
-                                    {profileData?.primaryName && !profileData?.profile?.username && (
-                                        <div>
-                                            <h3 className="text-sm font-medium text-muted-foreground">Using Primary Name</h3>
-                                            <p className="text-base text-muted-foreground italic">
-                                                No username set, displaying your primary name
+                                            <h3 className="text-sm font-medium text-muted-foreground">Server Nickname</h3>
+                                            <p className="text-base">
+                                                {getServerNickname() ||
+                                                    <span className="text-muted-foreground italic">No server nickname set</span>
+                                                }
                                             </p>
                                         </div>
                                     )}
@@ -465,8 +518,8 @@ export default function Profile() {
                                         </p>
                                         {profileData?.primaryName && (
                                             <div className="mt-1 text-xs text-muted-foreground">
-                                                {/* Using non-breaking space between ARweave */}
-                                                <span className="text-green-500">✓</span> AR&#8209;name registered
+                                                {/* Using non-breaking space between words */}
+                                                <span className="text-green-500">✓</span> Primary&#8209;Name registered
                                             </div>
                                         )}
                                     </div>
@@ -487,7 +540,7 @@ export default function Profile() {
                                 </Button>
                                 <Button
                                     onClick={handleSaveProfile}
-                                    disabled={isSaving}
+                                    disabled={isSaving || !activeServerId}
                                     className="flex items-center gap-2"
                                 >
                                     {isSaving ? (

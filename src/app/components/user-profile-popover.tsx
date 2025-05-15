@@ -29,7 +29,9 @@ export default function UserProfilePopover({
     const {
         getUserProfileFromCache,
         updateUserProfileCache,
-        fetchUserProfileAndCache
+        fetchUserProfileAndCache,
+        activeServerId,
+        getServerMembers
     } = useGlobalState();
 
     // Fetch user profile data when the popover opens or userId changes
@@ -93,13 +95,25 @@ export default function UserProfilePopover({
         }, 2000);
     };
 
-    // Get username from profile data or fall back to wallet address
+    // Get server-specific nickname if available
+    const getServerNickname = () => {
+        if (!userId || !activeServerId) return null;
+
+        const members = getServerMembers(activeServerId);
+        if (!members) return null;
+
+        const member = members.find(m => m.id === userId);
+        return member?.nickname || null;
+    };
+
+    // Get display name from profile data or fall back to wallet address
     const getDisplayName = () => {
         if (!profileData) return 'Unknown User';
 
-        // Prioritize username if available
-        if (profileData.profile?.username) {
-            return profileData.profile.username;
+        // First prioritize server-specific nickname
+        const nickname = getServerNickname();
+        if (nickname) {
+            return nickname;
         }
 
         // Use primaryName if available
@@ -161,7 +175,7 @@ export default function UserProfilePopover({
                                 </div>
                                 <div>
                                     <h3 className="font-medium text-base">{getDisplayName()}</h3>
-                                    {profileData?.primaryName && profileData?.profile?.username && (
+                                    {getServerNickname() && profileData?.primaryName && (
                                         <div className="text-sm text-muted-foreground">
                                             {profileData.primaryName}
                                         </div>

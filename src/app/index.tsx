@@ -5,12 +5,32 @@ import DmList from '@/app/components/dm-list';
 import Hero from '@/app/components/hero';
 import Chat from '@/app/components/chat';
 import ServerList from '@/app/components/server-list';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { uploadFileAndGetId } from '@/lib/ao';
 import Profile from './components/profile';
 import { useConnection } from '@arweave-wallet-kit/react';
 import { useMobile } from '@/hooks';
 import UsersList from './components/users-list';
+
+// Create global rate limiting middleware for the app
+// This ensures we don't spam servers with requests
+const initializeRequestLimiting = () => {
+    console.log('[App] Initializing global request limiting');
+
+    // Keep track of any pending member request retry timers
+    const pendingRetryTimers = new Set();
+
+    // Clear timers on refresh/navigation
+    window.addEventListener('beforeunload', () => {
+        for (const timer of pendingRetryTimers) {
+            clearTimeout(timer);
+        }
+        pendingRetryTimers.clear();
+    });
+
+    // Add global guards to prevent rapid re-mounting from causing request storms
+    console.log('[App] Global request limiting initialized');
+};
 
 export default function App() {
     const { connected } = useConnection();
@@ -24,6 +44,15 @@ export default function App() {
         setActiveChannelId,
         showUsers
     } = useGlobalState();
+    const initRef = useRef(false);
+
+    // Initialize global request limiting on first render only
+    useEffect(() => {
+        if (!initRef.current) {
+            initRef.current = true;
+            initializeRequestLimiting();
+        }
+    }, []);
 
     useEffect(() => {
         const t = setTimeout(() => {

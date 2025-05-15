@@ -528,15 +528,16 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
 
         // When forceRefresh is true, we'll retry even if previously marked as invalid
-        if (invalidMemberServers.has(serverId) && !forceRefresh) {
+        // ONLY if it's explicitly a user action (isLoadingServer is true)
+        if (invalidMemberServers.has(serverId) && (!forceRefresh || !get().isLoadingServer)) {
             console.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
             return;
         }
 
-        // If this is a force refresh for a server previously marked as invalid,
+        // If this is a force refresh from a user action for a server previously marked as invalid,
         // remove it from the invalid set to allow retrying
-        if (forceRefresh && invalidMemberServers.has(serverId)) {
-            console.log(`[fetchServerMembers] Retrying previously invalid member server: ${serverId}`);
+        if (forceRefresh && invalidMemberServers.has(serverId) && get().isLoadingServer) {
+            console.log(`[fetchServerMembers] Retrying previously invalid member server due to user action: ${serverId}`);
             const updatedInvalidMemberServers = new Set(invalidMemberServers);
             updatedInvalidMemberServers.delete(serverId);
             set({

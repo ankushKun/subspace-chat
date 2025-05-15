@@ -10,6 +10,30 @@ import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";
 
+// Global request tracking to persist across component remounts
+const globalRequestLimiter = {
+    serverRequests: new Map<string, number>(),
+    lastAttemptTimes: new Map<string, number>(),
+    MIN_REQUEST_INTERVAL: 60000, // 1 minute minimum between requests
+    MAX_REQUESTS_PER_SERVER: 3,
+    isServerBlocked: function (serverId: string): boolean {
+        const count = this.serverRequests.get(serverId) || 0;
+        const lastAttempt = this.lastAttemptTimes.get(serverId) || 0;
+        const now = Date.now();
+
+        // Block if:
+        // 1. We've exceeded max requests
+        // 2. We've tried too recently
+        return count >= this.MAX_REQUESTS_PER_SERVER ||
+            (now - lastAttempt < this.MIN_REQUEST_INTERVAL);
+    },
+    recordAttempt: function (serverId: string) {
+        const count = this.serverRequests.get(serverId) || 0;
+        this.serverRequests.set(serverId, count + 1);
+        this.lastAttemptTimes.set(serverId, Date.now());
+    }
+};
+
 // Define response type for getMembers
 interface MembersResponse {
     success: boolean;
@@ -53,14 +77,23 @@ export default function UsersList() {
     const checkServerRequestLimit = (serverId: string): boolean => {
         if (!serverId) return false;
 
-        const currentCount = serverRequestsRef.current.get(serverId) || 0;
-        if (currentCount >= MAX_REQUESTS_PER_SERVER) {
-            console.log(`[UsersList] Server ${serverId} has reached the maximum request limit (${MAX_REQUESTS_PER_SERVER})`);
+        // Use global limiter to check if server is blocked
+        if (globalRequestLimiter.isServerBlocked(serverId)) {
+            console.log(`[UsersList] Server ${serverId} is blocked from further requests`);
+            // Mark as failed to prevent future automatic retries
+            fetchFailedRef.current = true;
+            // Mark as loaded to prevent repeated checks
+            hasLoadedProfilesRef.current = true;
             return true;
         }
 
-        // Increment the counter
+        // Record the attempt in both local and global trackers
+        const currentCount = serverRequestsRef.current.get(serverId) || 0;
         serverRequestsRef.current.set(serverId, currentCount + 1);
+
+        // Record in global tracker
+        globalRequestLimiter.recordAttempt(serverId);
+
         return false;
     };
 
@@ -155,19 +188,34 @@ export default function UsersList() {
         fetchUserProfileAndCache
     ]);
 
-    // Setup on first render
+    // This useEffect manages component setup and cleanup
     useEffect(() => {
+        // Clear immediate server failures on first mount to allow retry
+        if (firstRenderRef.current) {
+            console.log(`[UsersList] First render, resetting failure flags`);
+            fetchFailedRef.current = false;
+            hasLoadedProfilesRef.current = false;
+            firstRenderRef.current = false;
+        }
+
         // Reset on component unmount
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
             }
-
-            // Clear tracked requests on unmount
-            serverRequestsRef.current.clear();
         };
     }, []);
+
+    // Separate effect to handle checking invalidMemberServers
+    useEffect(() => {
+        // If the server is known to have invalid members, mark it as failed
+        if (activeServerId && invalidMemberServers.has(activeServerId)) {
+            console.log(`[UsersList] Server ${activeServerId} is known to have invalid members endpoint`);
+            fetchFailedRef.current = true;
+            hasLoadedProfilesRef.current = true;
+        }
+    }, [activeServerId, invalidMemberServers]);
 
     // Fix the useEffect that triggers profile loading when panel becomes visible
     useEffect(() => {
@@ -175,12 +223,11 @@ export default function UsersList() {
         if (showUsers && activeServerId) {
             const now = Date.now();
             const timeSinceLastFetch = now - lastFetchAttemptRef.current;
-            const minFetchInterval = 60000; // Increase to 60 seconds to be more conservative
+            const minFetchInterval = 60000; // 60 seconds minimum between attempts
 
             // Skip under these conditions:
             // 1. We're in first render - let the app stabilize
             if (firstRenderRef.current) {
-                firstRenderRef.current = false;
                 return;
             }
 
@@ -202,9 +249,16 @@ export default function UsersList() {
                 return;
             }
 
-            // 5. We've made too many requests to this server
+            // 5. We've made too many requests to this server (check both local and global limit)
             if (checkServerRequestLimit(activeServerId)) {
-                fetchFailedRef.current = true; // Mark as failed to prevent future automatic attempts
+                return;
+            }
+
+            // 6. Server is already known to have invalid members endpoint
+            if (invalidMemberServers.has(activeServerId)) {
+                console.log(`[UsersList] Server ${activeServerId} is known to have invalid members endpoint`);
+                fetchFailedRef.current = true;
+                hasLoadedProfilesRef.current = true;
                 return;
             }
 
@@ -230,8 +284,7 @@ export default function UsersList() {
                         hasLoadedProfilesRef.current = true;
                         fetchFailedRef.current = false;
                     })
-                    .catch(error => {
-                        console.warn("[UsersList] Failed to refresh members data:", error);
+                    .catch(() => {
                         // Mark as failed to prevent automatic retries
                         fetchFailedRef.current = true;
                         // Mark as loaded to prevent spam
@@ -242,7 +295,7 @@ export default function UsersList() {
             // Clean up the timer if the component unmounts
             return () => clearTimeout(timerId);
         }
-    }, [showUsers, activeServerId, members, loadMembersProfiles]);
+    }, [showUsers, activeServerId, members, loadMembersProfiles, invalidMemberServers]);
 
     // Add a separate effect to monitor for member changes - with safety checks
     useEffect(() => {
@@ -264,6 +317,12 @@ export default function UsersList() {
                     return;
                 }
 
+                // Don't attempt to load profiles if we've exceeded the request limit
+                if (checkServerRequestLimit(activeServerId)) {
+                    processedMembersRef.current = memberIds;
+                    return;
+                }
+
                 console.log(`[UsersList] Member list changed (${members.length} members), loading profiles`);
                 processedMembersRef.current = memberIds;
                 lastFetchAttemptRef.current = now;
@@ -274,7 +333,7 @@ export default function UsersList() {
                 }, 100);
             }
         }
-    }, [showUsers, members, isLoadingProfiles, loadMembersProfiles]);
+    }, [showUsers, members, isLoadingProfiles, loadMembersProfiles, activeServerId]);
 
     // Handle retrying the member fetch for servers previously marked as invalid
     const handleRetryFetch = async () => {
@@ -283,6 +342,13 @@ export default function UsersList() {
         setIsRetrying(true);
         try {
             console.log(`[UsersList] Retrying member fetch for previously invalid server: ${activeServerId}`);
+
+            // Reset request counter for this server to allow a fresh attempt
+            serverRequestsRef.current.set(activeServerId, 0);
+
+            // Also reset in the global limiter
+            globalRequestLimiter.serverRequests.set(activeServerId, 0);
+
             await fetchServerMembers(activeServerId, true);
 
             // If we got members, load their profiles
@@ -297,6 +363,13 @@ export default function UsersList() {
         } catch (error) {
             console.error("[UsersList] Error retrying member fetch:", error);
             fetchFailedRef.current = true;
+
+            // Increment the counter for this server
+            const currentCount = serverRequestsRef.current.get(activeServerId) || 0;
+            serverRequestsRef.current.set(activeServerId, currentCount + 1);
+
+            // Record in global tracker
+            globalRequestLimiter.recordAttempt(activeServerId);
         } finally {
             setIsRetrying(false);
         }

@@ -261,14 +261,106 @@ export async function getServerInfo(id: string) {
     }
 }
 
+// Global request tracking to persist across the entire application
+const memberRequestLimiter = {
+    serverRequests: new Map<string, number>(),
+    lastAttemptTimes: new Map<string, number>(),
+    MIN_REQUEST_INTERVAL: 60000, // 1 minute minimum between requests
+    MAX_REQUESTS_PER_SERVER: 3,  // Maximum of 3 attempts per server per session
+    isServerBlocked: function (serverId: string): boolean {
+        const count = this.serverRequests.get(serverId) || 0;
+        const lastAttempt = this.lastAttemptTimes.get(serverId) || 0;
+        const now = Date.now();
+
+        return count >= this.MAX_REQUESTS_PER_SERVER ||
+            (now - lastAttempt < this.MIN_REQUEST_INTERVAL);
+    },
+    recordAttempt: function (serverId: string) {
+        const count = this.serverRequests.get(serverId) || 0;
+        this.serverRequests.set(serverId, count + 1);
+        this.lastAttemptTimes.set(serverId, Date.now());
+        console.log(`[memberRequestLimiter] Recorded attempt ${count + 1}/${this.MAX_REQUESTS_PER_SERVER} for server ${serverId}`);
+    },
+    isInvalidMembersServer: function (serverId: string): boolean {
+        try {
+            const globalState = useGlobalState.getState();
+            return globalState.invalidMemberServers.has(serverId);
+        } catch (error) {
+            console.warn('[memberRequestLimiter] Error checking invalid members server:', error);
+            return false;
+        }
+    }
+};
+
 export async function getMembers(serverId: string) {
     console.log(`[getMembers] Fetching members for server: ${serverId}`);
-    const res = await aofetch(`${serverId}/get-members`);
-    console.log(`[getMembers] Response:`, res);
-    if (res.status == 200) {
-        return res.json;
-    } else {
-        throw new Error(res.error);
+
+    // Check if this server is already known to have invalid members
+    if (memberRequestLimiter.isInvalidMembersServer(serverId)) {
+        console.log(`[getMembers] Server ${serverId} is known to have invalid members endpoint, aborting request`);
+        throw new Error("Server does not support member listing");
+    }
+
+    // Check if we've exceeded request limits
+    if (memberRequestLimiter.isServerBlocked(serverId)) {
+        console.log(`[getMembers] Server ${serverId} is blocked from further requests due to rate limiting`);
+
+        // Mark as invalid in the global state to prevent future attempts
+        try {
+            // Mark this server as having an invalid members endpoint
+            markServerInvalidMembers(serverId);
+        } catch (error) {
+            console.warn('[getMembers] Error marking server invalid after rate limit:', error);
+        }
+
+        throw new Error("Rate limit exceeded for member requests to this server");
+    }
+
+    // Record this attempt
+    memberRequestLimiter.recordAttempt(serverId);
+
+    try {
+        const res = await aofetch(`${serverId}/get-members`);
+        console.log(`[getMembers] Response:`, res);
+        if (res.status == 200) {
+            return res.json;
+        } else {
+            // Mark the server as invalid to prevent further attempts
+            markServerInvalidMembers(serverId);
+            throw new Error(res.error || "Failed to get members");
+        }
+    } catch (error) {
+        console.error(`[getMembers] Error fetching members for ${serverId}:`, error);
+
+        // Mark the server as invalid if we get a specific error
+        if (error instanceof Error) {
+            const errorMessage = error.message.toLowerCase();
+            if (
+                errorMessage.includes("not found") ||
+                errorMessage.includes("does not exist") ||
+                errorMessage.includes("cannot read") ||
+                errorMessage.includes("internal server error")
+            ) {
+                markServerInvalidMembers(serverId);
+            }
+        }
+
+        throw error;
+    }
+}
+
+// Helper function to mark a server as having invalid members endpoint
+function markServerInvalidMembers(serverId: string) {
+    try {
+        const globalState = useGlobalState.getState();
+
+        // Trigger a fetch that will fail and properly update the state
+        globalState.fetchServerMembers(serverId, true)
+            .catch(() => {
+                console.log(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
+            });
+    } catch (error) {
+        console.warn('[markServerInvalidMembers] Error:', error);
     }
 }
 

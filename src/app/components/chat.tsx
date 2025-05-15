@@ -43,6 +43,8 @@ const mentionsInputStyle = {
         overflow: 'auto',
         height: '40px',
         borderRadius: '6px',
+        border: 'none',
+        outline: 'none',
     },
     suggestions: {
         backgroundColor: 'transparent',
@@ -65,6 +67,9 @@ const mentionsInputStyle = {
     },
     highlighter: {
         overflow: 'hidden',
+    },
+    mentions: {
+
     },
 };
 
@@ -707,15 +712,15 @@ export default function Chat() {
             </div>
 
             {/* Message Input */}
-            <div className="p-3 border-t border-border/30">
-                <form onSubmit={handleSendMessage} className="relative rounded-md">
+            <div className="p-3 border-t border-border/30 overflow-visible">
+                <form onSubmit={handleSendMessage} className="relative rounded-md overflow-visible">
                     <MentionsInput
                         value={messageInput}
                         onChange={handleMentionInputChange}
                         style={mentionsInputStyle}
                         placeholder={`Message #${activeChannel.name}`}
                         a11ySuggestionsListLabel={"Suggested mentions"}
-                        className="w-full py-2 px-3 pr-10 bg-muted/50 rounded-md border-none focus:outline-none"
+                        className="w-full py-2 pr-10 bg-muted/50 rounded-md overflow-visible"
                         disabled={isSending}
                         singleLine
                         forceSuggestionsAboveCursor
@@ -725,6 +730,8 @@ export default function Chat() {
                             data={getMembersData}
                             renderSuggestion={renderMemberSuggestion}
                             markup="@[__display__](__id__)"
+                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative left-[9px] z-10 text-white bottom-[1px]"
+                            style={mentionsInputStyle.mentions}
                             displayTransform={(id, display) => `@${display}`}
                             appendSpaceOnAdd
                         />

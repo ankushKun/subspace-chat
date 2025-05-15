@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ArrowLeft, HashIcon, Send, Users } from "lucide-react";
+import { ArrowLeft, HashIcon, Send, Users, Loader2 } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
@@ -9,6 +9,8 @@ import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
+import UserProfilePopover from "./user-profile-popover";
+import { PopoverTrigger } from "@/components/ui/popover";
 
 // Message type from server
 interface Message {
@@ -53,6 +55,7 @@ export default function Chat() {
     const previousChannelIdRef = useRef<number | null>(null);
     const activeUserProfilesRef = useRef<Set<string>>(new Set());
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
 
     // Find the active channel from the server data
     const activeChannel = useMemo(() => {
@@ -131,30 +134,6 @@ export default function Chat() {
         };
     }, [activeServerId, activeChannelId]);
 
-    // Function to queue loading a user profile
-    const queueProfileLoad = async (userId: string) => {
-        if (!userId || activeUserProfilesRef.current.has(userId)) return;
-
-        // Mark this user as being loaded to prevent duplicate fetches
-        activeUserProfilesRef.current.add(userId);
-
-        try {
-            // First check if we already have this profile in our global cache
-            const cachedProfile = getUserProfileFromCache(userId);
-            if (cachedProfile && (Date.now() - cachedProfile.timestamp) < 5 * 60 * 1000) {
-                // Profile is in cache and recent (less than 5 minutes old)
-                console.log(`[Chat] Using cached profile for ${userId}`);
-                return;
-            }
-
-            // If not in cache, fetch using the global fetcher function
-            console.log(`[Chat] Fetching profile for ${userId}`);
-            await fetchUserProfileAndCache(userId, false);
-        } catch (error) {
-            console.warn(`[Chat] Failed to load profile for ${userId}:`, error);
-        }
-    };
-
     // Function to preload all profiles from message list at once
     const preloadAllProfiles = (messageList: Message[]) => {
         if (!messageList || messageList.length === 0) return;
@@ -180,14 +159,33 @@ export default function Chat() {
 
         console.log(`[Chat] Loading profiles for ${authorsToLoad.length} authors`);
 
-        // Load profiles with slight delays to avoid rate limiting
-        authorsToLoad.forEach((authorId, index) => {
-            // Add increasing delay for each author to prevent server overload
-            // Wait 500ms between requests to avoid rate limiting
-            setTimeout(() => {
-                queueProfileLoad(authorId);
-            }, index * 500); // 500ms between each request
-        });
+        // If we have authors to load, update loading state
+        if (authorsToLoad.length > 0) {
+            setIsLoadingProfiles(true);
+
+            let completedLoads = 0;
+
+            // Update the queueProfileLoad function to track completion
+            const queueProfileLoad = (authorId: string) => {
+                fetchUserProfileAndCache(authorId)
+                    .finally(() => {
+                        completedLoads++;
+                        // When all profiles are loaded, update the loading state
+                        if (completedLoads >= authorsToLoad.length) {
+                            setIsLoadingProfiles(false);
+                        }
+                    });
+            };
+
+            // Load profiles with slight delays to avoid rate limiting
+            authorsToLoad.forEach((authorId, index) => {
+                // Add increasing delay for each author to prevent server overload
+                // Wait 500ms between requests to avoid rate limiting
+                setTimeout(() => {
+                    queueProfileLoad(authorId);
+                }, index * 500); // 500ms between each request
+            });
+        }
     };
 
     const fetchMessages = async (showLoading = false) => {
@@ -454,30 +452,48 @@ export default function Chat() {
                         {messages.map((message) => (
                             <div key={message.msg_id} className="group">
                                 <div className="flex items-start gap-3">
-                                    {/* Profile avatar - larger and more prominent */}
-                                    <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                        {getProfilePicture(message.author_id) ? (
-                                            <img
-                                                src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
-                                                alt={getDisplayName(message.author_id)}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => {
-                                                    // Handle broken images by showing fallback
-                                                    e.currentTarget.src = '';
-                                                    e.currentTarget.style.display = 'none';
-                                                    e.currentTarget.parentElement!.innerHTML = message.author_id.substring(0, 2).toUpperCase();
-                                                }}
-                                            />
-                                        ) : (
-                                            <span className="text-base font-medium">{message.author_id.substring(0, 2).toUpperCase()}</span>
-                                        )}
-                                    </div>
+                                    {/* Profile avatar - wrapped in the popover */}
+                                    <UserProfilePopover
+                                        userId={message.author_id}
+                                        side="right"
+                                        align="start"
+                                    >
+                                        <PopoverTrigger asChild>
+                                            <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer">
+                                                {getProfilePicture(message.author_id) ? (
+                                                    <img
+                                                        src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
+                                                        alt={getDisplayName(message.author_id)}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            // Handle broken images by showing fallback
+                                                            e.currentTarget.src = '';
+                                                            e.currentTarget.style.display = 'none';
+                                                            e.currentTarget.parentElement!.innerHTML = message.author_id.substring(0, 2).toUpperCase();
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span className="text-base font-medium">{message.author_id.substring(0, 2).toUpperCase()}</span>
+                                                )}
+                                            </div>
+                                        </PopoverTrigger>
+                                    </UserProfilePopover>
+
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-baseline gap-2">
-                                            {/* Username with better styling */}
-                                            <span className={`font-semibold text-sm truncate`}>
-                                                {getDisplayName(message.author_id)}
-                                            </span>
+                                            {/* Username with popover */}
+                                            <UserProfilePopover
+                                                userId={message.author_id}
+                                                side="top"
+                                                align="start"
+                                            >
+                                                <PopoverTrigger asChild>
+                                                    <span className={`font-semibold text-sm truncate cursor-pointer hover:underline`}>
+                                                        {getDisplayName(message.author_id)}
+                                                    </span>
+                                                </PopoverTrigger>
+                                            </UserProfilePopover>
+
                                             <span
                                                 className="text-xs text-muted-foreground whitespace-nowrap"
                                                 title={formatFullDate(message.timestamp)}

@@ -7,6 +7,8 @@ import { getProfile } from "@/lib/ao";
 import type { Member } from "@/lib/types";
 import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import UserProfilePopover from "./user-profile-popover";
+import { PopoverTrigger } from "@/components/ui/popover";
 
 // Define response type for getMembers
 interface MembersResponse {
@@ -281,44 +283,52 @@ export default function UsersList() {
                     // We have members to display - show the list
                     <div className="space-y-1">
                         {members.map((member) => (
-                            <div
+                            <UserProfilePopover
                                 key={member.id}
-                                className="flex items-center gap-2 p-2 hover:bg-accent rounded-md transition-colors"
+                                userId={member.id}
+                                side="right"
+                                align="start"
                             >
-                                <div className="h-8 w-8 mx-2 mr-4 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center text-primary">
-                                    {getProfilePicture(member.id) ? (
-                                        <img
-                                            src={`https://arweave.net/${getProfilePicture(member.id)}`}
-                                            alt={getDisplayName(member)}
-                                            className="object-cover w-full h-full"
-                                            onError={(e) => {
-                                                // Handle broken images
-                                                e.currentTarget.src = '';
-                                                e.currentTarget.style.display = 'none';
-                                                e.currentTarget.parentElement!.innerHTML = getDisplayName(member).charAt(0).toUpperCase();
-                                            }}
-                                        />
-                                    ) : (
-                                        getDisplayName(member).charAt(0).toUpperCase()
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`font-medium text-sm truncate`}>
-                                            {getDisplayName(member)}
-                                        </span>
-                                        {isServerOwner(member.id) && (
-                                            <ShieldIcon className="h-3.5 w-3.5 text-amber-500" />
-                                        )}
-                                        {isCurrentUser(member.id) && (
-                                            <span className="text-xs text-muted-foreground">(you)</span>
-                                        )}
+                                <PopoverTrigger asChild>
+                                    <div
+                                        className="flex items-center gap-2 p-2 hover:bg-accent rounded-md transition-colors cursor-pointer"
+                                    >
+                                        <div className="h-8 w-8 mx-2 mr-4 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center text-primary">
+                                            {getProfilePicture(member.id) ? (
+                                                <img
+                                                    src={`https://arweave.net/${getProfilePicture(member.id)}`}
+                                                    alt={getDisplayName(member)}
+                                                    className="object-cover w-full h-full"
+                                                    onError={(e) => {
+                                                        // Handle broken images
+                                                        e.currentTarget.src = '';
+                                                        e.currentTarget.style.display = 'none';
+                                                        e.currentTarget.parentElement!.innerHTML = getDisplayName(member).charAt(0).toUpperCase();
+                                                    }}
+                                                />
+                                            ) : (
+                                                getDisplayName(member).charAt(0).toUpperCase()
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-medium text-sm truncate`}>
+                                                    {getDisplayName(member)}
+                                                </span>
+                                                {isServerOwner(member.id) && (
+                                                    <ShieldIcon className="h-3.5 w-3.5 text-amber-500" />
+                                                )}
+                                                {isCurrentUser(member.id) && (
+                                                    <span className="text-xs text-muted-foreground">(you)</span>
+                                                )}
+                                            </div>
+                                            <span className="text-xs text-muted-foreground truncate">
+                                                {member.id.substring(0, 6)}...{member.id.substring(member.id.length - 4)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <span className="text-xs text-muted-foreground truncate">
-                                        {member.id.substring(0, 6)}...{member.id.substring(member.id.length - 4)}
-                                    </span>
-                                </div>
-                            </div>
+                                </PopoverTrigger>
+                            </UserProfilePopover>
                         ))}
 
                         {/* Show retry button below the list if the server is marked invalid but we have cached data */}

@@ -26,7 +26,7 @@ export default function Landing() {
   const address = useActiveAddress();
   const navigate = useNavigate();
   const { wanderInstance } = useGlobalState();
-  const [useWC, setUseWC] = useLocalStorage("useWC", true);
+  const [useWC, setUseWC] = useLocalStorage("useWC", false);
 
   useEffect(() => {
     if (connected && address) {
@@ -63,12 +63,7 @@ export default function Landing() {
         onClick={() => wanderInstance.open()}>
         <WalletCardsIcon />
       </Button>
-      <Switch
-        className="absolute top-26 right-4 mr-0.5"
-        checked={useWC}
-        onCheckedChange={setUseWC}
-        onClick={() => setInterval(() => window.location.reload(), 200)}
-      />
+
       <div className="rounded-lg w-full max-w-5xl mx-4 p-12 flex flex-col items-center justify-center" style={{ minHeight: '70vh' }}>
         <h1 className="text-6xl md:text-8xl font-bold mb-6 flex items-center space-x-2 select-none">
           <span className="font-normal text-outline">SUB</span>
@@ -112,6 +107,15 @@ export default function Landing() {
             </div> */}
           </div>
         )}
+        <div className="text-sm text-muted-foreground absolute bottom-4 left-4 flex items-center gap-2">
+          Wander Connect {useWC ? "enabled" : "disabled"}
+          <Switch
+            className="scale-80 cursor-pointer shadow-foreground/40 shadow"
+            checked={useWC}
+            onCheckedChange={setUseWC}
+            onClick={() => setInterval(() => window.location.reload(), 200)}
+          />
+        </div>
         <div className="text-xs text-muted-foreground/60 p-0 mt-4">
           {/* @ts-ignore */}
           v{__APP_VERSION__}

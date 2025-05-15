@@ -353,8 +353,15 @@ export default function Chat() {
     const getDisplayName = (userId: string) => {
         // Check profile cache from global state
         const profileData = getUserProfileFromCache(userId);
+
+        // Prioritize username if available
         if (profileData?.username) {
             return profileData.username;
+        }
+
+        // Use primaryName if available
+        if (profileData?.primaryName) {
+            return profileData.primaryName;
         }
 
         // Fall back to wallet address

@@ -54,6 +54,7 @@ export default function Profile() {
     const [profilePic, setProfilePic] = useState<File | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
 
     // Watch for address changes
     useEffect(() => {
@@ -193,6 +194,7 @@ export default function Profile() {
                     updateUserProfileCache(activeAddress, {
                         username: updatedProfile.profile?.username,
                         pfp: updatedProfile.profile?.pfp,
+                        primaryName: updatedProfile.primaryName,
                         timestamp: Date.now()
                     });
                 }
@@ -211,6 +213,7 @@ export default function Profile() {
                         updateUserProfileCache(activeAddress, {
                             username: typedProfile.profile?.username,
                             pfp: typedProfile.profile?.pfp,
+                            primaryName: typedProfile.primaryName,
                             timestamp: Date.now()
                         });
                     }
@@ -237,14 +240,23 @@ export default function Profile() {
         setProfilePic(null);
     };
 
+    const hovered = () => {
+        setIsHovered(true);
+    };
+
+    const unhovered = () => {
+        setIsHovered(false);
+    };
+
     return (
         <div className="mt-auto w-full border-t flex items-center justify-between border-border/30 p-2 bg-background/50 backdrop-blur-[2px]">
             <DropdownMenu>
-                <DropdownMenuTrigger className='w-full' asChild>
+                <DropdownMenuTrigger className='w-full' asChild onMouseEnter={hovered} onMouseLeave={unhovered}>
                     <div className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/40 transition-colors cursor-pointer">
                         {/* User avatar */}
                         <div className="relative">
-                            <div className="w-10 h-10 rounded-full bg-primary/20 overflow-hidden flex items-center justify-center">
+                            <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ${profileData?.primaryName ? 'bg-amber-800/30' : 'bg-primary/20'
+                                }`}>
                                 {activeAddress ? (
                                     profileData?.profile?.pfp ? (
                                         <img
@@ -265,15 +277,39 @@ export default function Profile() {
                         {/* User info */}
                         <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">
-                                {profileData?.profile?.username || (activeAddress ?
-                                    `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`
-                                    : 'Not Connected')}
+                                {profileData?.profile?.username ?
+                                    profileData.profile.username :
+                                    (profileData?.primaryName ?
+                                        profileData.primaryName :
+                                        (activeAddress ?
+                                            `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`
+                                            : 'Not Connected'))}
                             </div>
                             <div className="flex flex-col">
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                    {/* <span>Online</span> */}
-                                    {profileData?.profile?.username ? `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}` : "Online"}
+
+                                    {profileData?.profile?.username ? (
+                                        // If custom username is shown above, show primary name (if exists) or wallet address
+                                        <span className={isHovered ? 'hidden' : ''}>
+                                            {profileData?.primaryName || 'Online'}
+                                        </span>
+                                    ) : (
+                                        // If primary name is shown above, just show wallet address
+                                        <span>
+                                            {activeAddress ?
+                                                `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}` :
+                                                'Online'
+                                            }
+                                        </span>
+                                    )}
+
+                                    {/* Show wallet address on hover only if custom username is displayed */}
+                                    {profileData?.profile?.username && activeAddress && (
+                                        <span className={!isHovered ? 'hidden' : ''}>
+                                            {`${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -370,7 +406,8 @@ export default function Profile() {
                         ) : (
                             <div className="space-y-6">
                                 <div className="flex flex-col items-center justify-center">
-                                    <div className="w-24 h-24 rounded-full overflow-hidden mb-2 bg-muted flex items-center justify-center">
+                                    <div className={`w-24 h-24 rounded-full overflow-hidden mb-2 flex items-center justify-center ${profileData?.primaryName ? 'bg-amber-800/30' : 'bg-muted'
+                                        }`}>
                                         {profileData?.profile?.pfp ? (
                                             <img
                                                 src={`https://arweave.net/${profileData.profile.pfp}`}
@@ -385,23 +422,53 @@ export default function Profile() {
                                             )
                                         )}
                                     </div>
+                                    {profileData?.primaryName && (
+                                        <div className="text-xs bg-amber-800/20 text-amber-400 px-2 py-0.5 rounded-full">
+                                            {profileData.primaryName}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-4">
                                     <div>
                                         <h3 className="text-sm font-medium text-muted-foreground">Display Name</h3>
                                         <p className="text-base">
-                                            {profileData?.profile?.username || (
-                                                <span className="text-muted-foreground italic">No display name set</span>
-                                            )}
+                                            {profileData?.profile?.username ?
+                                                profileData.profile.username :
+                                                (profileData?.primaryName ?
+                                                    `${profileData.primaryName}` :
+                                                    <span className="text-muted-foreground italic">No display name set</span>
+                                                )}
                                         </p>
                                     </div>
+
+                                    {profileData?.primaryName && profileData?.profile?.username && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-muted-foreground">Primary Name</h3>
+                                            <p className="text-base">{profileData.primaryName}</p>
+                                        </div>
+                                    )}
+
+                                    {profileData?.primaryName && !profileData?.profile?.username && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-muted-foreground">Using Primary Name</h3>
+                                            <p className="text-base text-muted-foreground italic">
+                                                No username set, displaying your primary name
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div>
                                         <h3 className="text-sm font-medium text-muted-foreground">Wallet Address</h3>
                                         <p className="text-sm font-mono bg-muted rounded-md p-2 overflow-x-auto">
                                             {activeAddress || 'Not connected'}
                                         </p>
+                                        {profileData?.primaryName && (
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                                {/* Using non-breaking space between ARweave */}
+                                                <span className="text-green-500">✓</span> AR&#8209;name registered
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

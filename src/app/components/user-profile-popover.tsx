@@ -97,8 +97,14 @@ export default function UserProfilePopover({
     const getDisplayName = () => {
         if (!profileData) return 'Unknown User';
 
+        // Prioritize username if available
         if (profileData.profile?.username) {
             return profileData.profile.username;
+        }
+
+        // Use primaryName if available
+        if (profileData.primaryName) {
+            return profileData.primaryName;
         }
 
         // Fallback to truncated wallet address
@@ -155,6 +161,11 @@ export default function UserProfilePopover({
                                 </div>
                                 <div>
                                     <h3 className="font-medium text-base">{getDisplayName()}</h3>
+                                    {profileData?.primaryName && profileData?.profile?.username && (
+                                        <div className="text-sm text-muted-foreground">
+                                            {profileData.primaryName}
+                                        </div>
+                                    )}
                                     <div className="text-xs text-muted-foreground flex items-center">
                                         <span className="truncate max-w-[150px]">{userId}</span>
                                         <Button

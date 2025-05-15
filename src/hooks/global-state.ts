@@ -65,6 +65,7 @@ interface CachedUserProfiles {
     [userId: string]: {
         username?: string;   // User's display name
         pfp?: string;        // Profile picture ID
+        primaryName?: string; // User's primary name from ArNS
         timestamp: number;   // When this profile was cached
     };
 }
@@ -267,8 +268,8 @@ export interface GlobalState {
 
     // User profiles cache - for all users
     userProfilesCache: CachedUserProfiles
-    getUserProfileFromCache: (userId: string) => { username?: string, pfp?: string, timestamp: number } | null
-    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, timestamp: number }) => void
+    getUserProfileFromCache: (userId: string) => { username?: string, pfp?: string, primaryName?: string, timestamp: number } | null
+    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, primaryName?: string, timestamp: number }) => void
     fetchUserProfileAndCache: (userId: string, forceRefresh?: boolean) => Promise<any | null>
     clearUserProfilesCache: () => void
 }
@@ -819,7 +820,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
         return null;
     },
-    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, timestamp: number }) => {
+    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, primaryName?: string, timestamp: number }) => {
         const userProfiles = get().userProfilesCache;
         if (userProfiles) {
             userProfiles[userId] = profile;
@@ -847,12 +848,13 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
             if (profileData) {
                 // Type assertion to ensure profile property exists
-                const typedProfile = profileData as { profile?: { username?: string, pfp?: string } };
+                const typedProfile = profileData as { profile?: { username?: string, pfp?: string }, primaryName?: string };
 
                 // Cache the profile data
                 get().updateUserProfileCache(userId, {
                     username: typedProfile.profile?.username,
                     pfp: typedProfile.profile?.pfp,
+                    primaryName: typedProfile.primaryName,
                     timestamp: Date.now()
                 });
                 return profileData;

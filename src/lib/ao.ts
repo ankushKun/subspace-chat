@@ -7,6 +7,10 @@ import serverSource from "@/lib/lua/server"
 // import { TurboFactory } from "@ardrive/turbo-sdk/web";
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
+import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
+
+// Initialize AR.IO client
+const ario = ARIO.mainnet();
 
 const SCHEDULER = "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA"
 const MODULE = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw"
@@ -550,8 +554,35 @@ export async function getProfile(address?: string) {
         body: address ? { id: address } : undefined
     });
     console.log(`[getProfile] Response:`, res);
+
     if (res.status == 200) {
-        return res.json;
+        // Type assertion to ensure we treat this as a Record
+        const profileData = res.json as Record<string, any>;
+
+        // Always try to fetch primary name if address is provided
+        if (address) {
+            try {
+                console.log(`[getProfile] Fetching primary name for ${address}`);
+                const primaryNameData = await ario.getPrimaryName({ address });
+
+                if (primaryNameData && primaryNameData.name) {
+                    console.log(`[getProfile] Found primary name: ${primaryNameData.name}`);
+
+                    // Ensure profile structure exists
+                    if (!profileData.profile) {
+                        profileData.profile = {};
+                    }
+
+                    // Add primaryName to the profile data
+                    profileData.primaryName = primaryNameData.name;
+                }
+            } catch (error) {
+                console.warn(`[getProfile] Failed to fetch primary name:`, error);
+                // Continue without primary name
+            }
+        }
+
+        return profileData;
     } else {
         throw new Error(res.error);
     }

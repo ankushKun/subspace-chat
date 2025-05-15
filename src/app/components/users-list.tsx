@@ -166,8 +166,15 @@ export default function UsersList() {
     const getDisplayName = (member: Member) => {
         // Try to get username from profile cache
         const profileData = getUserProfileFromCache(member.id);
+
+        // Prioritize username if available
         if (profileData?.username) {
             return profileData.username;
+        }
+
+        // Try to use primaryName if available
+        if (profileData?.primaryName) {
+            return profileData.primaryName;
         }
 
         // Fall back to nickname if available
@@ -322,6 +329,15 @@ export default function UsersList() {
                                                     <span className="text-xs text-muted-foreground">(you)</span>
                                                 )}
                                             </div>
+
+                                            {/* Show primary name as additional info if both username and primaryName exist */}
+                                            {getUserProfileFromCache(member.id)?.username &&
+                                                getUserProfileFromCache(member.id)?.primaryName && (
+                                                    <span className="text-xs text-muted-foreground block">
+                                                        {getUserProfileFromCache(member.id)?.primaryName}
+                                                    </span>
+                                                )}
+
                                             <span className="text-xs text-muted-foreground truncate">
                                                 {member.id.substring(0, 6)}...{member.id.substring(member.id.length - 4)}
                                             </span>

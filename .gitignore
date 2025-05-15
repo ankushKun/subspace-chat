@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+dist-id.txt
+dist-manifest.json
+dist-manifest.csv

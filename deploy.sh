@@ -1,5 +1,7 @@
 #!/bin/bash
 
+bun run build
+
 wallet_path="/Users/weeblet/Library/Mobile Documents/com~apple~CloudDocs/WALLETS/8iD-Gy_sKx98oth27JhjjP2V_xUSIGqs_8-skb63YHg.json"
 wb64=$(cat "$wallet_path" | base64)
 

@@ -708,44 +708,42 @@ export default function Chat() {
             </div>
 
             {/* Message Input */}
-            <div className="p-3 border-t border-border/30 overflow-visible relative">
-                <form onSubmit={handleSendMessage} className="rounded-md overflow-visible flex justify-between items-center mr-8 gap-1">
-                    <MentionsInput
-                        value={messageInput}
-                        onChange={handleMentionInputChange}
-                        style={mentionsInputStyle}
-                        placeholder={`Message #${activeChannel.name}`}
-                        a11ySuggestionsListLabel={"Suggested mentions"}
-                        className="w-full py-2 bg-muted/50 rounded-md overflow-visible px-2"
-                        disabled={isSending}
-                        singleLine
-                        forceSuggestionsAboveCursor
-                    >
-                        <Mention
-                            trigger="@"
-                            data={getMembersData}
-                            renderSuggestion={renderMemberSuggestion}
-                            markup="@[__display__](__id__)"
-                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative -left-[1px] text-white bottom-[1px] p-0 m-0"
-                            displayTransform={(id, display) => `@${display}`}
-                            appendSpaceOnAdd
-                        />
-                    </MentionsInput>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        type="submit"
-
-                        disabled={!messageInput.trim() || isSending}
-                    >
-                        {isSending ? (
-                            <div className="h-4 w-4 opacity-70"></div>
-                        ) : (
-                            <Send className="h-4 w-4" />
-                        )}
-                    </Button>
-                </form>
-            </div>
+            <form onSubmit={handleSendMessage} className="rounded-md p-2 border-t flex rounded-t-none border-border/30 overflow-visible justify-between items-center gap-1">
+                <MentionsInput
+                    value={messageInput}
+                    onChange={handleMentionInputChange}
+                    style={mentionsInputStyle}
+                    placeholder={`Message #${activeChannel.name}`}
+                    a11ySuggestionsListLabel={"Suggested mentions"}
+                    className="w-full py-2 bg-muted/50 rounded-md overflow-visible px-2 block max-w-[calc(100%-2.3rem)]"
+                    disabled={isSending}
+                    singleLine
+                    forceSuggestionsAboveCursor
+                >
+                    <Mention
+                        trigger="@"
+                        data={getMembersData}
+                        renderSuggestion={renderMemberSuggestion}
+                        markup="@[__display__](__id__)"
+                        className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative -left-[1px] text-white bottom-[1px] p-0 m-0"
+                        displayTransform={(id, display) => `@${display}`}
+                        appendSpaceOnAdd
+                    />
+                </MentionsInput>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    type="submit"
+                    className="flex items-center justify-center"
+                    disabled={!messageInput.trim() || isSending}
+                >
+                    {isSending ? (
+                        <div className="h-4 w-4 opacity-70"></div>
+                    ) : (
+                        <Send className="h-4 w-4" />
+                    )}
+                </Button>
+            </form>
         </div>
     );
 }

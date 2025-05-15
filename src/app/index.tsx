@@ -8,9 +8,10 @@ import ServerList from '@/app/components/server-list';
 import { useEffect, useRef } from 'react';
 import { uploadFileAndGetId } from '@/lib/ao';
 import Profile from './components/profile';
-import { useConnection } from '@arweave-wallet-kit/react';
+import { useConnection } from 'arwalletkit-react';
 import { useMobile } from '@/hooks';
 import UsersList from './components/users-list';
+import UserDM from './user';
 
 // Create global rate limiting middleware for the app
 // This ensures we don't spam servers with requests
@@ -18,12 +19,12 @@ const initializeRequestLimiting = () => {
     console.log('[App] Initializing global request limiting');
 
     // Keep track of any pending member request retry timers
-    const pendingRetryTimers = new Set();
+    const pendingRetryTimers = new Set<number>();
 
-    // Clear timers on refresh/navigation
+    // Clear timers on refresh/navigation 
     window.addEventListener('beforeunload', () => {
-        for (const timer of pendingRetryTimers) {
-            clearTimeout(timer);
+        for (const timerId of pendingRetryTimers) {
+            clearTimeout(timerId);
         }
         pendingRetryTimers.clear();
     });
@@ -101,7 +102,7 @@ export default function App() {
                 </div>
             </> : <>
                 <div className='w-full bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
-                    {showUsers ? <UsersList /> : <Chat />}
+                    {showUsers ? userId ? <UserDM /> : <UsersList /> : <Chat />}
                 </div>
             </>}
         </div>;
@@ -119,7 +120,7 @@ export default function App() {
             </div>
             {/* main view */}
             <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
-                {activeServerId === null ? <Hero /> : <Chat />}
+                {activeServerId === null ? userId ? <UserDM /> : <Hero /> : <Chat />}
             </div>
             {activeServerId !== null && showUsers && <div className='min-w-[300px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
                 <UsersList />

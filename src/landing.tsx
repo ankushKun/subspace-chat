@@ -4,7 +4,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { FaApple, FaDiscord, FaGoogle, FaPuzzlePiece, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
-import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
+import { useActiveAddress, useConnection, useProfileModal } from "arwalletkit-react"
 import { useNavigate } from "react-router-dom"
 import BackgroundStars from "@/components/background-stars";
 import { CornerDownLeftIcon, WalletCards, WalletCardsIcon } from "lucide-react";

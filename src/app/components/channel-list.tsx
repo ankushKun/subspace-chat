@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
 import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua } from "@/lib/ao";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useActiveAddress } from "arwalletkit-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";

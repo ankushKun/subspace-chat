@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useConnection } from '@arweave-wallet-kit/react'
+import { useConnection } from 'arwalletkit-react'
 import { Button } from '@/components/ui/button'
 
 export default function Settings() {

@@ -2,10 +2,11 @@ import './index.css'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
-import { ArweaveWalletKit } from "@arweave-wallet-kit/react"
+import { ArweaveWalletKit, useConnection } from "arwalletkit-react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
+import WagmiStrategy from "arwalletkit-wagmi"
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
@@ -13,9 +14,15 @@ import Settings from '@/settings'
 import Invite from '@/invite'
 import { useEffect, useRef } from 'react'
 import { WanderConnect } from '@wanderapp/connect'
-import { useConnection } from "@arweave-wallet-kit/react"
 import { useGlobalState } from '@/hooks'
 import { useLocalStorage } from '@uidotdev/usehooks'
+import { createConfig, http } from 'wagmi'
+import { mainnet, arbitrum } from 'wagmi/chains'
+import { injected, walletConnect } from 'wagmi/connectors'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+// Create a QueryClient for React Query
+const queryClient = new QueryClient()
 
 function Main() {
   const { wanderInstance, setWanderInstance } = useGlobalState()
@@ -57,45 +64,69 @@ function Main() {
 
   const wc = useWC ? new BrowserWalletStrategy() : new WanderStrategy();
 
+  // Set up Wagmi configuration for the WagmiStrategy
+  const projectId = '3fcc6bba6f1de962d911bb5b5c3dba68' // You should replace with actual project ID if needed
+
+  const wagmiConfig = createConfig({
+    chains: [mainnet, arbitrum],
+    connectors: [
+      injected()
+    ],
+    transports: {
+      [mainnet.id]: http(),
+      [arbitrum.id]: http(),
+    }
+  });
+
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     {/* <Toaster /> */}
-    <ArweaveWalletKit
-      config={{
-        appInfo: {
-          name: "Subspace Chat",
-          // logo: "https://arweave.net/L9FExC-Wzzvmu201-he_UTH_HymCXGEemlKIJoa1_9k"
-          logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
-        },
-        permissions: [
-          "ACCESS_ADDRESS",
-          "SIGN_TRANSACTION"
-        ],
-        ensurePermissions: true,
-        strategies: [
-          wc,
-          new AoSyncStrategy(),
-        ]
-      }}
-      theme={{
-        accent: { r: 160, g: 160, b: 220 },
-        displayTheme: "dark"
-      }}
-    >
-      <Toaster />
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/app" element={<App />} />
-          <Route path="/user/:userId" element={<App />} />
-          <Route path="/app/:serverId" element={<App />} />
-          <Route path="/app/:serverId/:channelId" element={<App />} />
-          <Route path="/app/settings" element={<Settings />} />
-          <Route path="/invite" element={<Invite />} />
-          <Route path="/invite/:serverId" element={<Invite />} />
-          <Route path='*' element={<Navigate to='/' />} />
-        </Routes>
-      </HashRouter>
-    </ArweaveWalletKit>
+    <QueryClientProvider client={queryClient}>
+      <ArweaveWalletKit
+        config={{
+          appInfo: {
+            name: "Subspace Chat",
+            // logo: "https://arweave.net/L9FExC-Wzzvmu201-he_UTH_HymCXGEemlKIJoa1_9k"
+            logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
+          },
+          permissions: [
+            "ACCESS_ADDRESS",
+            "SIGN_TRANSACTION"
+          ],
+          ensurePermissions: true,
+          strategies: [
+            wc,
+            new AoSyncStrategy(),
+            // new WagmiStrategy({
+            //   id: "wagmi",
+            //   name: "Wagmi",
+            //   description: "Wagmi",
+            //   theme: "dark",
+            //   logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4",
+            //   wagmiConfig: wagmiConfig
+            // })
+          ]
+        }}
+        theme={{
+          accent: { r: 160, g: 160, b: 220 },
+          displayTheme: "dark"
+        }}
+      >
+        <Toaster />
+        <HashRouter>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/app" element={<App />} />
+            <Route path="/app/user/:userId" element={<App />} />
+            <Route path="/app/:serverId" element={<App />} />
+            <Route path="/app/:serverId/:channelId" element={<App />} />
+            <Route path="/app/settings" element={<Settings />} />
+            <Route path="/invite" element={<Invite />} />
+            <Route path="/invite/:serverId" element={<Invite />} />
+            <Route path='*' element={<Navigate to='/' />} />
+          </Routes>
+        </HashRouter>
+      </ArweaveWalletKit>
+    </QueryClientProvider>
   </ThemeProvider>
 }
 

@@ -5,7 +5,7 @@ import { ArrowLeft, UserIcon, Loader2, ShieldIcon, AlertCircle, RefreshCcw } fro
 import { useEffect, useState, useRef, useCallback } from "react";
 import { getProfile } from "@/lib/ao";
 import type { Member } from "@/lib/types";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useActiveAddress } from "arwalletkit-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";

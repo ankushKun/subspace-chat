@@ -120,7 +120,7 @@ export default function App() {
                 <Profile />
             </div>
             {/* main view */}
-            <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
+            <div className='grow w-fit overflow-scroll bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
                 {activeServerId === null ? userId ? <UserDM /> : <Hero /> : <Chat />}
             </div>
             {activeServerId !== null && showUsers && <div className='min-w-[300px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>

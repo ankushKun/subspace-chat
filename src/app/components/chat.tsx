@@ -38,9 +38,8 @@ const mentionsInputStyle = {
         fontWeight: 'normal',
     },
     input: {
-        margin: 0,
-        padding: '8px 10px',
         overflow: 'auto',
+        padding: '0px 8px',
         height: '40px',
         borderRadius: '6px',
         border: 'none',
@@ -67,9 +66,6 @@ const mentionsInputStyle = {
     },
     highlighter: {
         overflow: 'hidden',
-    },
-    mentions: {
-
     },
 };
 
@@ -712,15 +708,15 @@ export default function Chat() {
             </div>
 
             {/* Message Input */}
-            <div className="p-3 border-t border-border/30 overflow-visible">
-                <form onSubmit={handleSendMessage} className="relative rounded-md overflow-visible">
+            <div className="p-3 border-t border-border/30 overflow-visible relative">
+                <form onSubmit={handleSendMessage} className="rounded-md overflow-visible flex justify-between items-center mr-8 gap-1">
                     <MentionsInput
                         value={messageInput}
                         onChange={handleMentionInputChange}
                         style={mentionsInputStyle}
                         placeholder={`Message #${activeChannel.name}`}
                         a11ySuggestionsListLabel={"Suggested mentions"}
-                        className="w-full py-2 pr-10 bg-muted/50 rounded-md overflow-visible"
+                        className="w-full py-2 bg-muted/50 rounded-md overflow-visible px-2"
                         disabled={isSending}
                         singleLine
                         forceSuggestionsAboveCursor
@@ -730,15 +726,16 @@ export default function Chat() {
                             data={getMembersData}
                             renderSuggestion={renderMemberSuggestion}
                             markup="@[__display__](__id__)"
-                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative left-[9px] z-10 text-white bottom-[1px]"
-                            style={mentionsInputStyle.mentions}
+                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative -left-[1px] text-white bottom-[1px] p-0 m-0"
                             displayTransform={(id, display) => `@${display}`}
                             appendSpaceOnAdd
                         />
                     </MentionsInput>
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="icon"
                         type="submit"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+
                         disabled={!messageInput.trim() || isSending}
                     >
                         {isSending ? (
@@ -746,7 +743,7 @@ export default function Chat() {
                         ) : (
                             <Send className="h-4 w-4" />
                         )}
-                    </button>
+                    </Button>
                 </form>
             </div>
         </div>

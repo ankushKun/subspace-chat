@@ -31,7 +31,9 @@ export default function Landing() {
   const [sClickCount, setSClickCount] = useState(0);
   const [showClickCount, setShowClickCount] = useState(false);
 
+
   useEffect(() => {
+    console.log(connected)
     if (connected && address) {
       console.log("connected", address);
       navigate("/app");

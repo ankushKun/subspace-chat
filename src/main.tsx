@@ -6,7 +6,7 @@ import { ArweaveWalletKit, useConnection } from "arwalletkit-react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
-import WagmiStrategy from "arwalletkit-wagmi"
+import { EthereumStrategy } from "arwalletkit-wagmi"
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Landing from '@/landing'
 import App from '@/app'
@@ -64,20 +64,6 @@ function Main() {
 
   const wc = useWC ? new BrowserWalletStrategy() : new WanderStrategy();
 
-  // Set up Wagmi configuration for the WagmiStrategy
-  const projectId = '3fcc6bba6f1de962d911bb5b5c3dba68' // You should replace with actual project ID if needed
-
-  const wagmiConfig = createConfig({
-    chains: [mainnet, arbitrum],
-    connectors: [
-      injected()
-    ],
-    transports: {
-      [mainnet.id]: http(),
-      [arbitrum.id]: http(),
-    }
-  });
-
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     {/* <Toaster /> */}
     <QueryClientProvider client={queryClient}>
@@ -90,20 +76,14 @@ function Main() {
           },
           permissions: [
             "ACCESS_ADDRESS",
-            "SIGN_TRANSACTION"
+            "SIGN_TRANSACTION",
           ],
           ensurePermissions: true,
           strategies: [
             wc,
             new AoSyncStrategy(),
-            // new WagmiStrategy({
-            //   id: "wagmi",
-            //   name: "Wagmi",
-            //   description: "Wagmi",
-            //   theme: "dark",
-            //   logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4",
-            //   wagmiConfig: wagmiConfig
-            // })
+            // @ts-ignore
+            new EthereumStrategy()
           ]
         }}
         theme={{

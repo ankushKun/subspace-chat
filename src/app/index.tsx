@@ -56,6 +56,7 @@ export default function App() {
     }, []);
 
     useEffect(() => {
+        console.log(connected)
         const t = setTimeout(() => {
             if (!connected) {
                 navigate("/");

@@ -1,18 +1,27 @@
 import { create } from 'zustand'
-import type { Server } from '@/lib/types'
-import { useEffect } from 'react'
-import { getServerInfo } from '@/lib/ao'
+import type { Server, Member } from '@/lib/types'
+import { useEffect, useState } from 'react'
+import { getServerInfo, getMembers, getJoinedServers } from '@/lib/ao'
 import { persist } from 'zustand/middleware'
 import type { WanderConnect } from '@wanderapp/connect'
+
+// Define API response interfaces
+interface MembersResponse {
+    success: boolean;
+    members: Member[];
+}
 
 // Storage keys
 const STORAGE_KEY = 'subspace-server-cache'
 const MESSAGE_CACHE_KEY = 'subspace-message-cache'
+const MEMBERS_CACHE_KEY = 'subspace-members-cache'
 
 // Cache TTL in milliseconds (24 hours)
 const CACHE_TTL = 24 * 60 * 60 * 1000
 // Message cache TTL (5 minutes)
 const MESSAGE_CACHE_TTL = 5 * 60 * 1000
+// Members cache TTL (10 minutes)
+const MEMBERS_CACHE_TTL = 10 * 60 * 1000
 
 interface CachedServer {
     data: Server
@@ -21,6 +30,11 @@ interface CachedServer {
 
 interface CachedMessages {
     data: any[]  // Message array
+    timestamp: number
+}
+
+interface CachedMembers {
+    data: Member[]
     timestamp: number
 }
 
@@ -74,6 +88,31 @@ const saveMessageCache = (cache: Map<string, CachedMessages>): void => {
     }
 }
 
+// Helper functions for members cache persistence
+const loadMembersCache = (): Map<string, CachedMembers> => {
+    try {
+        const storedCache = localStorage.getItem(MEMBERS_CACHE_KEY)
+        if (storedCache) {
+            // Convert from JSON object to Map
+            const parsed = JSON.parse(storedCache)
+            return new Map(Object.entries(parsed))
+        }
+    } catch (error) {
+        console.error('Failed to load members cache from storage:', error)
+    }
+    return new Map<string, CachedMembers>()
+}
+
+const saveMembersCache = (cache: Map<string, CachedMembers>): void => {
+    try {
+        // Convert Map to an object for storage
+        const cacheObj = Object.fromEntries(cache.entries())
+        localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(cacheObj))
+    } catch (error) {
+        console.error('Failed to save members cache to storage:', error)
+    }
+}
+
 export interface GlobalState {
     activeServerId: string | null
     setActiveServerId: (server: string | null) => void
@@ -97,11 +136,24 @@ export interface GlobalState {
     markServerAsInvalid: (serverId: string) => void
     isServerValid: (serverId: string) => boolean
 
+    // Member management
+    serverMembers: Map<string, CachedMembers>
+    isLoadingMembers: boolean
+    fetchServerMembers: (serverId: string, forceRefresh?: boolean) => Promise<void>
+    getServerMembers: (serverId: string) => Member[] | null
+
+    // Background loading
+    prefetchAllServerData: (address: string) => Promise<void>
+    isPrefetchingData: boolean
+
     showUsers: boolean
     setShowUsers: (show: boolean) => void
 
     wanderInstance: WanderConnect | null
     setWanderInstance: (instance: WanderConnect | null) => void
+
+    // Track servers with invalid member endpoints
+    invalidMemberServers: Set<string>
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -135,12 +187,19 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                         get().fetchServerInfo(serverId, true);
                     }, 1000);
                 }
+
+                // Load server members in the background
+                get().fetchServerMembers(serverId);
+
                 return;
             }
         }
 
         // Fetch server info if not in cache
         get().fetchServerInfo(serverId);
+
+        // Load server members in the background
+        get().fetchServerMembers(serverId);
     },
     activeServer: null,
     setActiveServer: (server: Server | null) => set({ activeServer: server }),
@@ -205,6 +264,8 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         if (activeServerId) {
             console.log(`[refreshServerData] Refreshing server data for ${activeServerId}`);
             await get().fetchServerInfo(activeServerId, true);
+            // Also refresh members data
+            await get().fetchServerMembers(activeServerId, true);
         } else {
             console.log(`[refreshServerData] No active server to refresh`);
         }
@@ -234,6 +295,170 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     isServerValid: (serverId: string) => {
         const { invalidServerIds } = get();
         return !invalidServerIds.has(serverId);
+    },
+
+    // Member management
+    serverMembers: loadMembersCache(),
+    isLoadingMembers: false,
+    // Track servers with invalid member endpoints
+    invalidMemberServers: new Set<string>(),
+
+    fetchServerMembers: async (serverId: string, forceRefresh = false) => {
+        if (!serverId) return;
+        const { serverMembers, invalidServerIds, invalidMemberServers } = get();
+
+        // Skip if this server is already known to be invalid
+        if (invalidServerIds.has(serverId)) {
+            console.log(`[fetchServerMembers] Skipping fetch for invalid server: ${serverId}`);
+            return;
+        }
+
+        // Skip if this server is known to have an invalid members endpoint
+        if (invalidMemberServers.has(serverId)) {
+            console.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
+            return;
+        }
+
+        // Check if we have cached members and if the cache is still valid
+        const cachedMembers = serverMembers.get(serverId);
+        const now = Date.now();
+
+        if (!forceRefresh && cachedMembers && now - cachedMembers.timestamp <= MEMBERS_CACHE_TTL) {
+            console.log(`[fetchServerMembers] Using cached members for ${serverId}`);
+            return;
+        }
+
+        try {
+            set({ isLoadingMembers: true });
+            console.log(`[fetchServerMembers] Fetching members for ${serverId}`);
+
+            const response = await getMembers(serverId) as MembersResponse;
+
+            if (response?.success && Array.isArray(response.members)) {
+                // Update cached members
+                const updatedCache = new Map(get().serverMembers);
+                updatedCache.set(serverId, {
+                    data: response.members,
+                    timestamp: now
+                });
+
+                // Save to storage
+                saveMembersCache(updatedCache);
+
+                // Update state
+                set({
+                    serverMembers: updatedCache,
+                    isLoadingMembers: false
+                });
+
+                console.log(`[fetchServerMembers] Successfully fetched ${response.members.length} members for ${serverId}`);
+            } else {
+                console.error(`[fetchServerMembers] Invalid response format for ${serverId}:`, response);
+                // Mark this server as having an invalid member endpoint
+                const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
+                updatedInvalidMemberServers.add(serverId);
+                set({
+                    invalidMemberServers: updatedInvalidMemberServers,
+                    isLoadingMembers: false
+                });
+            }
+        } catch (error) {
+            console.error(`[fetchServerMembers] Error fetching members for ${serverId}:`, error);
+            // Mark this server as having an invalid member endpoint
+            const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
+            updatedInvalidMemberServers.add(serverId);
+            set({
+                invalidMemberServers: updatedInvalidMemberServers,
+                isLoadingMembers: false
+            });
+        }
+    },
+
+    getServerMembers: (serverId: string) => {
+        if (!serverId) return null;
+
+        const { serverMembers, invalidMemberServers } = get();
+
+        // If this server is known to have an invalid members endpoint,
+        // return empty array instead of null to prevent further fetching
+        if (invalidMemberServers.has(serverId)) {
+            return [];
+        }
+
+        const cachedMembers = serverMembers.get(serverId);
+
+        if (cachedMembers) {
+            // Check if cache is still valid
+            const now = Date.now();
+            if (now - cachedMembers.timestamp <= MEMBERS_CACHE_TTL) {
+                return cachedMembers.data;
+            }
+
+            // If cache expired, trigger a background refresh
+            get().fetchServerMembers(serverId, true);
+
+            // Still return the cached data while we refresh
+            return cachedMembers.data;
+        }
+
+        // If no cache, trigger a fetch and return null for now
+        get().fetchServerMembers(serverId);
+        return null;
+    },
+
+    // Background prefetching for all servers
+    isPrefetchingData: false,
+
+    prefetchAllServerData: async (address: string) => {
+        const { isPrefetchingData, isServerValid, serverCache, fetchServerInfo, fetchServerMembers } = get();
+
+        // Avoid multiple concurrent prefetches
+        if (isPrefetchingData) return;
+
+        try {
+            set({ isPrefetchingData: true });
+            console.log('[prefetchAllServerData] Starting background prefetch of all server data');
+
+            // Get list of joined servers
+            const serverIds = await getJoinedServers(address);
+            console.log(`[prefetchAllServerData] Found ${serverIds.length} servers to prefetch`);
+
+            if (serverIds.length === 0) {
+                set({ isPrefetchingData: false });
+                return;
+            }
+
+            // Process servers with a slight delay between each to avoid overwhelming API
+            for (const serverId of serverIds) {
+                // Skip invalid servers
+                if (!isServerValid(serverId)) continue;
+
+                // Check if we need to refresh this server's data
+                const cachedServer = serverCache.get(serverId);
+                const now = Date.now();
+                const needsRefresh = !cachedServer || (now - cachedServer.timestamp > CACHE_TTL);
+
+                if (needsRefresh) {
+                    console.log(`[prefetchAllServerData] Prefetching server ${serverId}`);
+                    await fetchServerInfo(serverId, true);
+                    // Small delay to avoid overwhelming the API
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // Also fetch members data
+                    await fetchServerMembers(serverId);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                } else {
+                    console.log(`[prefetchAllServerData] Using cached data for ${serverId}`);
+                    // Even if we have cached data, we might still want to update member info
+                    fetchServerMembers(serverId, false);
+                }
+            }
+        } catch (error) {
+            console.error('[prefetchAllServerData] Error prefetching server data:', error);
+        } finally {
+            set({ isPrefetchingData: false });
+            console.log('[prefetchAllServerData] Background prefetch completed');
+        }
     },
 
     // Update the fetchServerInfo function to handle invalid servers
@@ -298,6 +523,11 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             updates.refreshingServers = newRefreshing;
 
             set(updates);
+
+            // Start loading members in the background
+            if (get().activeServerId === serverId) {
+                get().fetchServerMembers(serverId);
+            }
         } catch (error) {
             console.error(`Failed to fetch server info for ${serverId}:`, error);
 
@@ -345,7 +575,7 @@ export function useServerSync() {
 
 // Hook to manage cache persistence
 export function useCachePersistence() {
-    const { serverCache, messageCache } = useGlobalState();
+    const { serverCache, messageCache, serverMembers } = useGlobalState();
 
     // Save cache to localStorage whenever it changes
     useEffect(() => {
@@ -356,5 +586,49 @@ export function useCachePersistence() {
     useEffect(() => {
         saveMessageCache(messageCache);
     }, [messageCache]);
+
+    // Save members cache to localStorage whenever it changes
+    useEffect(() => {
+        saveMembersCache(serverMembers);
+    }, [serverMembers]);
+}
+
+// Hook to prefetch all server data when user logs in
+export function useBackgroundPreload() {
+    const { prefetchAllServerData } = useGlobalState();
+    const activeAddress = useActiveWalletAddress();
+
+    useEffect(() => {
+        if (activeAddress) {
+            // Start background prefetch after a short delay to avoid blocking app startup
+            setTimeout(() => {
+                prefetchAllServerData(activeAddress);
+            }, 1000);
+        }
+    }, [activeAddress, prefetchAllServerData]);
+
+    return null;
+}
+
+// Helper to get the active wallet address
+function useActiveWalletAddress() {
+    const [address, setAddress] = useState<string | null>(null);
+
+    useEffect(() => {
+        async function getAddress() {
+            try {
+                if (window.arweaveWallet) {
+                    const addr = await window.arweaveWallet.getActiveAddress();
+                    setAddress(addr);
+                }
+            } catch (error) {
+                console.error("Error getting wallet address:", error);
+            }
+        }
+
+        getAddress();
+    }, []);
+
+    return address;
 }
 

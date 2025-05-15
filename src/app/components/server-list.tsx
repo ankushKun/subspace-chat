@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useGlobalState } from "@/hooks/global-state";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import TextWLine from "@/components/text-w-line";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -46,7 +47,8 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
         isLoadingServer,
         serverCache,
         refreshingServers,
-        isServerValid
+        isServerValid,
+        fetchServerInfo
     } = useGlobalState();
     const [hover, setHover] = useState(false);
     const [isLeavingServer, setIsLeavingServer] = useState(false);
@@ -54,6 +56,18 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
 
     const isInvalid = !isServerValid(id);
     const isActive = activeServerId === id;
+
+    // When this icon mounts, ensure we have server data (or start fetching it)
+    useEffect(() => {
+        if (!isInvalid && !isActive) {
+            // Check if we need to fetch server data
+            const cachedData = serverCache.get(id);
+            if (!cachedData || Date.now() - cachedData.timestamp > 3600000) { // 1 hour
+                // Fetch data silently in the background
+                fetchServerInfo(id, true);
+            }
+        }
+    }, [id, isInvalid, isActive, serverCache, fetchServerInfo]);
 
     const handleMouseEnter = () => setHover(true);
     const handleMouseLeave = () => setHover(false);
@@ -100,6 +114,14 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
     // Determine if we have valid server data to display
     const hasServerData = !isInvalid && serverInfo && serverInfo.icon;
 
+    // If we don't have icon data yet, try to get it directly
+    useEffect(() => {
+        if (!isInvalid && !hasServerData && !isLoading && !isRefreshing) {
+            // Try to get server data silently in the background
+            fetchServerInfo(id, true);
+        }
+    }, [id, isInvalid, hasServerData, isLoading, isRefreshing, fetchServerInfo]);
+
     return (
         <div className="relative group">
             <Button
@@ -124,7 +146,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                 {/* Loading state */}
                 {!isInvalid && isLoading && (
                     <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
-                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        <Skeleton className="h-full w-full rounded-lg" />
                     </div>
                 )}
 
@@ -175,7 +197,9 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                 `}
             >
                 {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-3 w-20" />
+                    </div>
                 ) : isInvalid ? (
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1 text-destructive">
@@ -369,7 +393,7 @@ if (typeof window !== 'undefined') {
 }
 
 export default function ServerList() {
-    const { activeServerId, isServerValid, wanderInstance } = useGlobalState();
+    const { activeServerId, isServerValid, wanderInstance, fetchServerInfo } = useGlobalState();
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [joinInput, setJoinInput] = useState("");
@@ -455,9 +479,31 @@ export default function ServerList() {
     async function runGetJoinedServers() {
         if (!address) return;
         setFetchingJoinedServers(true);
-        const res = await getJoinedServers(address);
-        setJoinedServers(res);
-        setFetchingJoinedServers(false);
+
+        try {
+            console.log("[ServerList] Fetching joined servers list");
+            const res = await getJoinedServers(address);
+            setJoinedServers(res);
+
+            // After we have the servers list, start prefetching their data
+            for (const serverId of res) {
+                if (!isServerValid(serverId)) continue;
+
+                // Queue up prefetching with a delay to avoid overwhelming API
+                setTimeout(async () => {
+                    try {
+                        console.log(`[ServerList] Prefetching data for server: ${serverId}`);
+                        await fetchServerInfo(serverId, true);
+                    } catch (error) {
+                        console.warn(`[ServerList] Failed to prefetch server ${serverId}:`, error);
+                    }
+                }, 500 * Math.random()); // Random delay for better distribution
+            }
+        } catch (error) {
+            console.error("[ServerList] Error fetching joined servers:", error);
+        } finally {
+            setFetchingJoinedServers(false);
+        }
     }
 
     async function runJoinServer() {
@@ -551,7 +597,11 @@ export default function ServerList() {
             </Button>
             <TextWLine className='w-6 opacity-70' />
             {fetchingJoinedServers ? (
-                <Loader2 className="h-12 w-12 p-3 animate-spin" />
+                <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-12 rounded-lg" />
+                    ))}
+                </div>
             ) : (
                 joinedServers.map((id) => (
                     <ServerIcon

@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";
 import { useMobile } from "@/hooks";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // File dropzone component for server icon
 const FileDropzone = ({
@@ -557,8 +558,26 @@ export default function ChannelList() {
             {/* Channel List Content */}
             <div className="flex-1 overflow-y-auto py-2">
                 {!activeServer ? (
-                    <div className="flex items-center justify-center h-full">
-                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    <div className="p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-4 w-4" />
+                        </div>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="pl-4 space-y-1">
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-8 w-11/12" />
+                            </div>
+                        ))}
+                        <div className="flex items-center justify-between">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-4 w-4" />
+                        </div>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="pl-4">
+                                <Skeleton className="h-8 w-full" />
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="space-y-2">

@@ -92,6 +92,14 @@ app.get("/", function(req, res)
     })
 end)
 
+app.get("/get-members", function(req, res)
+    local members = SQLRead("SELECT * FROM members")
+    res:json({
+        success = true,
+        members = members
+    })
+end)
+
 app.post("/update-server", function(req, res)
     assert(isOwner(req.msg.From), "You are not the owner of this server")
     local name = req.body.name or nil

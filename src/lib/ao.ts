@@ -236,6 +236,17 @@ export async function getServerInfo(id: string) {
     }
 }
 
+export async function getMembers(serverId: string) {
+    console.log(`[getMembers] Fetching members for server: ${serverId}`);
+    const res = await aofetch(`${serverId}/get-members`);
+    console.log(`[getMembers] Response:`, res);
+    if (res.status == 200) {
+        return res.json;
+    } else {
+        throw new Error(res.error);
+    }
+}
+
 export async function updateServer(id: string, name: string, icon: string) {
     console.log(`[updateServer] Updating server: ${id}`, { name, icon });
     const res = await aofetch(`${id}/update-server`, {

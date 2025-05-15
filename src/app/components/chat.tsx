@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ArrowLeft, HashIcon, Loader2, Send, Users } from "lucide-react";
+import { ArrowLeft, HashIcon, Send, Users } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Message type from server
 interface Message {
@@ -69,19 +70,19 @@ export default function Chat() {
                 if (cachedMessages) {
                     console.log(`[Chat] Using cached messages for channel ${activeChannelId}`);
                     setMessages(cachedMessages);
+                    // Don't show loading indicator when using cache
                     setIsLoadingMessages(false);
                 } else {
-                    // No cached messages found - explicitly clear messages
-                    console.log(`[Chat] No cached messages for channel ${activeChannelId}`);
+                    // No cached messages found - keep messages empty
                     setMessages([]);
-                    // Show loading indicator
-                    setIsLoadingMessages(true);
+                    // Load silently in background with no indicator
+                    setIsLoadingMessages(false);
                 }
             }
         }
 
         if (activeServerId && activeChannelId) {
-            fetchMessages(true);
+            fetchMessages(false); // Don't show loading for initial fetch
         }
     }, [activeServerId, activeChannelId]);
 
@@ -95,7 +96,7 @@ export default function Chat() {
         if (!activeServerId || !activeChannelId) return;
 
         const intervalId = setInterval(() => {
-            fetchMessages(true); // Silent refresh (no loading indicator)
+            fetchMessages(false); // Silent refresh
         }, 5000);
 
         return () => {
@@ -107,12 +108,12 @@ export default function Chat() {
         };
     }, [activeServerId, activeChannelId]);
 
-    const fetchMessages = async (showLoading = true) => {
+    const fetchMessages = async (showLoading = false) => {
         if (!activeServerId || !activeChannelId) return;
 
         try {
+            // We're disabling loading indicators by default
             if (showLoading) {
-                // Only show loading indicator if we have no messages
                 setIsLoadingMessages(true);
             }
 
@@ -146,6 +147,7 @@ export default function Chat() {
             }
         } catch (error) {
             console.error("Error fetching messages:", error);
+            // Don't show toast errors for silent fetches
             if (showLoading) {
                 toast.error("Failed to load messages");
             }
@@ -264,11 +266,36 @@ export default function Chat() {
         });
     };
 
-    // Loading or no channel selected
+    // Generate placeholder messages for empty state or loading state
+    const renderPlaceholderMessages = () => (
+        <div className="space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+                <div key={`placeholder-${i}`}>
+                    <div className="flex items-start gap-2">
+                        <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <div className="flex gap-2 items-center mb-2">
+                                <Skeleton className="w-24 h-4" />
+                                <Skeleton className="w-16 h-3" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Skeleton className="w-full h-3" />
+                                <Skeleton className="w-4/5 h-3" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+
+    // Loading or no server selected - show placeholder
     if (!activeServer) {
         return (
             <div className="flex items-center justify-center h-full w-full">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <div className="text-muted-foreground px-4 py-2 rounded-md border border-border/50">
+                    Select a server to continue
+                </div>
             </div>
         );
     }
@@ -291,40 +318,24 @@ export default function Chat() {
                 </Button>}
                 <HashIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="font-medium">{activeChannel?.name}</span>
-                {isLoadingMessages && (
-                    <div className="relative group">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-1" />
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-background border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-                            Loading messages...
-                        </div>
-                    </div>
+                {(activeServer?.member_count > 0 || showUsers) && (
+                    <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}
+                        className="!p-0 ml-auto data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                        onClick={() => {
+                            setShowUsers(!showUsers);
+                        }}>
+                        <Users size={20} className="!h-5 !w-5" />
+                    </Button>
                 )}
-                <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}
-                    className="!p-0 ml-auto data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-                    onClick={() => {
-                        setShowUsers(!showUsers);
-                    }}>
-                    <Users size={20} className="!h-5 !w-5" />
-                </Button>
             </div>
 
             {/* Chat Content Area */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col relative">
-                {/* Loading overlay shown only when refreshing with existing messages */}
-                {/* {isLoadingMessages && messages.length > 0 && (
-                    <div className="absolute top-2 right-2 z-10">
-                        <div className="bg-background/80 backdrop-blur-sm rounded-md p-1 flex items-center shadow-sm">
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            <span className="text-xs">Updating...</span>
-                        </div>
+                {messages.length === 0 ? (
+                    <div className="flex-1 flex flex-col justify-center">
+                        {renderPlaceholderMessages()}
                     </div>
-                )} */}
-
-                {isLoadingMessages && messages.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center">
-                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                    </div>
-                ) : messages.length > 0 ? (
+                ) : (
                     <div className="space-y-4">
                         {messages.map((message) => (
                             <div key={message.msg_id} className="group">
@@ -351,11 +362,6 @@ export default function Chat() {
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
-                ) : (
-                    <div className="text-center text-muted-foreground py-8 flex-1 flex flex-col items-center justify-center">
-                        <p className="text-sm">This is the start of the #{activeChannel?.name} channel.</p>
-                        <p className="text-xs mt-1">Be the first to send a message!</p>
-                    </div>
                 )}
             </div>
 
@@ -376,7 +382,7 @@ export default function Chat() {
                         disabled={!messageInput.trim() || isSending}
                     >
                         {isSending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <div className="h-4 w-4 opacity-70"></div>
                         ) : (
                             <Send className="h-4 w-4" />
                         )}

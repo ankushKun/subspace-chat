@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { useGlobalState, useServerSync, useCachePersistence } from '@/hooks/global-state';
+import { useGlobalState, useServerSync, useCachePersistence, useBackgroundPreload } from '@/hooks/global-state';
 import ChannelList from '@/app/components/channel-list';
 import DmList from '@/app/components/dm-list';
 import Hero from '@/app/components/hero';
@@ -37,6 +37,9 @@ export default function App() {
     // Use hooks for server synchronization and cache persistence
     useServerSync();
     useCachePersistence();
+
+    // Prefetch server data in the background when app starts
+    useBackgroundPreload();
 
     useEffect(() => {
         console.log('URL params:', serverId, channelId, userId);
@@ -89,7 +92,7 @@ export default function App() {
             <div className='w-full bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
                 {activeServerId === null ? <Hero /> : <Chat />}
             </div>
-            {activeServerId !== null && showUsers && <div className='w-80 bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
+            {activeServerId !== null && showUsers && <div className='min-w-[300px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
                 <UsersList />
             </div>}
         </div>

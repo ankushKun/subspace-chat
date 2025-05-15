@@ -39,7 +39,10 @@ export default function Profile() {
         activeServer,
         getUserProfile,
         fetchUserProfile,
-        userProfile
+        userProfile,
+        getUserProfileFromCache,
+        updateUserProfileCache,
+        fetchUserProfileAndCache
     } = useGlobalState();
     const previousAddressRef = useRef<string | null>(null);
     const navigate = useNavigate();
@@ -184,11 +187,14 @@ export default function Profile() {
                 setProfileData(updatedProfile);
                 setUsername(updatedProfile.profile?.username || "");
 
-                // Make sure global state cache is updated too
-                if (updatedProfile !== userProfile?.data) {
-                    console.log(`[Profile] Ensuring global state cache is updated with fresh data`);
-                    // The fetchUserProfile call above should have already updated the cache,
-                    // but we can verify the global state has the updated data
+                // Also update the user profiles cache to ensure it's reflected everywhere in the app
+                if (activeAddress) {
+                    console.log(`[Profile] Updating user profiles cache with latest data`);
+                    updateUserProfileCache(activeAddress, {
+                        username: updatedProfile.profile?.username,
+                        pfp: updatedProfile.profile?.pfp,
+                        timestamp: Date.now()
+                    });
                 }
             } else {
                 console.warn(`[Profile] Failed to get updated profile data after update`);
@@ -200,6 +206,13 @@ export default function Profile() {
                         // Type assertion to tell TypeScript this is a record with a profile property
                         const typedProfile = freshProfileData as Record<string, any>;
                         setUsername(typedProfile.profile?.username || "");
+
+                        // Update user profiles cache here too for the fallback
+                        updateUserProfileCache(activeAddress, {
+                            username: typedProfile.profile?.username,
+                            pfp: typedProfile.profile?.pfp,
+                            timestamp: Date.now()
+                        });
                     }
                 } catch (err) {
                     console.error(`[Profile] Error in fallback profile fetch:`, err);

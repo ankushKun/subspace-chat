@@ -3,7 +3,7 @@ import { ArrowLeft, HashIcon, Send, Users } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
-import { getMessages, sendMessage } from "@/lib/ao";
+import { getMessages, sendMessage, getProfile } from "@/lib/ao";
 import { toast } from "sonner";
 import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,13 @@ export default function Chat() {
         getChannelMessages,
         cacheChannelMessages,
         showUsers,
-        setShowUsers
+        setShowUsers,
+        getUserProfile,
+        // Use the centralized profile cache
+        userProfilesCache,
+        getUserProfileFromCache,
+        updateUserProfileCache,
+        fetchUserProfileAndCache
     } = useGlobalState();
     const isMobile = useMobile();
     const navigate = useNavigate();
@@ -45,6 +51,8 @@ export default function Chat() {
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousChannelIdRef = useRef<number | null>(null);
+    const activeUserProfilesRef = useRef<Set<string>>(new Set());
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     // Find the active channel from the server data
     const activeChannel = useMemo(() => {
@@ -63,6 +71,9 @@ export default function Chat() {
 
             previousChannelIdRef.current = activeChannelId;
 
+            // Reset active user profiles set when channel changes
+            activeUserProfilesRef.current = new Set();
+
             // Check if there are cached messages for this channel
             if (activeChannelId) {
                 const cachedMessages = getChannelMessages(activeChannelId);
@@ -72,6 +83,10 @@ export default function Chat() {
                     setMessages(cachedMessages);
                     // Don't show loading indicator when using cache
                     setIsLoadingMessages(false);
+
+                    // Immediately preload profiles for the cached messages
+                    // This ensures profile data is loaded as soon as cached messages are displayed
+                    preloadAllProfiles(cachedMessages);
                 } else {
                     // No cached messages found - keep messages empty
                     setMessages([]);
@@ -84,6 +99,14 @@ export default function Chat() {
         if (activeServerId && activeChannelId) {
             fetchMessages(false); // Don't show loading for initial fetch
         }
+
+        // Clean up any aborted fetch when channel changes
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+        };
     }, [activeServerId, activeChannelId]);
 
     // Auto-scroll to bottom when messages change
@@ -107,6 +130,65 @@ export default function Chat() {
             }
         };
     }, [activeServerId, activeChannelId]);
+
+    // Function to queue loading a user profile
+    const queueProfileLoad = async (userId: string) => {
+        if (!userId || activeUserProfilesRef.current.has(userId)) return;
+
+        // Mark this user as being loaded to prevent duplicate fetches
+        activeUserProfilesRef.current.add(userId);
+
+        try {
+            // First check if we already have this profile in our global cache
+            const cachedProfile = getUserProfileFromCache(userId);
+            if (cachedProfile && (Date.now() - cachedProfile.timestamp) < 5 * 60 * 1000) {
+                // Profile is in cache and recent (less than 5 minutes old)
+                console.log(`[Chat] Using cached profile for ${userId}`);
+                return;
+            }
+
+            // If not in cache, fetch using the global fetcher function
+            console.log(`[Chat] Fetching profile for ${userId}`);
+            await fetchUserProfileAndCache(userId, false);
+        } catch (error) {
+            console.warn(`[Chat] Failed to load profile for ${userId}:`, error);
+        }
+    };
+
+    // Function to preload all profiles from message list at once
+    const preloadAllProfiles = (messageList: Message[]) => {
+        if (!messageList || messageList.length === 0) return;
+
+        console.log(`[Chat] Preloading profiles for ${messageList.length} messages`);
+
+        // Extract unique authors from messages
+        const uniqueAuthors = Array.from(new Set(messageList.map(msg => msg.author_id)));
+        console.log(`[Chat] Found ${uniqueAuthors.length} unique authors to load`);
+
+        // First check which authors we already have in cache
+        const authorsToLoad = uniqueAuthors.filter(authorId => {
+            // Skip if already in cache and cache is fresh (less than 5 min old)
+            const cachedProfile = getUserProfileFromCache(authorId);
+            return !(cachedProfile &&
+                Date.now() - cachedProfile.timestamp < 5 * 60 * 1000);
+        });
+
+        if (authorsToLoad.length === 0) {
+            console.log('[Chat] All profiles already in cache');
+            return;
+        }
+
+        console.log(`[Chat] Loading profiles for ${authorsToLoad.length} authors`);
+
+        // Load profiles with slight delays to avoid rate limiting
+        authorsToLoad.forEach((authorId, index) => {
+            // Add increasing delay for each author to prevent server overload
+            // Wait 500ms between requests to avoid rate limiting
+            setTimeout(() => {
+                queueProfileLoad(authorId);
+            }, index * 500); // 500ms between each request
+        });
+    };
 
     const fetchMessages = async (showLoading = false) => {
         if (!activeServerId || !activeChannelId) return;
@@ -136,6 +218,9 @@ export default function Chat() {
 
                         // Cache the sorted messages
                         cacheChannelMessages(activeChannelId, sortedMessages);
+
+                        // Load profiles for message authors - using a new preload function
+                        preloadAllProfiles(sortedMessages);
                     }
                 } else {
                     console.warn("Unexpected message format:", result);
@@ -266,6 +351,25 @@ export default function Chat() {
         });
     };
 
+    // Get the display name for a user
+    const getDisplayName = (userId: string) => {
+        // Check profile cache from global state
+        const profileData = getUserProfileFromCache(userId);
+        if (profileData?.username) {
+            return profileData.username;
+        }
+
+        // Fall back to wallet address
+        return `${userId.substring(0, 6)}...${userId.substring(userId.length - 4)}`;
+    };
+
+    // Get profile picture for a user
+    const getProfilePicture = (userId: string) => {
+        // Check profile cache from global state
+        const profileData = getUserProfileFromCache(userId);
+        return profileData?.pfp;
+    };
+
     // Generate placeholder messages for empty state or loading state
     const renderPlaceholderMessages = () => (
         <div className="space-y-4">
@@ -349,14 +453,30 @@ export default function Chat() {
                     <div className="space-y-4">
                         {messages.map((message) => (
                             <div key={message.msg_id} className="group">
-                                <div className="flex items-start gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                        <span className="text-xs">{message.author_id.substring(0, 2)}</span>
+                                <div className="flex items-start gap-3">
+                                    {/* Profile avatar - larger and more prominent */}
+                                    <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                        {getProfilePicture(message.author_id) ? (
+                                            <img
+                                                src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
+                                                alt={getDisplayName(message.author_id)}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    // Handle broken images by showing fallback
+                                                    e.currentTarget.src = '';
+                                                    e.currentTarget.style.display = 'none';
+                                                    e.currentTarget.parentElement!.innerHTML = message.author_id.substring(0, 2).toUpperCase();
+                                                }}
+                                            />
+                                        ) : (
+                                            <span className="text-base font-medium">{message.author_id.substring(0, 2).toUpperCase()}</span>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-baseline gap-2">
-                                            <span className="font-semibold text-sm truncate">
-                                                {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
+                                            {/* Username with better styling */}
+                                            <span className={`font-semibold text-sm truncate`}>
+                                                {getDisplayName(message.author_id)}
                                             </span>
                                             <span
                                                 className="text-xs text-muted-foreground whitespace-nowrap"
@@ -364,6 +484,13 @@ export default function Chat() {
                                             >
                                                 {formatTimestamp(message.timestamp)}
                                             </span>
+
+                                            {/* Add wallet address as tooltip/subtitle if we're showing a username */}
+                                            {getUserProfileFromCache(message.author_id)?.username && (
+                                                <span className="text-xs text-muted-foreground hidden group-hover:inline">
+                                                    {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
+                                                </span>
+                                            )}
                                         </div>
                                         <p className="mt-1 text-sm break-words">{message.content}</p>
                                     </div>

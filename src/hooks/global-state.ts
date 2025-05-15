@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Server, Member } from '@/lib/types'
 import { useEffect, useState, useRef } from 'react'
-import { getServerInfo, getMembers, getJoinedServers } from '@/lib/ao'
+import { getServerInfo, getMembers, getJoinedServers, getProfile } from '@/lib/ao'
 import { persist } from 'zustand/middleware'
 import type { WanderConnect } from '@wanderapp/connect'
 
@@ -17,6 +17,7 @@ const MESSAGE_CACHE_KEY = 'subspace-message-cache'
 const MEMBERS_CACHE_KEY = 'subspace-members-cache'
 const USER_PROFILE_CACHE_KEY = 'subspace-user-profile-cache'
 const SERVER_LIST_CACHE_KEY = 'subspace-server-list-cache'
+const USER_PROFILES_CACHE_KEY = 'subspace-user-profiles-cache'
 
 // Cache TTL in milliseconds (24 hours)
 const CACHE_TTL = 24 * 60 * 60 * 1000
@@ -28,6 +29,8 @@ const MEMBERS_CACHE_TTL = 10 * 60 * 1000
 const USER_PROFILE_CACHE_TTL = 30 * 60 * 1000
 // Server list cache TTL (15 minutes)
 const SERVER_LIST_CACHE_TTL = 15 * 60 * 1000
+// User profiles cache TTL (15 minutes)
+const USER_PROFILES_CACHE_TTL = 15 * 60 * 1000
 
 interface CachedServer {
     data: Server
@@ -55,6 +58,15 @@ interface CachedServerList {
     data: string[];  // Array of server IDs
     address: string; // The address this list belongs to
     timestamp: number;
+}
+
+// Define interface for user profiles cache
+interface CachedUserProfiles {
+    [userId: string]: {
+        username?: string;   // User's display name
+        pfp?: string;        // Profile picture ID
+        timestamp: number;   // When this profile was cached
+    };
 }
 
 // Helper functions for cache persistence
@@ -176,6 +188,28 @@ const saveServerListCache = (cache: CachedServerList): void => {
     }
 }
 
+// Helper function to load user profiles from storage
+const loadUserProfilesCache = (): CachedUserProfiles => {
+    try {
+        const storedCache = localStorage.getItem(USER_PROFILES_CACHE_KEY)
+        if (storedCache) {
+            return JSON.parse(storedCache)
+        }
+    } catch (error) {
+        console.error('Failed to load user profiles cache from storage:', error)
+    }
+    return {}
+}
+
+// Helper function to save user profiles to storage
+const saveUserProfilesCache = (cache: CachedUserProfiles): void => {
+    try {
+        localStorage.setItem(USER_PROFILES_CACHE_KEY, JSON.stringify(cache))
+    } catch (error) {
+        console.error('Failed to save user profiles cache to storage:', error)
+    }
+}
+
 export interface GlobalState {
     activeServerId: string | null
     setActiveServerId: (server: string | null) => void
@@ -230,6 +264,13 @@ export interface GlobalState {
     fetchJoinedServers: (address: string, forceRefresh?: boolean) => Promise<string[]>
     cacheServerList: (address: string, serverIds: string[]) => void
     clearServerListCache: () => void
+
+    // User profiles cache - for all users
+    userProfilesCache: CachedUserProfiles
+    getUserProfileFromCache: (userId: string) => { username?: string, pfp?: string, timestamp: number } | null
+    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, timestamp: number }) => void
+    fetchUserProfileAndCache: (userId: string, forceRefresh?: boolean) => Promise<any | null>
+    clearUserProfilesCache: () => void
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -751,11 +792,13 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 }
             }
 
-            // Import getProfile from ao.ts without causing circular dependencies
-            const { getProfile } = require('@/lib/ao');
+            // Use the imported getProfile function directly
             const profileData = await getProfile(address);
 
             if (profileData) {
+                // Type assertion to ensure safe access
+                const typedProfile = profileData as { profile?: { username?: string, pfp?: string } };
+
                 // Cache the profile data
                 get().setUserProfile(profileData);
                 return profileData;
@@ -765,6 +808,64 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
 
         return null;
+    },
+
+    // User profiles cache - for all users
+    userProfilesCache: loadUserProfilesCache(),
+    getUserProfileFromCache: (userId: string) => {
+        const userProfiles = get().userProfilesCache;
+        if (userProfiles && userProfiles[userId]) {
+            return userProfiles[userId];
+        }
+        return null;
+    },
+    updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, timestamp: number }) => {
+        const userProfiles = get().userProfilesCache;
+        if (userProfiles) {
+            userProfiles[userId] = profile;
+            set({ userProfilesCache: userProfiles });
+            saveUserProfilesCache(userProfiles);
+        }
+    },
+    fetchUserProfileAndCache: async (userId: string, forceRefresh = false) => {
+        if (!userId) return null;
+
+        try {
+            console.log(`[fetchUserProfileAndCache] Fetching profile for ${userId}`);
+
+            // Check for cached profile data first
+            if (!forceRefresh) {
+                const cachedProfile = get().getUserProfileFromCache(userId);
+                if (cachedProfile) {
+                    console.log(`[fetchUserProfileAndCache] Using cached profile data for ${userId}`);
+                    return cachedProfile;
+                }
+            }
+
+            // Use the imported getProfile function directly
+            const profileData = await getProfile(userId);
+
+            if (profileData) {
+                // Type assertion to ensure profile property exists
+                const typedProfile = profileData as { profile?: { username?: string, pfp?: string } };
+
+                // Cache the profile data
+                get().updateUserProfileCache(userId, {
+                    username: typedProfile.profile?.username,
+                    pfp: typedProfile.profile?.pfp,
+                    timestamp: Date.now()
+                });
+                return profileData;
+            }
+        } catch (error) {
+            console.error(`[fetchUserProfileAndCache] Error fetching profile for ${userId}:`, error);
+        }
+
+        return null;
+    },
+    clearUserProfilesCache: () => {
+        set({ userProfilesCache: {} });
+        localStorage.removeItem(USER_PROFILES_CACHE_KEY);
     }
 }))
 

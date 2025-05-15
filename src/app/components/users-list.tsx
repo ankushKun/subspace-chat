@@ -22,14 +22,19 @@ export default function UsersList() {
         setShowUsers,
         getServerMembers,
         fetchServerMembers,
-        invalidMemberServers
+        invalidMemberServers,
+        getUserProfile,
+        // Use the centralized profile cache
+        userProfilesCache,
+        getUserProfileFromCache,
+        updateUserProfileCache,
+        fetchUserProfileAndCache
     } = useGlobalState();
-    const [profiles, setProfiles] = useState<Record<string, any>>({});
     const [error, setError] = useState<string | null>(null);
     const [isRetrying, setIsRetrying] = useState(false);
+    const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
     const isMobile = useMobile();
     const activeAddress = useActiveAddress();
-    const isFetchingProfiles = useRef(false);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     // Get members from global state
@@ -49,180 +54,118 @@ export default function UsersList() {
                 globalState.fetchServerMembers(activeServerId, true)
                     .catch(error => console.warn("[UsersList] Failed to refresh members data:", error));
             }, 150);
-        }
-    }, [showUsers, activeServerId]);
 
-    // Reset profiles when server changes
-    useEffect(() => {
-        // Clear profiles when server changes
-        setProfiles({});
-
-        // Abort any ongoing fetches when server changes
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-
-        isFetchingProfiles.current = false;
-    }, [activeServerId]);
-
-    // Separate fetch function to avoid dependency issues
-    const fetchProfile = useCallback(async (memberId: string, signal: AbortSignal) => {
-        try {
-            return await getProfile(memberId);
-        } catch (error) {
-            if (signal.aborted) {
-                console.log('Profile fetch aborted for', memberId);
-            } else {
-                console.warn(`Failed to fetch profile for ${memberId}:`, error);
+            // Check if we have members and need to load their profiles
+            if (members && members.length > 0) {
+                loadMembersProfiles(members);
             }
-            return null;
         }
-    }, []);
 
-    // Fetch profiles for members when the member list changes
-    useEffect(() => {
-        if (!members || members.length === 0) return;
-
-        // Create a new abort controller for this fetch session
-        const abortController = new AbortController();
-        abortControllerRef.current = abortController;
-        const signal = abortController.signal;
-
-        // Avoid duplicate fetches
-        if (isFetchingProfiles.current) return;
-
-        const fetchMemberProfiles = async () => {
-            isFetchingProfiles.current = true;
-
-            try {
-                // We'll collect all profile updates and apply them at once
-                let updatedProfiles = false;
-                const newProfiles = { ...profiles };
-
-                // Process members sequentially with delays instead of in parallel
-                for (const member of members) {
-                    // Break if component unmounted or fetch aborted
-                    if (signal.aborted) break;
-
-                    // Skip if we already have profile data for this member
-                    if (newProfiles[member.id]?.profile) continue;
-
-                    const profileData = await fetchProfile(member.id, signal);
-
-                    // Only update if we got data and haven't been aborted
-                    if (!signal.aborted && profileData) {
-                        newProfiles[member.id] = { profile: profileData };
-                        updatedProfiles = true;
-                    }
-
-                    // Add a delay between requests to avoid rate limiting
-                    if (!signal.aborted) {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-                }
-
-                // Only update state once at the end if needed
-                if (updatedProfiles && !signal.aborted) {
-                    setProfiles(newProfiles);
-                }
-            } catch (error) {
-                console.error("Error in profile fetching process:", error);
-            } finally {
-                if (!signal.aborted) {
-                    isFetchingProfiles.current = false;
-                }
-            }
-        };
-
-        fetchMemberProfiles();
-
-        // Cleanup function to abort fetches on unmount or dependency change
+        // Clean up abort controller on unmount
         return () => {
-            abortController.abort();
-            abortControllerRef.current = null;
-        };
-    }, [members, fetchProfile, profiles]); // Only depend on members and fetchProfile, not profiles
-
-    // Function to initiate a refresh of all member profiles
-    const refreshAllProfiles = useCallback(async () => {
-        if (!members || members.length === 0) return;
-
-        // Don't start if we're already fetching
-        if (isFetchingProfiles.current) return;
-
-        console.log(`[UsersList] Refreshing all member profiles for ${members.length} members`);
-
-        // Create a new abort controller for this refresh session
-        const abortController = new AbortController();
-        abortControllerRef.current = abortController;
-        const signal = abortController.signal;
-
-        isFetchingProfiles.current = true;
-
-        try {
-            const newProfiles = { ...profiles };
-            let updatedProfiles = false;
-
-            // Process a few members at a time with small delays
-            // to avoid rate limiting and UI blocking
-            for (let i = 0; i < members.length; i++) {
-                if (signal.aborted) break;
-
-                const member = members[i];
-
-                // Fetch fresh profile data (even if we already have cached data)
-                const profileData = await fetchProfile(member.id, signal);
-
-                // Update profile data if we got a valid response
-                if (!signal.aborted && profileData) {
-                    newProfiles[member.id] = { profile: profileData };
-                    updatedProfiles = true;
-                }
-
-                // Add a small delay between requests
-                if (!signal.aborted && i < members.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                }
-            }
-
-            // Update state if we got new data
-            if (updatedProfiles && !signal.aborted) {
-                setProfiles(newProfiles);
-            }
-        } catch (error) {
-            console.error("[UsersList] Error refreshing profiles:", error);
-        } finally {
-            if (!signal.aborted) {
-                isFetchingProfiles.current = false;
-            }
-        }
-    }, [members, profiles, fetchProfile]);
-
-    // Trigger refreshing all profiles when the panel becomes visible
-    useEffect(() => {
-        if (showUsers && members && members.length > 0) {
-            // Small delay to avoid blocking the UI rendering
-            setTimeout(() => {
-                refreshAllProfiles();
-            }, 500);
-        }
-
-        // Clean up any pending refreshes when the panel is hidden
-        return () => {
-            if (!showUsers && abortControllerRef.current) {
+            if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
-                isFetchingProfiles.current = false;
             }
         };
-    }, [showUsers, members, refreshAllProfiles]);
+    }, [showUsers, activeServerId, members]);
+
+    // This function loads profiles for all members in batches
+    const loadMembersProfiles = async (membersList: Member[]) => {
+        if (!membersList || membersList.length === 0) return;
+
+        setIsLoadingProfiles(true);
+
+        // Create a new abort controller
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+
+        try {
+            console.log(`[UsersList] Loading profiles for ${membersList.length} members`);
+
+            // Identify which members need profile loading
+            const membersToLoad = membersList.filter(member => {
+                const cachedProfile = getUserProfileFromCache(member.id);
+                // Skip if we have fresh cache (less than 15 minutes old)
+                return !(cachedProfile &&
+                    Date.now() - cachedProfile.timestamp < 15 * 60 * 1000);
+            });
+
+            if (membersToLoad.length === 0) {
+                console.log(`[UsersList] All member profiles already in cache`);
+                setIsLoadingProfiles(false);
+                return;
+            }
+
+            console.log(`[UsersList] Need to load ${membersToLoad.length} member profiles`);
+
+            // Process members in batches to avoid rate limiting
+            for (let i = 0; i < membersToLoad.length; i++) {
+                // Break if component unmounted or fetch aborted
+                if (signal.aborted) break;
+
+                const member = membersToLoad[i];
+
+                // Prioritize loading the current user's profile from global state
+                if (member.id === activeAddress) {
+                    const currentUserProfile = getUserProfile();
+                    if (currentUserProfile && currentUserProfile.profile) {
+                        updateUserProfileCache(member.id, {
+                            username: currentUserProfile.profile.username,
+                            pfp: currentUserProfile.profile.pfp,
+                            timestamp: Date.now()
+                        });
+                        continue;
+                    }
+                }
+
+                // Load profile for this member
+                await fetchUserProfileAndCache(member.id, false);
+
+                // Add a delay between requests to prevent rate limiting
+                if (!signal.aborted && i < membersToLoad.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+        } catch (error) {
+            console.error('[UsersList] Error loading member profiles:', error);
+        } finally {
+            if (!signal.aborted) {
+                setIsLoadingProfiles(false);
+            }
+        }
+    };
+
+    // Handle retrying the member fetch for servers previously marked as invalid
+    const handleRetryFetch = async () => {
+        if (!activeServerId) return;
+
+        setIsRetrying(true);
+        try {
+            console.log(`[UsersList] Retrying member fetch for previously invalid server: ${activeServerId}`);
+            await fetchServerMembers(activeServerId, true);
+
+            // If we got members, load their profiles
+            const currentMembers = getServerMembers(activeServerId);
+            if (currentMembers && currentMembers.length > 0) {
+                await loadMembersProfiles(currentMembers);
+            }
+        } catch (error) {
+            console.error("[UsersList] Error retrying member fetch:", error);
+        } finally {
+            setIsRetrying(false);
+        }
+    };
 
     // Get display name for a member
     const getDisplayName = (member: Member) => {
-        // Try to get username from profile
-        if (profiles[member.id]?.profile?.username) {
-            return profiles[member.id].profile.username;
+        // Try to get username from profile cache
+        const profileData = getUserProfileFromCache(member.id);
+        if (profileData?.username) {
+            return profileData.username;
         }
 
         // Fall back to nickname if available
@@ -232,6 +175,13 @@ export default function UsersList() {
 
         // Fall back to truncated ID
         return member.id.substring(0, 6) + '...' + member.id.substring(member.id.length - 4);
+    };
+
+    // Get profile picture for a user
+    const getProfilePicture = (memberId: string) => {
+        // Check profile cache from global state
+        const profileData = getUserProfileFromCache(memberId);
+        return profileData?.pfp;
     };
 
     // Check if member is the server owner
@@ -269,21 +219,6 @@ export default function UsersList() {
             return `(${activeServer.member_count})`;
         }
         return '';
-    };
-
-    // Handle retrying the member fetch for servers previously marked as invalid
-    const handleRetryFetch = async () => {
-        if (!activeServerId) return;
-
-        setIsRetrying(true);
-        try {
-            console.log(`[UsersList] Retrying member fetch for previously invalid server: ${activeServerId}`);
-            await fetchServerMembers(activeServerId, true);
-        } catch (error) {
-            console.error("[UsersList] Error retrying member fetch:", error);
-        } finally {
-            setIsRetrying(false);
-        }
     };
 
     // Check if we have a members endpoint failure
@@ -351,11 +286,17 @@ export default function UsersList() {
                                 className="flex items-center gap-2 p-2 hover:bg-accent rounded-md transition-colors"
                             >
                                 <div className="h-8 w-8 mx-2 mr-4 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center text-primary">
-                                    {profiles[member.id]?.profile?.pfp ? (
+                                    {getProfilePicture(member.id) ? (
                                         <img
-                                            src={`https://arweave.net/${profiles[member.id].profile.pfp}`}
+                                            src={`https://arweave.net/${getProfilePicture(member.id)}`}
                                             alt={getDisplayName(member)}
                                             className="object-cover w-full h-full"
+                                            onError={(e) => {
+                                                // Handle broken images
+                                                e.currentTarget.src = '';
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.parentElement!.innerHTML = getDisplayName(member).charAt(0).toUpperCase();
+                                            }}
                                         />
                                     ) : (
                                         getDisplayName(member).charAt(0).toUpperCase()
@@ -363,7 +304,7 @@ export default function UsersList() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-medium text-sm truncate">
+                                        <span className={`font-medium text-sm truncate`}>
                                             {getDisplayName(member)}
                                         </span>
                                         {isServerOwner(member.id) && (
@@ -404,6 +345,16 @@ export default function UsersList() {
                                         </>
                                     )}
                                 </Button>
+                            </div>
+                        )}
+
+                        {/* Loading indicator when refreshing profiles */}
+                        {isLoadingProfiles && (
+                            <div className="pt-2 pb-1 flex flex-col items-center">
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Loading user profiles...
+                                </div>
                             </div>
                         )}
                     </div>

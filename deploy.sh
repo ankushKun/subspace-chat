@@ -6,4 +6,5 @@ wallet_path="/Users/weeblet/Library/Mobile Documents/com~apple~CloudDocs/WALLETS
 wb64=$(cat "$wallet_path" | base64)
 
 
-DEPLOY_KEY="$wb64" bunx permaweb-deploy --deploy-folder ./dist --ant-process X4j36WjUIpVEknVrm4Woibz2GQn-BykiKgLoUUQ9l7o
+DEPLOY_KEY="$wb64" bunx permaweb-deploy --deploy-folder ./dist
+# DEPLOY_KEY="$wb64" bunx permaweb-deploy --deploy-folder ./dist --ant-process X4j36WjUIpVEknVrm4Woibz2GQn-BykiKgLoUUQ9l7o

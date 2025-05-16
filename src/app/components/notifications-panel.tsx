@@ -228,7 +228,7 @@ export default function NotificationsPanel() {
                             <div className="space-y-4">
                                 {Object.entries(notificationsByServer).map(([serverId, { serverName, notifications }]) => (
                                     <div key={serverId} className="space-y-1">
-                                        <div className="text-sm font-semibold text-foreground px-2 pt-1">{serverName} 💪</div>
+                                        <div className="text-sm font-semibold text-foreground px-2 pt-1">{serverName}</div>
                                         {notifications
                                             .sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp))
                                             .map(notification => (

@@ -739,6 +739,9 @@ export default function Chat() {
     if (!activeChannel) {
         return (
             <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground">
+                <div className="absolute top-4 right-4 flex ">
+                    <NotificationsPanel />
+                </div>
                 <div className="text-lg text-center">Select a channel to start chatting</div>
             </div>
         );
@@ -753,7 +756,7 @@ export default function Chat() {
                 </Button>}
                 <HashIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="font-medium">{activeChannel?.name}</span>
-                <div className="w-full" />
+                <div className="grow" />
                 <NotificationsPanel />
                 {(activeServer?.member_count > 0 || showUsers) && (
                     <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}

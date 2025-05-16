@@ -18,6 +18,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 
 // Message type from server
 interface Message {
@@ -523,7 +524,7 @@ export default function Chat() {
 
     // Generate placeholder messages for empty state or loading state
     const renderPlaceholderMessages = () => (
-        <div className="space-y-4">
+        <div className="space-y-4 p-4">
             {Array.from({ length: 5 }).map((_, i) => (
                 <div key={`placeholder-${i}`}>
                     <div className="flex items-start gap-2">
@@ -651,6 +652,25 @@ export default function Chat() {
     const handleDeleteMessage = async (message: Message) => {
         if (!activeServerId) return;
 
+        // Show a confirmation dialog with note about Arweave permanence
+        toast.warning("Delete message?", {
+            description: "This will remove the message from the UI, but due to Arweave's permanent nature, the message data will still exist on the blockchain.",
+            action: {
+                label: "Delete",
+                onClick: () => performMessageDeletion(message)
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => { /* Do nothing */ }
+            },
+            duration: 10000 // 10 seconds to give time to read
+        });
+    };
+
+    // Actually perform the message deletion after confirmation
+    const performMessageDeletion = async (message: Message) => {
+        if (!activeServerId) return;
+
         setIsDeleting(true);
 
         try {
@@ -688,6 +708,17 @@ export default function Chat() {
             console.error("Error checking message author:", error);
             return false;
         }
+    };
+
+    // Check if the current user is the server owner
+    const isServerOwner = useMemo(() => {
+        if (!activeServer || !currentAddress) return false;
+        return activeServer.owner === currentAddress;
+    }, [activeServer, currentAddress]);
+
+    // Show delete button if user is either the message author or the server owner
+    const canDeleteMessage = (messageAuthorId: string) => {
+        return messageAuthorId === currentAddress || isServerOwner;
     };
 
     // Loading or no server selected - show placeholder
@@ -741,15 +772,15 @@ export default function Chat() {
             </div>
 
             {/* Chat Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col relative">
+            <div className="flex-1 overflow-y-auto flex flex-col relative">
                 {messages.length === 0 ? (
-                    <div className="flex-1 flex flex-col justify-center">
+                    <div className="flex-1 flex flex-col justify-start">
                         {renderPlaceholderMessages()}
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-4 mt-5">
                         {messages.map((message) => (
-                            <div key={message.msg_id} className="group">
+                            <div key={message.msg_id} className="group px-4 py-1 pb-3 m-0 mb-1 hover:bg-accent/30">
                                 <div className="flex items-start gap-3">
                                     {/* Profile avatar - wrapped in the popover */}
                                     <UserProfilePopover
@@ -758,7 +789,7 @@ export default function Chat() {
                                         align="start"
                                     >
                                         <PopoverTrigger asChild>
-                                            <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer">
+                                            <div className="w-10 h-10 mt-1 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer">
                                                 {getProfilePicture(message.author_id) ? (
                                                     <img
                                                         src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
@@ -779,17 +810,26 @@ export default function Chat() {
                                     </UserProfilePopover>
 
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-baseline gap-2">
+                                        <div className="flex items-center h-6 gap-2">
                                             {/* Username with popover */}
                                             <UserProfilePopover
                                                 userId={message.author_id}
-                                                side="top"
+                                                side="bottom"
                                                 align="start"
                                             >
                                                 <PopoverTrigger asChild>
-                                                    <span className={`font-semibold text-sm truncate cursor-pointer hover:underline`}>
-                                                        {getDisplayName(message.author_id)}
-                                                    </span>
+                                                    {(() => {
+                                                        const displayName = getDisplayName(message.author_id);
+                                                        const userProfile = getUserProfileFromCache(message.author_id);
+                                                        const hasNicknameOrPrimary = userProfile?.username || userProfile?.primaryName;
+                                                        return (
+                                                            <span
+                                                                className={`font-semibold text-sm truncate cursor-pointer hover:underline${!hasNicknameOrPrimary ? " text-muted-foreground" : ""}`}
+                                                            >
+                                                                {displayName}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </PopoverTrigger>
                                             </UserProfilePopover>
 
@@ -807,16 +847,16 @@ export default function Chat() {
                                                     null}
                                             </span>
 
-                                            {/* Add wallet address as tooltip/subtitle if we're showing a username */}
-                                            {getUserProfileFromCache(message.author_id)?.username && (
+                                            {/* Add wallet address as tooltip/subtitle if we're showing a username or primary name */}
+                                            {(getUserProfileFromCache(message.author_id)?.username || getUserProfileFromCache(message.author_id)?.primaryName) && (
                                                 <span className="text-xs text-muted-foreground hidden group-hover:inline">
                                                     {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
                                                 </span>
                                             )}
 
                                             {/* Message actions - direct buttons instead of dropdown */}
-                                            {message.author_id === currentAddress && (
-                                                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                            <div className="ml-auto relative z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                                {message.author_id === currentAddress && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -830,25 +870,27 @@ export default function Chat() {
                                                     >
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
+                                                )}
+                                                {canDeleteMessage(message.author_id) && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-6 w-6 text-destructive hover:text-destructive"
                                                         onClick={() => handleDeleteMessage(message)}
                                                         disabled={isEditing || isDeleting}
-                                                        title="Delete message"
+                                                        title={isServerOwner && message.author_id !== currentAddress ? "Delete as server owner" : "Delete message"}
                                                     >
                                                         <Trash2 className="h-3.5 w-3.5" />
                                                     </Button>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Show edit input if editing this message */}
                                         {editingMessage?.msg_id === message.msg_id ? (
                                             <div className="mt-1">
                                                 <div className="flex gap-2 mt-2">
-                                                    <input
+                                                    <Input
                                                         type="text"
                                                         value={editedContent}
                                                         onChange={(e) => setEditedContent(e.target.value)}
@@ -874,7 +916,7 @@ export default function Chat() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <p className="mt-1 text-sm break-words">
+                                            <p className=" text-sm break-words">
                                                 {formatMessageWithMentions(message.content)}
                                             </p>
                                         )}

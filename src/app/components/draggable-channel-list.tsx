@@ -603,22 +603,23 @@ export default function DraggableChannelList() {
                                     <div
                                         ref={provided.innerRef}
                                         {...provided.droppableProps}
-                                        className="space-y-1 px-2 mb-4 min-h-[8px] relative"
+                                        className="space-y-1 px-2 mb-1 min-h-[8px] relative"
                                     >
                                         {/* Add a header for the uncategorized section */}
-                                        <div className="flex items-center justify-between py-1 text-xs font-medium text-muted-foreground mt-3 mb-1">
-                                            <span>UNCATEGORIZED</span>
-                                            {isServerOwner && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-4 w-4 opacity-0 group-hover:opacity-100 hover:bg-muted"
-                                                    onClick={handleCreateUncategorizedChannel}
-                                                >
-                                                    <Plus className="h-3 w-3" />
-                                                </Button>
-                                            )}
-                                        </div>
+                                        {/* <div className="flex items-center justify-between py-1 text-xs font-medium text-muted-foreground mt-0 "> */}
+                                        {/* DONT SHOW ANY LABEL FOR UNCATEGORISED CHANNELS, JUST SHOW THE CHANNELS ON TOP */}
+                                        {/* <span>UNCATEGORIZED</span> */}
+                                        {/* {isServerOwner && ( */}
+                                        {/* <Button */}
+                                        {/* variant="ghost" */}
+                                        {/* size="icon" */}
+                                        {/* className="h-4 w-4 opacity-0 group-hover:opacity-100 hover:bg-muted" */}
+                                        {/* onClick={handleCreateUncategorizedChannel} */}
+                                        {/* > */}
+                                        {/* <Plus className="h-3 w-3" /> */}
+                                        {/* </Button> */}
+                                        {/* )} */}
+                                        {/* </div> */}
 
                                         {uncategorizedChannels.map((channel, index) => (
                                             <Draggable

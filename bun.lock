@@ -5,12 +5,13 @@
       "name": "webapp",
       "dependencies": {
         "@ar.io/sdk": "^3.10.2",
-        "@ardrive/turbo-sdk": "^1.21.0",
+        "@ardrive/turbo-sdk": "^1.20.0",
         "@arweave-wallet-kit/browser-wallet-strategy": "^0.1.1",
         "@arweave-wallet-kit/core": "^0.1.1",
         "@arweave-wallet-kit/react": "^0.3.2",
         "@arweave-wallet-kit/styles": "^0.1.1",
         "@arweave-wallet-kit/wander-strategy": "^0.1.2",
+        "@dha-team/arbundles": "^1.0.3",
         "@permaweb/aoconnect": "^0.0.84",
         "@radix-ui/react-alert-dialog": "^1.1.13",
         "@radix-ui/react-avatar": "^1.1.9",
@@ -53,6 +54,7 @@
         "viem": "^2.29.3",
         "vite-plugin-node-polyfills": "^0.22.0",
         "wagmi": "^2.15.3",
+        "web-streams-polyfill": "^4.1.0",
         "zustand": "^5.0.4",
       },
       "devDependencies": {
@@ -2517,6 +2519,8 @@
     "warp-arbundles": ["warp-arbundles@1.0.4", "", { "dependencies": { "arweave": "^1.13.7", "base64url": "^3.0.1", "buffer": "^6.0.3", "warp-isomorphic": "^1.0.7" } }, "sha512-KeRac/EJ7VOK+v5+PSMh2SrzpCKOAFnJICLlqZWt6qPkDCzVwcrNE5wFxOlEk5U170ewMDAB3e86UHUblevXpw=="],
 
     "warp-isomorphic": ["warp-isomorphic@1.0.7", "", { "dependencies": { "buffer": "^6.0.3", "undici": "^5.19.1" } }, "sha512-fXHbUXwdYqPm9fRPz8mjv5ndPco09aMQuTe4kXfymzOq8V6F3DLsg9cIafxvjms9/mc6eijzkLBJ63yjEENEjA=="],
+
+    "web-streams-polyfill": ["web-streams-polyfill@4.1.0", "", {}, "sha512-A7Jxrg7+eV+eZR/CIdESDnRGFb6/bcKukGvJBB5snI6cw3is1c2qamkYstC1bY1p08TyMRlN9eTMkxmnKJBPBw=="],
 
     "webextension-polyfill": ["webextension-polyfill@0.10.0", "", {}, "sha512-c5s35LgVa5tFaHhrZDnr3FpQpjj1BB+RXhLTYUxGqBVN460HkbM8TBtEqdXWbpTKfzwCcjAZVF7zXCYSKtcp9g=="],
 

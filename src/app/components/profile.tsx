@@ -268,16 +268,22 @@ export default function Profile() {
 
             // Upload new profile picture if one was selected
             if (profilePic) {
-                toast.loading("Uploading profile picture...");
-                pfpId = await uploadFileAndGetId(profilePic);
-                toast.dismiss();
-            }
+                try {
+                    toast.loading("Uploading profile picture...");
+                    pfpId = await uploadFileAndGetId(profilePic);
+                    toast.dismiss();
 
-            // Update global profile picture
-            if (profilePic) {
-                toast.loading("Updating profile picture...");
-                await updateProfile(undefined, pfpId);
-                toast.dismiss();
+                    // Update global profile with new pfp ID
+                    toast.loading("Updating profile picture...");
+                    await updateProfile("", pfpId);
+                    toast.dismiss();
+                    toast.success("Profile picture updated successfully");
+                } catch (error) {
+                    console.error("Error updating profile picture:", error);
+                    toast.dismiss();
+                    toast.error("Failed to update profile picture");
+                    // Continue with other updates even if pfp fails
+                }
             }
 
             // Update server-specific nickname
@@ -287,16 +293,10 @@ export default function Profile() {
                 toast.dismiss();
                 // Type-safe check if the result has a success property that is false
                 nicknameUpdated = !!(nicknameResult && typeof nicknameResult === 'object' && 'success' in nicknameResult ? nicknameResult.success !== false : true);
-            }
 
-            // Show success toast only if something was updated
-            if (profilePic || nicknameUpdated) {
-                toast.success("Profile updated successfully");
-            }
-
-            // Local state update for immediate UI feedback if nickname update appears successful
-            if (nicknameUpdated) {
-                setNickname(nickname);
+                if (nicknameUpdated) {
+                    toast.success("Nickname updated successfully");
+                }
             }
 
             // Add a small delay to ensure backend has processed the update
@@ -319,8 +319,6 @@ export default function Profile() {
                         timestamp: Date.now()
                     });
                 }
-
-                // The server members should already be updated through the optimized caching in updateNickname
             } else {
                 console.warn(`[Profile] Failed to get updated profile data after update`);
                 // Fallback to fetching profile directly if the global state method failed

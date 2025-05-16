@@ -1,12 +1,19 @@
 import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
+import { ArconnectSigner, ArweaveSigner, type JWKInterface } from "@dha-team/arbundles"
 import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
 import type { Tag } from "@/lib/types"
-// import { TurboFactory } from "@ardrive/turbo-sdk/web";
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
 import { toast } from "sonner";  // Use sonner for toast messages
+import {
+    TurboAuthenticatedClient,
+    TurboFactory,
+    TurboWebArweaveSigner,
+} from '@ardrive/turbo-sdk/web';
+import { ReadableStream } from 'web-streams-polyfill';
+import type { JWKPublicInterface } from "arweave/web/lib/wallet";
 
 // @ts-ignore
 const serverSource = `${__SERVER_SRC__}`
@@ -168,6 +175,12 @@ export function parseOutput(msg: MessageResult) {
 
 export async function uploadFileAndGetId(file: File): Promise<string> {
     console.log(`[uploadFileAndGetId] Uploading file:`, file.name, file.size, file.type);
+
+
+    // const fileId = await uploadWithTurbo(file)
+    // console.log(`[uploadFileAndGetId] File uploaded successfully:`, fileId);
+    // return fileId;
+
     // Using standard Arweave for reliable uploads
     try {
         const fileId = await uploadWithStandardArweave(file);
@@ -178,6 +191,30 @@ export async function uploadFileAndGetId(file: File): Promise<string> {
         throw error;
     }
 }
+
+// async function uploadWithTurbo(file: File): Promise<string> {
+//     const buffer = await file.arrayBuffer();
+//     const ar = Arweave.init({})
+//     const w = await ar.wallets.generate()
+//     const turbo = TurboFactory.authenticated({ signer: new ArweaveSigner(w as JWKInterface) })
+//     // const turbo = new TurboAuthenticatedClient({ signer: new ArconnectSigner(window.arweaveWallet) })
+//     const fileId = await turbo.uploadFile({
+//         fileStreamFactory: () => new ReadableStream({
+//             start(controller) {
+//                 controller.enqueue(buffer);
+//                 controller.close();
+//             },
+//         }),
+//         fileSizeFactory: () => file.size,
+//         dataItemOpts: {
+//             tags: [
+//                 ...CommonTags,
+//                 { name: "Content-Type", value: file.type }
+//             ]
+//         }
+//     })
+//     return fileId.id
+// }
 
 // Reliable implementation using standard Arweave
 async function uploadWithStandardArweave(file: File): Promise<string> {

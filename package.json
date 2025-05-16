@@ -11,12 +11,13 @@
   },
   "dependencies": {
     "@ar.io/sdk": "^3.10.2",
-    "@ardrive/turbo-sdk": "^1.21.0",
+    "@ardrive/turbo-sdk": "^1.20.0",
     "@arweave-wallet-kit/browser-wallet-strategy": "^0.1.1",
     "@arweave-wallet-kit/core": "^0.1.1",
     "@arweave-wallet-kit/react": "^0.3.2",
     "@arweave-wallet-kit/styles": "^0.1.1",
     "@arweave-wallet-kit/wander-strategy": "^0.1.2",
+    "@dha-team/arbundles": "^1.0.3",
     "@permaweb/aoconnect": "^0.0.84",
     "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-avatar": "^1.1.9",
@@ -59,6 +60,7 @@
     "viem": "^2.29.3",
     "vite-plugin-node-polyfills": "^0.22.0",
     "wagmi": "^2.15.3",
+    "web-streams-polyfill": "^4.1.0",
     "zustand": "^5.0.4"
   },
   "devDependencies": {

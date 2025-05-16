@@ -14,6 +14,10 @@ import {
 } from '@ardrive/turbo-sdk/web';
 import { ReadableStream } from 'web-streams-polyfill';
 import type { JWKPublicInterface } from "arweave/web/lib/wallet";
+import { createLogger } from '@/lib/logger'
+
+// Create a logger for this module
+const logger = createLogger('ao');
 
 // @ts-ignore
 const serverSource = `${__SERVER_SRC__}`
@@ -48,7 +52,7 @@ export async function refreshCurrentServerData() {
         const globalState = useGlobalState.getState();
         return await globalState.refreshServerData();
     } catch (error) {
-        console.error("Failed to refresh server data:", error);
+        logger.error("Failed to refresh server data:", error);
         throw new Error("Failed to refresh server data. Please try again or reload the application.");
     }
 }
@@ -65,12 +69,12 @@ export function to(file: File): Promise<Uint8Array> {
 }
 
 export async function createServer(name: string, icon: File) {
-    console.log("Spawning server...", { name, icon: icon.name });
+    logger.info("Spawning server...", { name, icon: icon.name });
 
     // Read the file as an ArrayBuffer properly
     const iconUint8Array = await to(icon);
 
-    console.log("Icon array buffer created", iconUint8Array.byteLength, icon.type);
+    logger.info("Icon array buffer created", iconUint8Array.byteLength, icon.type);
 
     const serverId = await ao.spawn({
         scheduler: SCHEDULER,
@@ -84,19 +88,19 @@ export async function createServer(name: string, icon: File) {
         data: iconUint8Array
     })
 
-    console.log("Got server id", serverId);
+    logger.info("Got server id", serverId);
 
-    console.log("Loading aoxpress...");
+    logger.info("Loading aoxpress...");
     const aoxpressRes = await runLua(aoxpressSource, serverId)
-    console.log(await parseOutput(aoxpressRes));
-    console.log("aoxpress loaded");
+    logger.info("AoXpress result:", await parseOutput(aoxpressRes));
+    logger.info("aoxpress loaded");
 
-    console.log("Initializing server...");
+    logger.info("Initializing server...");
     const initServerRes = await runLua(serverSource, serverId)
-    console.log(await parseOutput(initServerRes));
-    console.log("Server initialized");
+    logger.info("Server initialization result:", await parseOutput(initServerRes));
+    logger.info("Server initialized");
 
-    console.log("Updating server details...");
+    logger.info("Updating server details...");
     const updateServerRes = await aofetch(`${serverId}/update-server`, {
         method: "POST",
         body: {
@@ -104,24 +108,24 @@ export async function createServer(name: string, icon: File) {
             icon: serverId
         }
     })
-    console.log(updateServerRes);
+    logger.info("Update server response:", JSON.stringify(updateServerRes));
 
     if (updateServerRes.status == 200) {
-        console.log("Server details updated");
+        logger.info("Server details updated");
     } else {
         throw new Error(updateServerRes.error);
     }
 
-    console.log("Joining server...");
+    logger.info("Joining server...");
     const joinServerRes = await aofetch(`${PROFILES}/join-server`, {
         method: "POST",
         body: {
             server_id: serverId
         }
     })
-    console.log(joinServerRes);
+    logger.info("Join server response:", JSON.stringify(joinServerRes));
     if (joinServerRes.status == 200) {
-        console.log("Server joined");
+        logger.info("Server joined");
     } else {
         throw new Error(joinServerRes.error);
     }
@@ -130,7 +134,7 @@ export async function createServer(name: string, icon: File) {
 }
 
 export async function runLua(code: string, process: string, tags?: Tag[]) {
-    console.log("Running lua", code);
+    logger.info("Running lua", code);
 
     if (tags) {
         tags = [...CommonTags, ...tags];
@@ -174,7 +178,7 @@ export function parseOutput(msg: MessageResult) {
 }
 
 export async function uploadFileAndGetId(file: File): Promise<string> {
-    console.log(`[uploadFileAndGetId] Uploading file:`, file.name, file.size, file.type);
+    logger.info(`[uploadFileAndGetId] Uploading file:`, file.name, file.size, file.type);
 
 
     // const fileId = await uploadWithTurbo(file)
@@ -184,10 +188,10 @@ export async function uploadFileAndGetId(file: File): Promise<string> {
     // Using standard Arweave for reliable uploads
     try {
         const fileId = await uploadWithStandardArweave(file);
-        console.log(`[uploadFileAndGetId] File uploaded successfully:`, fileId);
+        logger.info(`[uploadFileAndGetId] File uploaded successfully:`, fileId);
         return fileId;
     } catch (error) {
-        console.error(`[uploadFileAndGetId] Upload failed:`, error);
+        logger.error(`[uploadFileAndGetId] Upload failed:`, error);
         throw error;
     }
 }
@@ -218,7 +222,7 @@ export async function uploadFileAndGetId(file: File): Promise<string> {
 
 // Reliable implementation using standard Arweave
 async function uploadWithStandardArweave(file: File): Promise<string> {
-    console.log(`[uploadWithStandardArweave] Starting upload:`, file.name);
+    logger.info(`[uploadWithStandardArweave] Starting upload:`, file.name);
     const ar = Arweave.init({
         host: "arweave.net",
         port: 443,
@@ -226,22 +230,22 @@ async function uploadWithStandardArweave(file: File): Promise<string> {
     });
 
     const fileData = await to(file);
-    console.log(`[uploadWithStandardArweave] File converted to Uint8Array:`, fileData.byteLength);
+    logger.info(`[uploadWithStandardArweave] File converted to Uint8Array:`, fileData.byteLength);
 
     const tx = await ar.createTransaction({ data: fileData }, "use_wallet");
-    console.log(`[uploadWithStandardArweave] Transaction created:`, tx.id);
+    logger.info(`[uploadWithStandardArweave] Transaction created:`, tx.id);
 
     tx.addTag("Content-Type", file.type);
     tx.addTag("App-Name", "Subspace-Chat");
     // @ts-ignore
     tx.addTag("App-Version", window.APP_VERSION);
 
-    console.log(`[uploadWithStandardArweave] Signing transaction...`);
+    logger.info(`[uploadWithStandardArweave] Signing transaction...`);
     await ar.transactions.sign(tx, "use_wallet");
-    console.log(`[uploadWithStandardArweave] Transaction signed, posting...`);
+    logger.info(`[uploadWithStandardArweave] Transaction signed, posting...`);
 
     const res = await ar.transactions.post(tx);
-    console.log(`[uploadWithStandardArweave] Transaction posted, status:`, res.status);
+    logger.info(`[uploadWithStandardArweave] Transaction posted, status:`, res.status);
 
     if (res.status == 200) {
         return tx.id;
@@ -251,14 +255,14 @@ async function uploadWithStandardArweave(file: File): Promise<string> {
 }
 
 export async function getJoinedServers(address: string): Promise<string[]> {
-    console.log(`[getJoinedServers] Fetching joined servers for address: ${address}`);
+    logger.info(`[getJoinedServers] Fetching joined servers for address: ${address}`);
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
         body: {
             id: address
         },
     })
-    console.log(`[getJoinedServers] Response:`, res);
+    logger.info(`[getJoinedServers] Response:`, res);
 
     if (res.status == 200) {
         // Cache the entire profile response in global state
@@ -269,18 +273,18 @@ export async function getJoinedServers(address: string): Promise<string[]> {
             // Cache the profile data - use type assertion for the response
             const responseData = res.json as { profile: { servers_joined: string, [key: string]: any } };
             if (responseData && responseData.profile) {
-                console.log(`[getJoinedServers] Caching user profile data for ${address}`);
+                logger.info(`[getJoinedServers] Caching user profile data for ${address}`);
                 globalState.setUserProfile(responseData);
             }
         } catch (error) {
-            console.warn(`[getJoinedServers] Failed to cache profile data:`, error);
+            logger.warn(`[getJoinedServers] Failed to cache profile data:`, error);
         }
 
         // Extract and return the joined servers
         const responseData = res.json as { profile: { servers_joined: string } };
         const joinedServersString = responseData.profile.servers_joined === "{}" ? "[]" : responseData.profile.servers_joined;
         const servers = JSON.parse(joinedServersString);
-        console.log(`[getJoinedServers] Parsed servers:`, servers);
+        logger.info(`[getJoinedServers] Parsed servers:`, servers);
         return servers;
     } else {
         throw new Error(res.error);
@@ -288,9 +292,9 @@ export async function getJoinedServers(address: string): Promise<string[]> {
 }
 
 export async function getServerInfo(id: string) {
-    console.log(`[getServerInfo] Fetching server info for: ${id}`);
+    logger.info(`[getServerInfo] Fetching server info for: ${id}`);
     const res = await aofetch(`${id}/`);
-    console.log(`[getServerInfo] Response:`, res);
+    logger.info(`[getServerInfo] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -316,38 +320,38 @@ const memberRequestLimiter = {
         const count = this.serverRequests.get(serverId) || 0;
         this.serverRequests.set(serverId, count + 1);
         this.lastAttemptTimes.set(serverId, Date.now());
-        console.log(`[memberRequestLimiter] Recorded attempt ${count + 1}/${this.MAX_REQUESTS_PER_SERVER} for server ${serverId}`);
+        logger.info(`[memberRequestLimiter] Recorded attempt ${count + 1}/${this.MAX_REQUESTS_PER_SERVER} for server ${serverId}`);
     },
     isInvalidMembersServer: function (serverId: string): boolean {
         try {
             const globalState = useGlobalState.getState();
             return globalState.invalidMemberServers.has(serverId);
         } catch (error) {
-            console.warn('[memberRequestLimiter] Error checking invalid members server:', error);
+            logger.warn('[memberRequestLimiter] Error checking invalid members server:', error);
             return false;
         }
     }
 };
 
 export async function getMembers(serverId: string) {
-    console.log(`[getMembers] Fetching members for server: ${serverId}`);
+    logger.info(`[getMembers] Fetching members for server: ${serverId}`);
 
     // Check if this server is already known to have invalid members
     if (memberRequestLimiter.isInvalidMembersServer(serverId)) {
-        console.log(`[getMembers] Server ${serverId} is known to have invalid members endpoint, aborting request`);
+        logger.info(`[getMembers] Server ${serverId} is known to have invalid members endpoint, aborting request`);
         throw new Error("Server does not support member listing");
     }
 
     // Check if we've exceeded request limits
     if (memberRequestLimiter.isServerBlocked(serverId)) {
-        console.log(`[getMembers] Server ${serverId} is blocked from further requests due to rate limiting`);
+        logger.info(`[getMembers] Server ${serverId} is blocked from further requests due to rate limiting`);
 
         // Mark as invalid in the global state to prevent future attempts
         try {
             // Mark this server as having an invalid members endpoint
             markServerInvalidMembers(serverId);
         } catch (error) {
-            console.warn('[getMembers] Error marking server invalid after rate limit:', error);
+            logger.warn('[getMembers] Error marking server invalid after rate limit:', error);
         }
 
         throw new Error("Rate limit exceeded for member requests to this server");
@@ -358,7 +362,7 @@ export async function getMembers(serverId: string) {
 
     try {
         const res = await aofetch(`${serverId}/get-members`);
-        console.log(`[getMembers] Response:`, res);
+        logger.info(`[getMembers] Response:`, res);
         if (res.status == 200) {
             return res.json;
         } else {
@@ -367,7 +371,7 @@ export async function getMembers(serverId: string) {
             throw new Error(res.error || "Failed to get members");
         }
     } catch (error) {
-        console.error(`[getMembers] Error fetching members for ${serverId}:`, error);
+        logger.error(`[getMembers] Error fetching members for ${serverId}:`, error);
 
         // Mark the server as invalid if we get a specific error
         if (error instanceof Error) {
@@ -394,15 +398,15 @@ function markServerInvalidMembers(serverId: string) {
         // Trigger a fetch that will fail and properly update the state
         globalState.fetchServerMembers(serverId, true)
             .catch(() => {
-                console.log(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
+                logger.info(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
             });
     } catch (error) {
-        console.warn('[markServerInvalidMembers] Error:', error);
+        logger.warn('[markServerInvalidMembers] Error:', error);
     }
 }
 
 export async function updateServer(id: string, name: string, icon: string) {
-    console.log(`[updateServer] Updating server: ${id}`, { name, icon });
+    logger.info(`[updateServer] Updating server: ${id}`, { name, icon });
     const res = await aofetch(`${id}/update-server`, {
         method: "POST",
         body: {
@@ -410,13 +414,13 @@ export async function updateServer(id: string, name: string, icon: string) {
             icon
         }
     });
-    console.log(`[updateServer] Response:`, res);
+    logger.info(`[updateServer] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[updateServer] Failed to refresh data:', error);
+            logger.warn('[updateServer] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -425,7 +429,7 @@ export async function updateServer(id: string, name: string, icon: string) {
 }
 
 export async function createCategory(serverId: string, name: string, order?: number) {
-    console.log(`[createCategory] Creating category in server: ${serverId}`, { name, order });
+    logger.info(`[createCategory] Creating category in server: ${serverId}`, { name, order });
     const body: any = {
         name: name
     };
@@ -437,19 +441,19 @@ export async function createCategory(serverId: string, name: string, order?: num
         body.order_id = 1; // Default value
     }
 
-    console.log(`[createCategory] Sending request with body:`, body);
+    logger.info(`[createCategory] Sending request with body:`, body);
 
     const res = await aofetch(`${serverId}/create-category`, {
         method: "POST",
         body: body
     });
-    console.log(`[createCategory] Response:`, res);
+    logger.info(`[createCategory] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[createCategory] Failed to refresh data:', error);
+            logger.warn('[createCategory] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -458,7 +462,7 @@ export async function createCategory(serverId: string, name: string, order?: num
 }
 
 export async function updateCategory(serverId: string, id: number, name: string, order?: number) {
-    console.log(`[updateCategory] Updating category in server: ${serverId}`, { id, name, order });
+    logger.info(`[updateCategory] Updating category in server: ${serverId}`, { id, name, order });
     const body: any = {
         id: id,
         name: name
@@ -469,19 +473,19 @@ export async function updateCategory(serverId: string, id: number, name: string,
         body.order_id = order;
     }
 
-    console.log(`[updateCategory] Sending request with body:`, body);
+    logger.info(`[updateCategory] Sending request with body:`, body);
 
     const res = await aofetch(`${serverId}/update-category`, {
         method: "POST",
         body: body
     });
-    console.log(`[updateCategory] Response:`, res);
+    logger.info(`[updateCategory] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[updateCategory] Failed to refresh data:', error);
+            logger.warn('[updateCategory] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -490,20 +494,20 @@ export async function updateCategory(serverId: string, id: number, name: string,
 }
 
 export async function deleteCategory(serverId: string, id: number) {
-    console.log(`[deleteCategory] Deleting category in server: ${serverId}`, { id });
+    logger.info(`[deleteCategory] Deleting category in server: ${serverId}`, { id });
     const res = await aofetch(`${serverId}/delete-category`, {
         method: "POST",
         body: {
             id
         }
     });
-    console.log(`[deleteCategory] Response:`, res);
+    logger.info(`[deleteCategory] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[deleteCategory] Failed to refresh data:', error);
+            logger.warn('[deleteCategory] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -512,7 +516,7 @@ export async function deleteCategory(serverId: string, id: number) {
 }
 
 export async function createChannel(serverId: string, name: string, categoryId?: number, order?: number) {
-    console.log(`[createChannel] Creating channel in server: ${serverId}`, { name, categoryId, order });
+    logger.info(`[createChannel] Creating channel in server: ${serverId}`, { name, categoryId, order });
     const body: any = {
         name: name
     };
@@ -527,19 +531,19 @@ export async function createChannel(serverId: string, name: string, categoryId?:
     }
     // Let the server determine the next appropriate order_id
 
-    console.log(`[createChannel] Sending request with body:`, body);
+    logger.info(`[createChannel] Sending request with body:`, body);
 
     const res = await aofetch(`${serverId}/create-channel`, {
         method: "POST",
         body: body
     });
-    console.log(`[createChannel] Response:`, res);
+    logger.info(`[createChannel] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[createChannel] Failed to refresh data:', error);
+            logger.warn('[createChannel] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -548,7 +552,7 @@ export async function createChannel(serverId: string, name: string, categoryId?:
 }
 
 export async function updateChannel(serverId: string, id: number, name?: string, categoryId?: number | null, order?: number) {
-    console.log(`[updateChannel] Updating channel in server: ${serverId}`, { id, name, categoryId, order });
+    logger.info(`[updateChannel] Updating channel in server: ${serverId}`, { id, name, categoryId, order });
     const body: any = {
         id: id
     };
@@ -572,19 +576,19 @@ export async function updateChannel(serverId: string, id: number, name?: string,
         body.order_id = order;
     }
 
-    console.log(`[updateChannel] Sending request with body:`, body);
+    logger.info(`[updateChannel] Sending request with body:`, body);
 
     const res = await aofetch(`${serverId}/update-channel`, {
         method: "POST",
         body: body
     });
-    console.log(`[updateChannel] Response:`, res);
+    logger.info(`[updateChannel] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[updateChannel] Failed to refresh data:', error);
+            logger.warn('[updateChannel] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -593,20 +597,20 @@ export async function updateChannel(serverId: string, id: number, name?: string,
 }
 
 export async function deleteChannel(serverId: string, id: number) {
-    console.log(`[deleteChannel] Deleting channel in server: ${serverId}`, { id });
+    logger.info(`[deleteChannel] Deleting channel in server: ${serverId}`, { id });
     const res = await aofetch(`${serverId}/delete-channel`, {
         method: "POST",
         body: {
             id
         }
     });
-    console.log(`[deleteChannel] Response:`, res);
+    logger.info(`[deleteChannel] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[deleteChannel] Failed to refresh data:', error);
+            logger.warn('[deleteChannel] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -615,14 +619,14 @@ export async function deleteChannel(serverId: string, id: number) {
 }
 
 export async function getMessages(serverId: string, channelId: number) {
-    console.log(`[getMessages] Fetching messages for channel: ${channelId} in server: ${serverId}`);
+    logger.info(`[getMessages] Fetching messages for channel: ${channelId} in server: ${serverId}`);
     const res = await aofetch(`${serverId}/get-messages`, {
         method: "GET",
         body: {
             channel_id: channelId
         }
     });
-    console.log(`[getMessages] Response:`, res);
+    logger.info(`[getMessages] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -631,7 +635,7 @@ export async function getMessages(serverId: string, channelId: number) {
 }
 
 export async function sendMessage(serverId: string, channelId: number, content: string) {
-    console.log(`[sendMessage] Sending message to channel: ${channelId} in server: ${serverId}`, { content });
+    logger.info(`[sendMessage] Sending message to channel: ${channelId} in server: ${serverId}`, { content });
     const res = await aofetch(`${serverId}/send-message`, {
         method: "POST",
         body: {
@@ -639,7 +643,7 @@ export async function sendMessage(serverId: string, channelId: number, content: 
             content
         }
     });
-    console.log(`[sendMessage] Response:`, res);
+    logger.info(`[sendMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -648,7 +652,7 @@ export async function sendMessage(serverId: string, channelId: number, content: 
 }
 
 export async function editMessage(serverId: string, msgId: string, content: string) {
-    console.log(`[editMessage] Editing message: ${msgId} in server: ${serverId}`, { content });
+    logger.info(`[editMessage] Editing message: ${msgId} in server: ${serverId}`, { content });
     const res = await aofetch(`${serverId}/edit-message`, {
         method: "POST",
         body: {
@@ -656,7 +660,7 @@ export async function editMessage(serverId: string, msgId: string, content: stri
             content
         }
     });
-    console.log(`[editMessage] Response:`, res);
+    logger.info(`[editMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -665,14 +669,14 @@ export async function editMessage(serverId: string, msgId: string, content: stri
 }
 
 export async function deleteMessage(serverId: string, msgId: string) {
-    console.log(`[deleteMessage] Deleting message: ${msgId} in server: ${serverId}`);
+    logger.info(`[deleteMessage] Deleting message: ${msgId} in server: ${serverId}`);
     const res = await aofetch(`${serverId}/delete-message`, {
         method: "POST",
         body: {
             msg_id: msgId
         }
     });
-    console.log(`[deleteMessage] Response:`, res);
+    logger.info(`[deleteMessage] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -681,7 +685,7 @@ export async function deleteMessage(serverId: string, msgId: string) {
 }
 
 export async function updateNickname(serverId: string, nickname: string) {
-    console.log(`[updateNickname] Updating nickname in server: ${serverId}`, { nickname });
+    logger.info(`[updateNickname] Updating nickname in server: ${serverId}`, { nickname });
 
     try {
         // Use an empty string if nickname is null or undefined to clear the nickname
@@ -693,7 +697,7 @@ export async function updateNickname(serverId: string, nickname: string) {
                 nickname: safeNickname
             }
         });
-        console.log(`[updateNickname] Response:`, res);
+        logger.info(`[updateNickname] Response:`, res);
 
         if (res.status == 200) {
             // Directly update local cache for instant UI updates
@@ -702,23 +706,23 @@ export async function updateNickname(serverId: string, nickname: string) {
                 const globalState = useGlobalState.getState();
                 globalState.updateMemberNickname(serverId, activeAddress, safeNickname);
             } catch (error) {
-                console.warn('[updateNickname] Failed to update local cache:', error);
+                logger.warn('[updateNickname] Failed to update local cache:', error);
             }
 
             // Still trigger the standard refresh as a fallback
             try {
                 await refreshCurrentServerData();
             } catch (error) {
-                console.warn('[updateNickname] Failed to refresh data:', error);
+                logger.warn('[updateNickname] Failed to refresh data:', error);
             }
             return res.json;
         } else {
-            console.error(`[updateNickname] Server error:`, res.error || res.status);
+            logger.error(`[updateNickname] Server error:`, res.error || res.status);
             toast.error("Server does not support nickname updates");
             return { success: false, error: res.error || "Server error" };
         }
     } catch (error) {
-        console.error('[updateNickname] Error updating nickname:', error);
+        logger.error('[updateNickname] Error updating nickname:', error);
         toast.error("Server does not support nickname updates yet");
         // Return a safe response instead of throwing
         return { success: false, error: "Endpoint not available" };
@@ -726,12 +730,12 @@ export async function updateNickname(serverId: string, nickname: string) {
 }
 
 export async function getProfile(address?: string) {
-    console.log(`[getProfile] Fetching profile for:`, address || "current user");
+    logger.info(`[getProfile] Fetching profile for:`, address || "current user");
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
         body: address ? { id: address } : undefined
     });
-    console.log(`[getProfile] Response:`, res);
+    logger.info(`[getProfile] Response:`, res);
 
     if (res.status == 200) {
         // Type assertion to ensure we treat this as a Record
@@ -740,11 +744,11 @@ export async function getProfile(address?: string) {
         // Always try to fetch primary name if address is provided
         if (address) {
             try {
-                console.log(`[getProfile] Fetching primary name for ${address}`);
+                logger.info(`[getProfile] Fetching primary name for ${address}`);
                 const primaryNameData = await ario.getPrimaryName({ address });
 
                 if (primaryNameData && primaryNameData.name) {
-                    console.log(`[getProfile] Found primary name: ${primaryNameData.name}`);
+                    logger.info(`[getProfile] Found primary name: ${primaryNameData.name}`);
 
                     // Ensure profile structure exists
                     if (!profileData.profile) {
@@ -763,13 +767,13 @@ export async function getProfile(address?: string) {
                             primaryName: primaryNameData.name,
                             timestamp: Date.now()
                         });
-                        console.log(`[getProfile] Updated user profiles cache with primary name directly`);
+                        logger.info(`[getProfile] Updated user profiles cache with primary name directly`);
                     } catch (syncError) {
-                        console.warn(`[getProfile] Failed to sync primary name to cache:`, syncError);
+                        logger.warn(`[getProfile] Failed to sync primary name to cache:`, syncError);
                     }
                 }
             } catch (error) {
-                console.warn(`[getProfile] Failed to fetch primary name:`, error);
+                logger.warn(`[getProfile] Failed to fetch primary name:`, error);
                 // Continue without primary name
             }
         }
@@ -781,7 +785,7 @@ export async function getProfile(address?: string) {
 }
 
 export async function updateProfile(username?: string, pfp?: string) {
-    console.log(`[updateProfile] Updating profile:`, { username, pfp });
+    logger.info(`[updateProfile] Updating profile:`, { username, pfp });
     const res = await aofetch(`${PROFILES}/update-profile`, {
         method: "POST",
         body: {
@@ -789,7 +793,7 @@ export async function updateProfile(username?: string, pfp?: string) {
             pfp
         }
     });
-    console.log(`[updateProfile] Response:`, res);
+    logger.info(`[updateProfile] Response:`, res);
     if (res.status == 200) {
         return res.json;
     } else {
@@ -798,20 +802,20 @@ export async function updateProfile(username?: string, pfp?: string) {
 }
 
 export async function joinServer(serverId: string) {
-    console.log(`[joinServer] Joining server: ${serverId}`);
+    logger.info(`[joinServer] Joining server: ${serverId}`);
     const res = await aofetch(`${PROFILES}/join-server`, {
         method: "POST",
         body: {
             server_id: serverId
         }
     });
-    console.log(`[joinServer] Response:`, res);
+    logger.info(`[joinServer] Response:`, res);
     if (res.status == 200) {
         // Trigger refresh after successful operation
         try {
             await refreshCurrentServerData();
         } catch (error) {
-            console.warn('[joinServer] Failed to refresh data:', error);
+            logger.warn('[joinServer] Failed to refresh data:', error);
         }
         return res.json;
     } else {
@@ -825,34 +829,34 @@ export async function joinServer(serverId: string) {
  */
 export async function leaveServer(serverId: string): Promise<boolean> {
     try {
-        console.log(`[leaveServer] Leaving server: ${serverId}`);
+        logger.info(`[leaveServer] Leaving server: ${serverId}`);
         const res = await aofetch(`${PROFILES}/leave-server`, {
             method: "POST",
             body: {
                 server_id: serverId
             }
         });
-        console.log(`[leaveServer] Response:`, res);
+        logger.info(`[leaveServer] Response:`, res);
 
         if (res.status == 200) {
             // Trigger refresh after successful operation
             try {
                 await refreshCurrentServerData();
             } catch (error) {
-                console.warn('[leaveServer] Failed to refresh data:', error);
+                logger.warn('[leaveServer] Failed to refresh data:', error);
             }
             return true;
         } else {
             throw new Error(res.error);
         }
     } catch (error) {
-        console.error("Error leaving server:", error);
+        logger.error("Error leaving server:", error);
         throw error;
     }
 }
 
 export async function getNotifications(address: string) {
-    console.log(`[getNotifications] Fetching notifications for address: ${address}`);
+    logger.info(`[getNotifications] Fetching notifications for address: ${address}`);
 
     try {
         const res = await aofetch(`${PROFILES}/get-notifications`, {
@@ -862,13 +866,13 @@ export async function getNotifications(address: string) {
             }
         });
 
-        console.log(`[getNotifications] Response:`, res);
+        logger.info(`[getNotifications] Response:`, res);
 
         if (res.status == 200) {
             const responseData = res.json as { notifications: any[] };
 
             if (!responseData.notifications || responseData.notifications.length === 0) {
-                console.log('[getNotifications] No new notifications');
+                logger.info('[getNotifications] No new notifications');
                 return {
                     messages: [],
                     isEmpty: true
@@ -889,7 +893,7 @@ export async function getNotifications(address: string) {
                 timestamp: notification.timestamp.toString()
             }));
 
-            console.log(`[getNotifications] Found ${messages.length} notifications`);
+            logger.info(`[getNotifications] Found ${messages.length} notifications`);
 
             return {
                 messages: messages,
@@ -899,14 +903,14 @@ export async function getNotifications(address: string) {
             throw new Error(res.error);
         }
     } catch (error) {
-        console.error("[getNotifications] Error fetching notifications:", error);
+        logger.error("[getNotifications] Error fetching notifications:", error);
         throw error;
     }
 }
 
 // Add a new function to mark notifications as read
 export async function markNotificationsAsRead(serverId: string, channelId: number) {
-    console.log(`[markNotificationsAsRead] Marking notifications as read for server: ${serverId}, channel: ${channelId}`);
+    logger.info(`[markNotificationsAsRead] Marking notifications as read for server: ${serverId}, channel: ${channelId}`);
 
     try {
         const res = await aofetch(`${PROFILES}/mark-read`, {
@@ -917,7 +921,7 @@ export async function markNotificationsAsRead(serverId: string, channelId: numbe
             }
         });
 
-        console.log(`[markNotificationsAsRead] Response:`, res);
+        logger.info(`[markNotificationsAsRead] Response:`, res);
 
         if (res.status == 200) {
             return res.json;
@@ -925,7 +929,7 @@ export async function markNotificationsAsRead(serverId: string, channelId: numbe
             throw new Error(res.error);
         }
     } catch (error) {
-        console.error("[markNotificationsAsRead] Error marking notifications as read:", error);
+        logger.error("[markNotificationsAsRead] Error marking notifications as read:", error);
         throw error;
     }
 }

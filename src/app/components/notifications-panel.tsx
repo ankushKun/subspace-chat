@@ -203,7 +203,7 @@ export default function NotificationsPanel() {
         fetchNotifications();
 
         // Set up polling interval
-        const intervalId = setInterval(fetchNotifications, 5000);
+        const intervalId = setInterval(fetchNotifications, 4000);
 
         return () => clearInterval(intervalId);
     }, [address]);

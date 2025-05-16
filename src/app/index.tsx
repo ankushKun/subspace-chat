@@ -310,8 +310,8 @@ export default function App() {
         // Run immediately on mount
         checkNotifications();
 
-        // Set up interval - check every 3 seconds
-        const intervalId = setInterval(checkNotifications, 3000);
+        // Set up interval - check every 4 seconds
+        const intervalId = setInterval(checkNotifications, 4000);
 
         // Cleanup interval on unmount
         return () => clearInterval(intervalId);

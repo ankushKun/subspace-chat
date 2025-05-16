@@ -4,6 +4,10 @@ import { useEffect, useState, useRef } from 'react'
 import { getServerInfo, getMembers, getJoinedServers, getProfile } from '@/lib/ao'
 import { persist } from 'zustand/middleware'
 import type { WanderConnect } from '@wanderapp/connect'
+import { createLogger } from '@/lib/logger'
+
+// Create a logger for this module
+const logger = createLogger('global-state')
 
 // Define API response interfaces
 interface MembersResponse {
@@ -87,7 +91,7 @@ const loadServerCache = (): Map<string, CachedServer> => {
             return new Map(Object.entries(parsed))
         }
     } catch (error) {
-        console.error('Failed to load server cache from storage:', error)
+        logger.error('Failed to load server cache from storage:', error)
     }
     return new Map<string, CachedServer>()
 }
@@ -98,7 +102,7 @@ const saveServerCache = (cache: Map<string, CachedServer>): void => {
         const cacheObj = Object.fromEntries(cache.entries())
         localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheObj))
     } catch (error) {
-        console.error('Failed to save server cache to storage:', error)
+        logger.error('Failed to save server cache to storage:', error)
     }
 }
 
@@ -112,7 +116,7 @@ const loadMessageCache = (): Map<string, CachedMessages> => {
             return new Map(Object.entries(parsed))
         }
     } catch (error) {
-        console.error('Failed to load message cache from storage:', error)
+        logger.error('Failed to load message cache from storage:', error)
     }
     return new Map<string, CachedMessages>()
 }
@@ -123,7 +127,7 @@ const saveMessageCache = (cache: Map<string, CachedMessages>): void => {
         const cacheObj = Object.fromEntries(cache.entries())
         localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(cacheObj))
     } catch (error) {
-        console.error('Failed to save message cache to storage:', error)
+        logger.error('Failed to save message cache to storage:', error)
     }
 }
 
@@ -137,7 +141,7 @@ const loadMembersCache = (): Map<string, CachedMembers> => {
             return new Map(Object.entries(parsed))
         }
     } catch (error) {
-        console.error('Failed to load members cache from storage:', error)
+        logger.error('Failed to load members cache from storage:', error)
     }
     return new Map<string, CachedMembers>()
 }
@@ -148,7 +152,7 @@ const saveMembersCache = (cache: Map<string, CachedMembers>): void => {
         const cacheObj = Object.fromEntries(cache.entries())
         localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(cacheObj))
     } catch (error) {
-        console.error('Failed to save members cache to storage:', error)
+        logger.error('Failed to save members cache to storage:', error)
     }
 }
 
@@ -160,7 +164,7 @@ const loadUserProfileCache = (): CachedUserProfile | null => {
             return JSON.parse(storedCache)
         }
     } catch (error) {
-        console.error('Failed to load user profile cache from storage:', error)
+        logger.error('Failed to load user profile cache from storage:', error)
     }
     return null
 }
@@ -170,7 +174,7 @@ const saveUserProfileCache = (cache: CachedUserProfile): void => {
     try {
         localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(cache))
     } catch (error) {
-        console.error('Failed to save user profile cache to storage:', error)
+        logger.error('Failed to save user profile cache to storage:', error)
     }
 }
 
@@ -182,7 +186,7 @@ const loadServerListCache = (): CachedServerList | null => {
             return JSON.parse(storedCache)
         }
     } catch (error) {
-        console.error('Failed to load server list cache from storage:', error)
+        logger.error('Failed to load server list cache from storage:', error)
     }
     return null
 }
@@ -192,7 +196,7 @@ const saveServerListCache = (cache: CachedServerList): void => {
     try {
         localStorage.setItem(SERVER_LIST_CACHE_KEY, JSON.stringify(cache))
     } catch (error) {
-        console.error('Failed to save server list cache to storage:', error)
+        logger.error('Failed to save server list cache to storage:', error)
     }
 }
 
@@ -204,7 +208,7 @@ const loadUserProfilesCache = (): CachedUserProfiles => {
             return JSON.parse(storedCache)
         }
     } catch (error) {
-        console.error('Failed to load user profiles cache from storage:', error)
+        logger.error('Failed to load user profiles cache from storage:', error)
     }
     return {}
 }
@@ -214,7 +218,7 @@ const saveUserProfilesCache = (cache: CachedUserProfiles): void => {
     try {
         localStorage.setItem(USER_PROFILES_CACHE_KEY, JSON.stringify(cache))
     } catch (error) {
-        console.error('Failed to save user profiles cache to storage:', error)
+        logger.error('Failed to save user profiles cache to storage:', error)
     }
 }
 
@@ -364,12 +368,12 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             serverListCache &&
             serverListCache.address === address &&
             now - serverListCache.timestamp <= SERVER_LIST_CACHE_TTL) {
-            console.log(`[fetchJoinedServers] Using cached server list for ${address}`);
+            logger.log(`[fetchJoinedServers] Using cached server list for ${address}`);
             return serverListCache.data;
         }
 
         try {
-            console.log(`[fetchJoinedServers] Fetching joined servers for ${address}`);
+            logger.log(`[fetchJoinedServers] Fetching joined servers for ${address}`);
             const serverIds = await getJoinedServers(address);
 
             // Cache the result
@@ -377,11 +381,11 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
             return serverIds;
         } catch (error) {
-            console.error(`[fetchJoinedServers] Error fetching joined servers:`, error);
+            logger.error(`[fetchJoinedServers] Error fetching joined servers:`, error);
 
             // If we have cached data for this user, return it even if expired
             if (serverListCache && serverListCache.address === address) {
-                console.log(`[fetchJoinedServers] Using expired cache as fallback`);
+                logger.log(`[fetchJoinedServers] Using expired cache as fallback`);
                 return serverListCache.data;
             }
 
@@ -449,12 +453,12 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     refreshServerData: async () => {
         const { activeServerId } = get();
         if (activeServerId) {
-            console.log(`[refreshServerData] Refreshing server data for ${activeServerId}`);
+            logger.log(`[refreshServerData] Refreshing server data for ${activeServerId}`);
             await get().fetchServerInfo(activeServerId, true);
             // Also refresh members data
             await get().fetchServerMembers(activeServerId, true);
         } else {
-            console.log(`[refreshServerData] No active server to refresh`);
+            logger.log(`[refreshServerData] No active server to refresh`);
         }
     },
 
@@ -476,7 +480,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             saveServerCache(updatedCache);
         }
 
-        console.log(`[markServerAsInvalid] Marked server as invalid: ${serverId}`);
+        logger.log(`[markServerAsInvalid] Marked server as invalid: ${serverId}`);
     },
 
     isServerValid: (serverId: string) => {
@@ -524,9 +528,9 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             // Update state
             set({ serverMembers: updatedCache });
 
-            console.log(`[updateMemberNickname] Updated nickname for member ${memberId} in server ${serverId}`);
+            logger.log(`[updateMemberNickname] Updated nickname for member ${memberId} in server ${serverId}`);
         } else {
-            console.log(`[updateMemberNickname] Member ${memberId} not found in server ${serverId} cache`);
+            logger.log(`[updateMemberNickname] Member ${memberId} not found in server ${serverId} cache`);
         }
     },
 
@@ -536,21 +540,21 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         // Skip if this server is already known to be invalid
         if (invalidServerIds.has(serverId)) {
-            console.log(`[fetchServerMembers] Skipping fetch for invalid server: ${serverId}`);
+            logger.log(`[fetchServerMembers] Skipping fetch for invalid server: ${serverId}`);
             return;
         }
 
         // When forceRefresh is true, we'll retry even if previously marked as invalid
         // ONLY if it's explicitly a user action (isLoadingServer is true)
         if (invalidMemberServers.has(serverId) && (!forceRefresh || !get().isLoadingServer)) {
-            console.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
+            logger.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
             return;
         }
 
         // If this is a force refresh from a user action for a server previously marked as invalid,
         // remove it from the invalid set to allow retrying
         if (forceRefresh && invalidMemberServers.has(serverId) && get().isLoadingServer) {
-            console.log(`[fetchServerMembers] Retrying previously invalid member server due to user action: ${serverId}`);
+            logger.log(`[fetchServerMembers] Retrying previously invalid member server due to user action: ${serverId}`);
             const updatedInvalidMemberServers = new Set(invalidMemberServers);
             updatedInvalidMemberServers.delete(serverId);
             set({
@@ -563,13 +567,13 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         const now = Date.now();
 
         if (!forceRefresh && cachedMembers && now - cachedMembers.timestamp <= MEMBERS_CACHE_TTL) {
-            console.log(`[fetchServerMembers] Using cached members for ${serverId}`);
+            logger.log(`[fetchServerMembers] Using cached members for ${serverId}`);
             return;
         }
 
         try {
             set({ isLoadingMembers: true });
-            console.log(`[fetchServerMembers] Fetching members for ${serverId}`);
+            logger.log(`[fetchServerMembers] Fetching members for ${serverId}`);
 
             const response = await getMembers(serverId) as MembersResponse;
 
@@ -590,9 +594,9 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                     isLoadingMembers: false
                 });
 
-                console.log(`[fetchServerMembers] Successfully fetched ${response.members.length} members for ${serverId}`);
+                logger.log(`[fetchServerMembers] Successfully fetched ${response.members.length} members for ${serverId}`);
             } else {
-                console.error(`[fetchServerMembers] Invalid response format for ${serverId}:`, response);
+                logger.error(`[fetchServerMembers] Invalid response format for ${serverId}:`, response);
                 // Mark this server as having an invalid member endpoint
                 const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
                 updatedInvalidMemberServers.add(serverId);
@@ -602,7 +606,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 });
             }
         } catch (error) {
-            console.error(`[fetchServerMembers] Error fetching members for ${serverId}:`, error);
+            logger.error(`[fetchServerMembers] Error fetching members for ${serverId}:`, error);
             // Mark this server as having an invalid member endpoint
             const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
             updatedInvalidMemberServers.add(serverId);
@@ -623,7 +627,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         // BUT we have cached data, return the cached data instead
         if (invalidMemberServers.has(serverId)) {
             if (cachedMembers) {
-                console.log(`[getServerMembers] Using cached data for server with invalid members endpoint: ${serverId}`);
+                logger.log(`[getServerMembers] Using cached data for server with invalid members endpoint: ${serverId}`);
                 return cachedMembers.data;
             }
             // Only return empty array if we have no cached data
@@ -660,11 +664,11 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         try {
             set({ isPrefetchingData: true });
-            console.log('[prefetchAllServerData] Starting background prefetch of all server data');
+            logger.log('[prefetchAllServerData] Starting background prefetch of all server data');
 
             // Get list of joined servers
             const serverIds = await fetchJoinedServers(address, false);
-            console.log(`[prefetchAllServerData] Found ${serverIds.length} servers to prefetch`);
+            logger.log(`[prefetchAllServerData] Found ${serverIds.length} servers to prefetch`);
 
             if (serverIds.length === 0) {
                 set({ isPrefetchingData: false });
@@ -682,7 +686,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 const needsRefresh = !cachedServer || (now - cachedServer.timestamp > CACHE_TTL);
 
                 if (needsRefresh) {
-                    console.log(`[prefetchAllServerData] Prefetching server ${serverId}`);
+                    logger.log(`[prefetchAllServerData] Prefetching server ${serverId}`);
                     await fetchServerInfo(serverId, true);
                     // Small delay to avoid overwhelming the API
                     await new Promise(resolve => setTimeout(resolve, 300));
@@ -691,16 +695,16 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                     await fetchServerMembers(serverId);
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
-                    console.log(`[prefetchAllServerData] Using cached data for ${serverId}`);
+                    logger.log(`[prefetchAllServerData] Using cached data for ${serverId}`);
                     // Even if we have cached data, we might still want to update member info
                     fetchServerMembers(serverId, false);
                 }
             }
         } catch (error) {
-            console.error('[prefetchAllServerData] Error prefetching server data:', error);
+            logger.error('[prefetchAllServerData] Error prefetching server data:', error);
         } finally {
             set({ isPrefetchingData: false });
-            console.log('[prefetchAllServerData] Background prefetch completed');
+            logger.log('[prefetchAllServerData] Background prefetch completed');
         }
     },
 
@@ -712,7 +716,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         // Skip if this server is already known to be invalid
         if (invalidServerIds.has(serverId)) {
-            console.log(`[fetchServerInfo] Skipping fetch for invalid server: ${serverId}`);
+            logger.log(`[fetchServerInfo] Skipping fetch for invalid server: ${serverId}`);
             return;
         }
 
@@ -772,7 +776,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 get().fetchServerMembers(serverId);
             }
         } catch (error) {
-            console.error(`Failed to fetch server info for ${serverId}:`, error);
+            logger.error(`Failed to fetch server info for ${serverId}:`, error);
 
             // Mark server as invalid if we get specific errors that indicate the server doesn't exist
             // Examine error message to determine if this is a "server not found" type error
@@ -783,7 +787,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 errorMessage.includes("cannot read properties") ||
                 errorMessage.includes("internal server error")
             ) {
-                console.log(`[fetchServerInfo] Marking server as invalid due to error: ${serverId}`);
+                logger.log(`[fetchServerInfo] Marking server as invalid due to error: ${serverId}`);
                 get().markServerAsInvalid(serverId);
             }
 
@@ -837,13 +841,13 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         if (!address) return null;
 
         try {
-            console.log(`[fetchUserProfile] Fetching profile for ${address}`);
+            logger.log(`[fetchUserProfile] Fetching profile for ${address}`);
 
             // Check for cached profile data first
             if (!forceRefresh) {
                 const cachedProfile = get().getUserProfile();
                 if (cachedProfile) {
-                    console.log(`[fetchUserProfile] Using cached profile data for ${address}`);
+                    logger.log(`[fetchUserProfile] Using cached profile data for ${address}`);
                     return cachedProfile;
                 }
             }
@@ -861,7 +865,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 // Importantly: also update the user profiles cache to ensure consistency
                 // This ensures the primary name is available in both caching systems
                 if (typedProfile.primaryName) {
-                    console.log(`[fetchUserProfile] Synchronizing primary name "${typedProfile.primaryName}" to profiles cache`);
+                    logger.log(`[fetchUserProfile] Synchronizing primary name "${typedProfile.primaryName}" to profiles cache`);
                     get().updateUserProfileCache(address, {
                         username: typedProfile.profile?.username,
                         pfp: typedProfile.profile?.pfp,
@@ -873,7 +877,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 return profileData;
             }
         } catch (error) {
-            console.error(`[fetchUserProfile] Error fetching profile for ${address}:`, error);
+            logger.error(`[fetchUserProfile] Error fetching profile for ${address}:`, error);
         }
 
         return null;
@@ -900,13 +904,13 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         if (!userId) return null;
 
         try {
-            console.log(`[fetchUserProfileAndCache] Fetching profile for ${userId}`);
+            logger.log(`[fetchUserProfileAndCache] Fetching profile for ${userId}`);
 
             // Check for cached profile data first
             if (!forceRefresh) {
                 const cachedProfile = get().getUserProfileFromCache(userId);
                 if (cachedProfile) {
-                    console.log(`[fetchUserProfileAndCache] Using cached profile data for ${userId}`);
+                    logger.log(`[fetchUserProfileAndCache] Using cached profile data for ${userId}`);
                     return cachedProfile;
                 }
             }
@@ -928,7 +932,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
                 return profileData;
             }
         } catch (error) {
-            console.error(`[fetchUserProfileAndCache] Error fetching profile for ${userId}:`, error);
+            logger.error(`[fetchUserProfileAndCache] Error fetching profile for ${userId}:`, error);
         }
 
         return null;
@@ -1014,36 +1018,36 @@ export function useBackgroundPreload() {
         if (activeAddress) {
             // Only log on first load or address change
             if (!initialLoadCompleted.current) {
-                console.log(`[useBackgroundPreload] Initial load for address: ${activeAddress}`);
+                logger.log(`[useBackgroundPreload] Initial load for address: ${activeAddress}`);
                 initialLoadCompleted.current = true;
                 profileLoadAttempts.current = 0;
             } else {
-                console.log(`[useBackgroundPreload] Address changed to: ${activeAddress}`);
+                logger.log(`[useBackgroundPreload] Address changed to: ${activeAddress}`);
                 profileLoadAttempts.current = 0;
             }
 
             // Critical data loading function with retries
             const loadCriticalData = async () => {
                 try {
-                    console.log(`[useBackgroundPreload] Loading critical user data for ${activeAddress}`);
+                    logger.log(`[useBackgroundPreload] Loading critical user data for ${activeAddress}`);
 
                     // Step 1: Fetch user profile with retry logic
                     let profileData = null;
                     try {
-                        console.log(`[useBackgroundPreload] Fetching user profile for ${activeAddress}`);
+                        logger.log(`[useBackgroundPreload] Fetching user profile for ${activeAddress}`);
                         profileData = await fetchUserProfile(activeAddress, true);
                         if (profileData) {
-                            console.log(`[useBackgroundPreload] Successfully loaded user profile`);
+                            logger.log(`[useBackgroundPreload] Successfully loaded user profile`);
                         } else {
                             throw new Error("Profile data is null");
                         }
                     } catch (err) {
-                        console.warn(`[useBackgroundPreload] Profile fetch attempt ${profileLoadAttempts.current + 1} failed:`, err);
+                        logger.warn(`[useBackgroundPreload] Profile fetch attempt ${profileLoadAttempts.current + 1} failed:`, err);
 
                         // Attempt to retry profile fetch if needed
                         if (profileLoadAttempts.current < MAX_RETRY_ATTEMPTS) {
                             profileLoadAttempts.current++;
-                            console.log(`[useBackgroundPreload] Retrying profile fetch (attempt ${profileLoadAttempts.current})`);
+                            logger.log(`[useBackgroundPreload] Retrying profile fetch (attempt ${profileLoadAttempts.current})`);
 
                             // Retry after a short delay
                             setTimeout(() => {
@@ -1056,28 +1060,28 @@ export function useBackgroundPreload() {
                     // Step 2: Ensure the user's primary name is cached in their profile
                     // (This happens as part of fetchUserProfile, but we ensure it's there)
                     if (profileData && !profileData.primaryName) {
-                        console.log(`[useBackgroundPreload] Ensuring user primary name is fetched`);
+                        logger.log(`[useBackgroundPreload] Ensuring user primary name is fetched`);
                         await fetchUserProfileAndCache(activeAddress, true);
                     }
 
                     // Step 3: Load joined servers list
                     try {
-                        console.log(`[useBackgroundPreload] Fetching user's joined servers`);
+                        logger.log(`[useBackgroundPreload] Fetching user's joined servers`);
                         const serverIds = await fetchJoinedServers(activeAddress, true);
-                        console.log(`[useBackgroundPreload] Loaded ${serverIds.length} joined servers`);
+                        logger.log(`[useBackgroundPreload] Loaded ${serverIds.length} joined servers`);
                     } catch (err) {
-                        console.warn('[useBackgroundPreload] Failed to fetch joined servers:', err);
+                        logger.warn('[useBackgroundPreload] Failed to fetch joined servers:', err);
                     }
 
                     // Step 4: Start background prefetch of all server data
                     // This includes server info and members with lower priority
-                    console.log(`[useBackgroundPreload] Starting background server data prefetch`);
+                    logger.log(`[useBackgroundPreload] Starting background server data prefetch`);
                     setTimeout(() => {
                         prefetchAllServerData(activeAddress);
                     }, 500);
 
                 } catch (err) {
-                    console.error('[useBackgroundPreload] Critical data loading failed:', err);
+                    logger.error('[useBackgroundPreload] Critical data loading failed:', err);
                 }
             };
 
@@ -1101,7 +1105,7 @@ function useActiveWalletAddress() {
                     setAddress(addr);
                 }
             } catch (error) {
-                console.error("Error getting wallet address:", error);
+                logger.error("Error getting wallet address:", error);
             }
         }
 

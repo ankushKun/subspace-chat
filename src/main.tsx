@@ -19,9 +19,14 @@ import { useLocalStorage } from '@uidotdev/usehooks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OfflineDetector } from '@/components/offline-detector'
 import { registerServiceWorker } from '@/pwa-handler'
+import { setLogLevel, LogLevel } from './lib/logger'
 
 // Create a QueryClient for React Query
 const queryClient = new QueryClient()
+
+// Set default log level - only errors and warnings in production
+// This will drastically reduce the number of logs in the console
+setLogLevel(import.meta.env.PROD ? LogLevel.ERROR : LogLevel.INFO)
 
 // Register service worker for PWA support
 if (import.meta.env.PROD) {

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useConnection } from 'arwalletkit-react'
 import { Button } from '@/components/ui/button'
+import { NotificationSettings } from '@/settings/components/notification'
 
 export default function Settings() {
     const navigate = useNavigate()
@@ -37,10 +38,7 @@ export default function Settings() {
                     </Button>
                 </div>
                 <div className='w-full flex-1 p-4'>
-                    {/* Settings content will go here */}
-                    <div className='text-center text-muted-foreground py-8'>
-                        <p className='text-sm'>Settings coming soon!</p>
-                    </div>
+                    <NotificationSettings />
                 </div>
             </div>
         </div>

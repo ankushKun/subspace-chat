@@ -282,7 +282,7 @@ export default function App() {
         checkNotifications();
 
         // Set up interval - check every 15 seconds
-        const intervalId = setInterval(checkNotifications, 15000);
+        const intervalId = setInterval(checkNotifications, 3000);
 
         // Cleanup interval on unmount
         return () => clearInterval(intervalId);

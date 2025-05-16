@@ -17,9 +17,16 @@ import { WanderConnect } from '@wanderapp/connect'
 import { useGlobalState } from '@/hooks'
 import { useLocalStorage } from '@uidotdev/usehooks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { OfflineDetector } from '@/components/offline-detector'
+import { registerServiceWorker } from '@/pwa-handler'
 
 // Create a QueryClient for React Query
 const queryClient = new QueryClient()
+
+// Register service worker for PWA support
+if (import.meta.env.PROD) {
+  registerServiceWorker();
+}
 
 function Main() {
   const { wanderInstance, setWanderInstance } = useGlobalState()
@@ -71,49 +78,51 @@ function Main() {
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     {/* <Toaster /> */}
     <QueryClientProvider client={queryClient}>
-      <ArweaveWalletKit
-        config={{
-          appInfo: {
-            name: "Subspace Chat",
-            // logo: "https://arweave.net/L9FExC-Wzzvmu201-he_UTH_HymCXGEemlKIJoa1_9k"
-            logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
-          },
-          permissions: [
-            "ACCESS_ADDRESS",
-            "SIGN_TRANSACTION",
-            "ACCESS_PUBLIC_KEY",
-            "ENCRYPT",
-            "DECRYPT",
-            "SIGNATURE",
-          ],
-          ensurePermissions: true,
-          strategies: [
-            wc,
-            new AoSyncStrategy(),
-            // @ts-ignore
-            new EthereumStrategy()
-          ]
-        }}
-        theme={{
-          accent: { r: 160, g: 160, b: 220 },
-          displayTheme: "dark"
-        }}
-      >
-        <Toaster />
-        <HashRouter>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/app" element={<App />} />
-            <Route path="/app/user/:userId" element={<App />} />
-            <Route path="/app/:serverId" element={<App />} />
-            <Route path="/app/:serverId/:channelId" element={<App />} />
-            <Route path="/app/settings" element={<Settings />} />
-            <Route path="/invite" element={<Invite />} />
-            <Route path="/invite/:serverId" element={<Invite />} />
-            <Route path='*' element={<Navigate to='/' />} />
-          </Routes>
-        </HashRouter>
-      </ArweaveWalletKit>
+      <OfflineDetector>
+        <ArweaveWalletKit
+          config={{
+            appInfo: {
+              name: "Subspace Chat",
+              // logo: "https://arweave.net/L9FExC-Wzzvmu201-he_UTH_HymCXGEemlKIJoa1_9k"
+              logo: "https://arweave.net/W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
+            },
+            permissions: [
+              "ACCESS_ADDRESS",
+              "SIGN_TRANSACTION",
+              "ACCESS_PUBLIC_KEY",
+              "ENCRYPT",
+              "DECRYPT",
+              "SIGNATURE",
+            ],
+            ensurePermissions: true,
+            strategies: [
+              wc,
+              new AoSyncStrategy(),
+              // @ts-ignore
+              new EthereumStrategy()
+            ]
+          }}
+          theme={{
+            accent: { r: 160, g: 160, b: 220 },
+            displayTheme: "dark"
+          }}
+        >
+          <Toaster />
+          <HashRouter>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/app" element={<App />} />
+              <Route path="/app/user/:userId" element={<App />} />
+              <Route path="/app/:serverId" element={<App />} />
+              <Route path="/app/:serverId/:channelId" element={<App />} />
+              <Route path="/app/settings" element={<Settings />} />
+              <Route path="/invite" element={<Invite />} />
+              <Route path="/invite/:serverId" element={<Invite />} />
+              <Route path='*' element={<Navigate to='/' />} />
+            </Routes>
+          </HashRouter>
+        </ArweaveWalletKit>
+      </OfflineDetector>
     </QueryClientProvider>
   </ThemeProvider>
 }

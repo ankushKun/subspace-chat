@@ -24,12 +24,19 @@ export default defineConfig({
     registerType: 'autoUpdate',
     strategies: 'generateSW',
     injectRegister: 'auto',
+    includeAssets: ['/s.png', '/offline.html', '/stars.gif'],
     devOptions: {
       enabled: true
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico,json,woff,woff2,ttf,eot}'],
       maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+      // Cache app shell for offline use
+      navigateFallback: 'index.html',
+      // Don't try to validate offline connectivity for these paths
+      // navigateFallbackDenylist: [/^\/api\//],
+      // Enable offline Google Analytics
+      // offlineGoogleAnalytics: true,
       runtimeCaching: [
         {
           urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
@@ -40,6 +47,25 @@ export default defineConfig({
               maxEntries: 50,
               maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
             }
+          }
+        },
+        {
+          urlPattern: /^https:\/\/arweave\.net\/.*/i,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'arweave-assets',
+            expiration: {
+              maxEntries: 100,
+              maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+            }
+          }
+        },
+        // Add a caching strategy for the /offline.html fallback page
+        {
+          urlPattern: /^\/offline\.html$/,
+          handler: 'StaleWhileRevalidate',
+          options: {
+            cacheName: 'offline-fallback'
           }
         }
       ]

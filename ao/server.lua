@@ -644,21 +644,24 @@ app.post("/send-message", function(req, res)
         "INSERT INTO messages (content, channel_id, author_id, timestamp, msg_id) VALUES (?, ?, ?, ?, ?)",
         content, channel_id, author_id, timestamp, msg_id)
     if rows_updated == 1 then
-        -- Print mentions for debugging
-        print("Found mentions:", #mentions)
+        -- Send notifications to mentioned users through the profile registry
         for name, address in pairs(mentions) do
-            print("Sending notification to:", name, address)
+            print("Sending notification to user:", name, address)
             ao.send({
-                Target = tostring(address),
-                Action = "Subspace-Notification",
-                SID = tostring(ao.id),
-                CID = tostring(channel_id),
-                MID = tostring(msg_id),
-                Author = tostring(member[1].nickname or author_id),
-                Content = tostring(content),
-                CName = tostring(channel[1].name),
-                SName = tostring(server_name),
-                Timestamp = tostring(timestamp)
+                Target = PROFILES,
+                Action = "Add-Notification",
+                Tags = {
+                    User_ID = address,
+                    Server_ID = ao.id,
+                    Channel_ID = tostring(channel_id),
+                    Message_ID = msg_id,
+                    Author_ID = author_id,
+                    Author_Name = tostring(member[1].nickname or author_id),
+                    Content = content,
+                    Channel_Name = channel[1].name,
+                    Server_Name = server_name,
+                    Timestamp = tostring(timestamp)
+                }
             })
         end
 

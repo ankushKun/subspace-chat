@@ -6,7 +6,7 @@ import Hero from '@/app/components/hero';
 import Chat from '@/app/components/chat';
 import ServerList from '@/app/components/server-list';
 import { useEffect, useRef } from 'react';
-import { getNotifications } from '@/lib/ao';
+import { getNotifications, markNotificationsAsRead } from '@/lib/ao';
 import Profile from './components/profile';
 import { useActiveAddress, useConnection } from 'arwalletkit-react';
 import { useMobile } from '@/hooks';
@@ -48,6 +48,10 @@ export default function App() {
     } = useGlobalState();
     const address = useActiveAddress();
     const initRef = useRef(false);
+    const lastChannelRef = useRef<{ serverId: string | null, channelId: number | null }>({
+        serverId: null,
+        channelId: null
+    });
 
     // Initialize global request limiting on first render only
     useEffect(() => {
@@ -57,11 +61,39 @@ export default function App() {
         }
     }, []);
 
+    // Mark notifications as read when entering a channel
+    useEffect(() => {
+        if (!connected || !address || !serverId || !channelId) return;
+
+        const channelIdNum = parseInt(channelId, 10);
+        if (isNaN(channelIdNum)) return;
+
+        // Check if we've changed channel - only mark as read on channel change
+        if (lastChannelRef.current.serverId !== serverId ||
+            lastChannelRef.current.channelId !== channelIdNum) {
+
+            console.log(`[App] Channel changed to ${serverId}/${channelId}, marking notifications as read`);
+            markNotificationsAsRead(serverId, channelIdNum)
+                .then(() => {
+                    console.log(`[App] Marked notifications as read for ${serverId}/${channelId}`);
+                })
+                .catch(error => {
+                    console.warn(`[App] Error marking notifications as read:`, error);
+                });
+
+            // Update the last channel ref
+            lastChannelRef.current = {
+                serverId,
+                channelId: channelIdNum
+            };
+        }
+    }, [connected, address, serverId, channelId]);
+
     useEffect(() => {
         if (!connected || !address) return;
 
-        // Store information about notification polling
-        let initialLoadComplete = false;
+        // Store information about notification checking
+        let notificationCheckActive = false;
 
         // Load seen notification IDs from localStorage
         const getSeenNotificationIds = (): Set<string> => {
@@ -102,64 +134,39 @@ export default function App() {
             return content.replace(/@\[(.*?)\]\((.*?)\)/g, '@$1');
         };
 
-        // With HEIGHT_DESC ordering, we need a different approach for periodic polling
-        // We'll load history once, then do periodic fresh queries and only process new messages
         const checkNotifications = async () => {
+            // Prevent multiple concurrent checks
+            if (notificationCheckActive) return;
+            notificationCheckActive = true;
+
             try {
                 // Get user notification preference from localStorage
                 const notificationsEnabled = localStorage.getItem('notifications-enabled') !== 'false';
-                if (!notificationsEnabled) return;
+                if (!notificationsEnabled) {
+                    notificationCheckActive = false;
+                    return;
+                }
 
                 // Load the set of already seen notification IDs
                 seenNotificationIds = getSeenNotificationIds();
 
-                // For initial load, we use the cursor to paginate through history
-                // For subsequent checks, we start fresh each time to get newest notifications
-                const forceFresh = initialLoadComplete;
-                const currentTime = Date.now();
+                console.log(`[checkNotifications] Fetching notifications...`);
 
-                console.log(`[checkNotifications] Fetching notifications... (initialLoadComplete: ${initialLoadComplete})`);
-
-                // For initial load, use the stored cursor for pagination
-                // For periodic checks, always use an empty cursor to get newest first
-                const cursor = initialLoadComplete ? "" : (localStorage.getItem('notifications-cursor') || "");
-                const notifications = await getNotifications(address, cursor, forceFresh);
+                // Get notifications from the profile registry
+                const notifications = await getNotifications(address);
 
                 // Skip if no valid data returned
                 if (!notifications) {
                     console.warn('[checkNotifications] No notification data returned');
+                    notificationCheckActive = false;
                     return;
-                }
-
-                // Only store cursor during initial history loading
-                if (!initialLoadComplete && notifications.cursor && notifications.cursor !== cursor) {
-                    localStorage.setItem('notifications-cursor', notifications.cursor);
-                    console.log(`[checkNotifications] Updated history cursor: ${notifications.cursor}`);
                 }
 
                 // Skip processing if no messages
                 if (!notifications.messages || notifications.messages.length === 0) {
                     console.log('[checkNotifications] No new notifications');
-
-                    // If this was the initial load, mark it complete even with no messages
-                    if (!initialLoadComplete && !notifications.hasNextPage) {
-                        console.log('[checkNotifications] Initial history load complete');
-                        initialLoadComplete = true;
-                        localStorage.setItem('notifications-last-check', currentTime.toString());
-                    }
-
+                    notificationCheckActive = false;
                     return;
-                }
-
-                // If this is still the initial load, check if we've reached the end of history
-                if (!initialLoadComplete && !notifications.hasNextPage) {
-                    console.log('[checkNotifications] Initial history load complete');
-                    initialLoadComplete = true;
-                }
-
-                // When polling (not initial load), update the last check time
-                if (initialLoadComplete) {
-                    localStorage.setItem('notifications-last-check', currentTime.toString());
                 }
 
                 console.log(`[checkNotifications] Processing ${notifications.messages.length} notifications`);
@@ -171,7 +178,7 @@ export default function App() {
                         return false;
                     }
 
-                    // Use the transaction ID as the primary deduplication key
+                    // Use the message ID as the primary deduplication key
                     const notificationId = message.id;
 
                     // Skip if we've already seen this notification
@@ -189,15 +196,10 @@ export default function App() {
 
                 console.log(`[checkNotifications] ${newMessages.length} new notifications after deduplication`);
 
-                // If all messages were duplicates, skip processing, but continue history loading if needed
+                // If all messages were duplicates, skip processing
                 if (newMessages.length === 0) {
                     console.log('[checkNotifications] All notifications were duplicates');
-
-                    // If we're still loading history and there are more pages, continue
-                    if (!initialLoadComplete && notifications.hasNextPage) {
-                        return;
-                    }
-
+                    notificationCheckActive = false;
                     return;
                 }
 
@@ -227,47 +229,43 @@ export default function App() {
                     return acc;
                 }, {} as Record<string, ServerMessages>);
 
-                // Only show notifications for truly new messages during active polling
-                // (not for historical messages during the initial load)
-                if (initialLoadComplete) {
-                    // Handle notifications for each server
-                    Object.entries(messagesByServer).forEach(([serverId, data]) => {
-                        const { serverName, messages } = data;
+                // Handle notifications for each server
+                Object.entries(messagesByServer).forEach(([serverId, data]) => {
+                    const { serverName, messages } = data;
 
-                        if (messages.length > 3) {
-                            // Group notification for multiple messages
+                    if (messages.length > 3) {
+                        // Group notification for multiple messages
+                        sendNotification(
+                            `${messages.length} new messages`,
+                            {
+                                server: serverName,
+                                SID: serverId,
+                                content: `${messages.length} new messages`
+                            }
+                        );
+                    } else {
+                        // Individual notifications for a few messages
+                        messages.forEach(message => {
+                            const authorName = message.author || 'Unknown User';
+
+                            // Format the message content to simplify mentions
+                            const formattedContent = formatMessageContent(message.content);
+
+                            // Create a concise notification with just the essential info
                             sendNotification(
-                                `${messages.length} new messages`,
+                                `${authorName}`,
                                 {
-                                    server: serverName,
-                                    SID: serverId,
-                                    content: `${messages.length} new messages`
+                                    ...message,
+                                    content: formattedContent
                                 }
                             );
-                        } else {
-                            // Individual notifications for a few messages
-                            messages.forEach(message => {
-                                const authorName = message.author || 'Unknown User';
-
-                                // Format the message content to simplify mentions
-                                const formattedContent = formatMessageContent(message.content);
-
-                                // Create a concise notification with just the essential info
-                                sendNotification(
-                                    `${authorName}`,
-                                    {
-                                        ...message,
-                                        content: formattedContent
-                                    }
-                                );
-                            });
-                        }
-                    });
-                } else {
-                    console.log('[checkNotifications] Silently adding historical messages to seen list');
-                }
+                        });
+                    }
+                });
             } catch (error) {
                 console.error("Error checking notifications:", error);
+            } finally {
+                notificationCheckActive = false;
             }
         };
 
@@ -281,7 +279,7 @@ export default function App() {
         // Run immediately on mount
         checkNotifications();
 
-        // Set up interval - check every 15 seconds
+        // Set up interval - check every 3 seconds
         const intervalId = setInterval(checkNotifications, 3000);
 
         // Cleanup interval on unmount

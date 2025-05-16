@@ -814,127 +814,81 @@ export async function leaveServer(serverId: string): Promise<boolean> {
     }
 }
 
-export async function getNotifications(address: string, cursor?: string, forceFresh: boolean = false) {
-    // If forceFresh is true, don't use the cursor to start fresh
-    const effectiveCursor = forceFresh ? "" : cursor;
+export async function getNotifications(address: string) {
+    console.log(`[getNotifications] Fetching notifications for address: ${address}`);
 
-    console.log(`[getNotifications] Fetching notifications for address: ${address}, after cursor: ${effectiveCursor || "none"}, forceFresh: ${forceFresh}`);
+    try {
+        const res = await aofetch(`${PROFILES}/get-notifications`, {
+            method: "GET",
+            body: {
+                id: address
+            }
+        });
 
-    // Use HEIGHT_DESC to get newest notifications first
-    // This means we'll get recent notifications immediately rather than having to wait
-    const query = `query FetchNotifications {
-  transactions(
-    recipients: "${address}"
-    tags: [
-      { name: "Action", values: ["Subspace-Notification"] }
-      { name: "Data-Protocol", values: ["ao"] }
-    ]
-    sort: HEIGHT_DESC
-    after: "${effectiveCursor}"
-    first: 25
-  ) {
-    pageInfo {
-      hasNextPage
-    }
-    edges {
-      cursor
-      node {
-        id
-        recipient
-        block {
-          height
-        }
-        tags {
-          name
-          value
-        }
-      }
-    }
-  }
-}`;
+        console.log(`[getNotifications] Response:`, res);
 
-    console.log(`[getNotifications] Sending GraphQL query to arnode.asia with HEIGHT_DESC order`);
-    const res = await fetch('https://arnode.asia/graphql', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify({ query })
-    });
+        if (res.status == 200) {
+            const responseData = res.json as { notifications: any[] };
 
-    const data = await res.json();
-    console.log(`[getNotifications] Processing response data`);
-
-    // Check if data exists and has the expected structure
-    if (!data || !data.data || !data.data.transactions || !data.data.transactions.edges) {
-        console.warn('[getNotifications] Received invalid data structure from API', data);
-        return { cursor: cursor, messages: [], hasNextPage: false, isEmpty: true };
-    }
-
-    const edges = data.data.transactions.edges
-        .map(edge => {
-            // Skip edges without necessary data
-            if (!edge || !edge.node || !edge.node.tags) return null;
-
-            // Extract tags into a key-value object for easy access
-            const tags = edge.node.tags.reduce((acc, tag) => {
-                acc[tag.name] = tag.value;
-                return acc;
-            }, {} as Record<string, string>);
-
-            // Only include if SID === From-Process
-            if (tags['SID'] !== tags['From-Process']) {
-                return null;
+            if (!responseData.notifications || responseData.notifications.length === 0) {
+                console.log('[getNotifications] No new notifications');
+                return {
+                    messages: [],
+                    isEmpty: true
+                };
             }
 
-            if (!tags['CID']) return null;
+            // Transform the notifications to match the expected format in the client
+            const messages = responseData.notifications.map(notification => ({
+                id: notification.message_id,
+                recipient: notification.user_id,
+                SID: notification.server_id,
+                CID: notification.channel_id.toString(),
+                MID: notification.message_id,
+                author: notification.author_name || notification.author_id,
+                content: notification.content || "",
+                channel: notification.channel_name,
+                server: notification.server_name,
+                timestamp: notification.timestamp.toString()
+            }));
+
+            console.log(`[getNotifications] Found ${messages.length} notifications`);
 
             return {
-                id: edge.node.id,
-                block: edge.node.block?.height || 0,
-                recipient: edge.node.recipient,
-                SID: tags['SID'] || tags['From-Process'],
-                CID: tags['CID'],
-                MID: tags['MID'],
-                author: tags['Author'],
-                content: tags['Content'] || "",
-                channel: tags['CName'],
-                server: tags['SName'],
-                timestamp: tags['Timestamp']
+                messages: messages,
+                isEmpty: messages.length === 0
             };
-        })
-        .filter(Boolean); // Remove nulls
-
-    // Get pagination info
-    const hasNextPage = data.data.transactions.pageInfo?.hasNextPage === true;
-    const isEmpty = edges.length === 0;
-
-    // With HEIGHT_DESC ordering:
-    // - When results are returned, use the cursor from the last edge
-    // - This means we'll get older notifications in the next query
-    // - For notification polling, this means we will NOT get new notifications this way
-    // - But we can use this when doing an initial load of notifications
-    let newCursor = cursor; // Default to keeping the same cursor if no results
-    if (data.data.transactions.edges.length > 0) {
-        // Get the cursor from the last edge (oldest notification in this result set)
-        const lastEdgeIndex = data.data.transactions.edges.length - 1;
-        const lastEdge = data.data.transactions.edges[lastEdgeIndex];
-        newCursor = lastEdge?.cursor || cursor;
-
-        console.log(`[getNotifications] New cursor from last edge (oldest): ${newCursor}`);
-    } else if (forceFresh) {
-        // If we did a fresh query with no cursor and got no results, we should return an empty cursor
-        newCursor = "";
-        console.log(`[getNotifications] No results with fresh query, clearing cursor`);
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        console.error("[getNotifications] Error fetching notifications:", error);
+        throw error;
     }
+}
 
-    console.log(`[getNotifications] Found ${edges.length} notifications, hasNextPage: ${hasNextPage}, isEmpty: ${isEmpty}`);
+// Add a new function to mark notifications as read
+export async function markNotificationsAsRead(serverId: string, channelId: number) {
+    console.log(`[markNotificationsAsRead] Marking notifications as read for server: ${serverId}, channel: ${channelId}`);
 
-    return {
-        cursor: newCursor,
-        messages: edges,
-        hasNextPage,
-        isEmpty
-    };
+    try {
+        const res = await aofetch(`${PROFILES}/mark-read`, {
+            method: "POST",
+            body: {
+                server_id: serverId,
+                channel_id: channelId
+            }
+        });
+
+        console.log(`[markNotificationsAsRead] Response:`, res);
+
+        if (res.status == 200) {
+            return res.json;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        console.error("[markNotificationsAsRead] Error marking notifications as read:", error);
+        throw error;
+    }
 }

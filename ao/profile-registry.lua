@@ -43,7 +43,26 @@ db:exec([[
         username TEXT DEFAULT "",
         pfp TEXT DEFAULT "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo",
         servers_joined TEXT DEFAULT "{}"
-    )
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        channel_id INTEGER NOT NULL,
+        message_id TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT,
+        content TEXT NOT NULL,
+        channel_name TEXT,
+        server_name TEXT,
+        timestamp INTEGER NOT NULL,
+        read INTEGER DEFAULT 0,
+        UNIQUE(user_id, message_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_server_channel ON notifications(user_id, server_id, channel_id);
 ]])
 
 
@@ -81,6 +100,17 @@ function UpdateServers(id, servers)
 
     SQLWrite("INSERT OR REPLACE INTO profiles (id, username, pfp, servers_joined) VALUES (?, ?, ?, ?)",
         id, username, pfp, json.encode(servers))
+end
+
+-- Add notification for a user
+function AddNotification(user_id, server_id, channel_id, message_id, author_id, author_name, content, channel_name,
+                         server_name, timestamp)
+    -- Try to insert the notification, ignore if there's a unique constraint violation
+    SQLWrite([[
+        INSERT OR IGNORE INTO notifications
+        (user_id, server_id, channel_id, message_id, author_id, author_name, content, channel_name, server_name, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ]], user_id, server_id, channel_id, message_id, author_id, author_name, content, channel_name, server_name, timestamp)
 end
 
 app.get("/profile", function(req, res)
@@ -224,6 +254,75 @@ app.post("/leave-server", function(req, res)
     })
 end)
 
+-- Get all unread notifications for a user
+app.get("/get-notifications", function(req, res)
+    local id = req.body.id or req.msg.From
+
+    -- Get all unread notifications for this user
+    local notifications = SQLRead([[
+        SELECT * FROM notifications
+        WHERE user_id = ? AND read = 0
+        ORDER BY timestamp DESC
+    ]], id)
+
+    res:json({
+        success = true,
+        notifications = notifications
+    })
+end)
+
+-- Mark notifications as read for a specific server and channel
+app.post("/mark-read", function(req, res)
+    local id = req.msg.From
+    local server_id = req.body.server_id
+    local channel_id = req.body.channel_id
+
+    if not server_id or not channel_id then
+        res:status(400):json({
+            success = false,
+            error = "Missing server_id or channel_id"
+        })
+        return
+    end
+
+    -- Mark all notifications as read for this user, server, and channel
+    local rows_updated = SQLWrite([[
+        UPDATE notifications
+        SET read = 1
+        WHERE user_id = ? AND server_id = ? AND channel_id = ? AND read = 0
+    ]], id, server_id, channel_id)
+
+    res:json({
+        success = true,
+        notifications_marked_read = rows_updated
+    })
+end)
+
+-- Add a handler for receiving notification data from servers
+Handlers.add("Add-Notification", function(msg)
+    local user_id = msg.Tags.User_ID
+    local server_id = msg.Tags.Server_ID
+    local channel_id = tonumber(msg.Tags.Channel_ID)
+    local message_id = msg.Tags.Message_ID
+    local author_id = msg.Tags.Author_ID
+    local author_name = msg.Tags.Author_Name
+    local content = msg.Tags.Content
+    local channel_name = msg.Tags.Channel_Name
+    local server_name = msg.Tags.Server_Name
+    local timestamp = tonumber(msg.Tags.Timestamp)
+
+    if not user_id or not server_id or not channel_id or not message_id then
+        print("Invalid notification data")
+        return
+    end
+
+    -- Add the notification to the database
+    AddNotification(
+        user_id, server_id, channel_id, message_id, author_id,
+        author_name, content, channel_name, server_name, timestamp
+    )
+    print("Added notification for user: " .. user_id)
+end)
 
 app.listen()
 print(ao.id)

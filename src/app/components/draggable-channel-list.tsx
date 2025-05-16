@@ -4,7 +4,7 @@ import { useGlobalState } from '@/hooks/global-state';
 import { HashIcon, ChevronRight, Loader2, Plus, RefreshCw, Pencil, TrashIcon } from 'lucide-react';
 import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
-import { updateChannel, updateCategory, createChannel, refreshCurrentServerData } from '@/lib/ao';
+import { updateChannel, updateCategory, createChannel, refreshCurrentServerData, markNotificationsAsRead } from '@/lib/ao';
 import { toast } from 'sonner';
 import { useActiveAddress } from 'arwalletkit-react';
 import {
@@ -29,7 +29,15 @@ import {
 } from "@/components/ui/context-menu";
 
 export default function DraggableChannelList() {
-    const { activeServer, activeServerId, activeChannelId, setActiveChannelId, refreshServerData } = useGlobalState();
+    const {
+        activeServer,
+        activeServerId,
+        activeChannelId,
+        setActiveChannelId,
+        refreshServerData,
+        hasUnreadNotifications,
+        getUnreadCount
+    } = useGlobalState();
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
     const navigate = useNavigate();
     const activeAddress = useActiveAddress();
@@ -237,11 +245,25 @@ export default function DraggableChannelList() {
     };
 
     // Handle channel click
-    const handleChannelClick = (channel: Channel) => {
+    const handleChannelClick = async (channel: Channel) => {
+        // Check if this channel has unread messages
+        const hasUnread = activeServerId && hasUnreadNotifications(activeServerId, channel.id.toString());
+
         // Update global state
         setActiveChannelId(channel.id);
         // Navigate to the channel
         navigate(`/app/${activeServerId}/${channel.id}`);
+
+        // If channel has unread messages, mark them as read
+        if (hasUnread && activeServerId) {
+            try {
+                // Mark notifications for this channel as read on the server
+                await markNotificationsAsRead(activeServerId, channel.id);
+                console.log(`Marked channel ${channel.id} as read`);
+            } catch (error) {
+                console.error("Error marking channel as read:", error);
+            }
+        }
     };
 
     // Handle drag end
@@ -584,20 +606,19 @@ export default function DraggableChannelList() {
                                         className="space-y-1 px-2 mb-4 min-h-[8px] relative"
                                     >
                                         {/* Add a header for the uncategorized section */}
-                                        {/* <div className="flex items-center justify-between mb-1">
-                                            <div className="text-xs uppercase font-semibold text-muted-foreground">
-                                                Channels
-                                            </div>
+                                        <div className="flex items-center justify-between py-1 text-xs font-medium text-muted-foreground mt-3 mb-1">
+                                            <span>UNCATEGORIZED</span>
                                             {isServerOwner && (
-                                                <button
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-4 w-4 opacity-0 group-hover:opacity-100 hover:bg-muted"
                                                     onClick={handleCreateUncategorizedChannel}
-                                                    className="p-1 w-4 h-4 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 opacity-0 group-hover:opacity-100 transition-all"
-                                                    title="Create channel"
                                                 >
-                                                    <Plus className="w-3 h-3" />
-                                                </button>
+                                                    <Plus className="h-3 w-3" />
+                                                </Button>
                                             )}
-                                        </div> */}
+                                        </div>
 
                                         {uncategorizedChannels.map((channel, index) => (
                                             <Draggable
@@ -629,6 +650,12 @@ export default function DraggableChannelList() {
                                                                         {updatingChannels.includes(channel.id) &&
                                                                             <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
                                                                         }
+                                                                        {activeServerId && hasUnreadNotifications(activeServerId, channel.id.toString()) &&
+                                                                            channel.id !== activeChannelId && (
+                                                                                <span className="ml-auto flex items-center justify-center bg-red-500 text-white rounded-full text-xs min-w-4 h-4 px-1">
+                                                                                    {getUnreadCount(activeServerId, channel.id.toString())}
+                                                                                </span>
+                                                                            )}
                                                                     </div>
                                                                 </div>
                                                             </ContextMenuTrigger>
@@ -709,6 +736,22 @@ export default function DraggableChannelList() {
                                                                         {updatingCategories.includes(category.id) &&
                                                                             <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
                                                                         }
+                                                                        {/* Update the category indicator to show count */}
+                                                                        {activeServerId && getChannelsForCategory(category.id).some(channel =>
+                                                                            hasUnreadNotifications(activeServerId, channel.id.toString()) &&
+                                                                            channel.id !== activeChannelId &&
+                                                                            !expandedCategories.has(category.id)
+                                                                        ) && (
+                                                                                <span className="ml-1 flex items-center justify-center bg-red-500 text-white rounded-full text-xs min-w-3.5 h-3.5 px-1">
+                                                                                    {getChannelsForCategory(category.id).reduce((total, channel) => {
+                                                                                        if (activeServerId && hasUnreadNotifications(activeServerId, channel.id.toString()) &&
+                                                                                            channel.id !== activeChannelId) {
+                                                                                            return total + getUnreadCount(activeServerId, channel.id.toString());
+                                                                                        }
+                                                                                        return total;
+                                                                                    }, 0)}
+                                                                                </span>
+                                                                            )}
                                                                     </div>
                                                                 </div>
 
@@ -788,6 +831,12 @@ export default function DraggableChannelList() {
                                                                                                 {updatingChannels.includes(channel.id) &&
                                                                                                     <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
                                                                                                 }
+                                                                                                {activeServerId && hasUnreadNotifications(activeServerId, channel.id.toString()) &&
+                                                                                                    channel.id !== activeChannelId && (
+                                                                                                        <span className="ml-auto flex items-center justify-center bg-red-500 text-white rounded-full text-xs min-w-4 h-4 px-1">
+                                                                                                            {getUnreadCount(activeServerId, channel.id.toString())}
+                                                                                                        </span>
+                                                                                                    )}
                                                                                             </div>
                                                                                         </div>
                                                                                     </ContextMenuTrigger>

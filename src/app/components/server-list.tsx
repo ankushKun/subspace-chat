@@ -48,7 +48,9 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
         serverCache,
         refreshingServers,
         isServerValid,
-        fetchServerInfo
+        fetchServerInfo,
+        hasUnreadNotifications,
+        getUnreadCount
     } = useGlobalState();
     const [hover, setHover] = useState(false);
     const [isLeavingServer, setIsLeavingServer] = useState(false);
@@ -56,6 +58,8 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
 
     const isInvalid = !isServerValid(id);
     const isActive = activeServerId === id;
+    const hasUnread = !isInvalid && hasUnreadNotifications(id);
+    const unreadCount = !isInvalid ? getUnreadCount(id) : 0;
 
     // When this icon mounts, ensure we have server data (or start fetching it)
     useEffect(() => {
@@ -184,6 +188,13 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                         <Trash2 className="w-3 h-3 text-white" />
                     </div>
                 )}
+
+                {/* Unread notification indicator */}
+                {hasUnread && !isActive && (
+                    <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full flex items-center justify-center text-xs min-w-4 h-4 px-1">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                )}
             </Button>
 
             {/* Server name tooltip */}
@@ -214,6 +225,11 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     <div className="flex items-center gap-1">
                         {serverInfo?.name || id.substring(0, 6)}
                         {isRefreshing && <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />}
+                        {hasUnread && (
+                            <span className="flex items-center justify-center bg-red-500 text-white rounded-full text-xs min-w-4 h-4 px-1">
+                                {unreadCount}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>

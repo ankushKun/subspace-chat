@@ -8,7 +8,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BiSolidInbox } from "react-icons/bi";
 
-interface Notification {
+export interface Notification {
     id: string;
     recipient: string;
     SID: string;
@@ -28,8 +28,71 @@ export default function NotificationsPanel() {
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
-    const { setActiveServerId, setActiveChannelId } = useGlobalState();
+    const {
+        setActiveServerId,
+        setActiveChannelId,
+        setUnreadNotifications,
+        serverListCache,
+        fetchJoinedServers,
+        activeServerId,
+        activeChannelId
+    } = useGlobalState();
     const address = useActiveAddress();
+    const [joinedServers, setJoinedServers] = useState<string[]>([]);
+
+    // Load joined servers list
+    useEffect(() => {
+        if (!address) return;
+
+        // Initially use cached joined server list if available
+        if (serverListCache && serverListCache.address === address) {
+            setJoinedServers(serverListCache.data);
+        }
+
+        // Then fetch the latest joined servers list
+        const loadJoinedServers = async () => {
+            try {
+                const servers = await fetchJoinedServers(address, false);
+                setJoinedServers(servers);
+            } catch (error) {
+                console.error("Failed to fetch joined servers for notifications:", error);
+            }
+        };
+
+        loadJoinedServers();
+    }, [address, serverListCache, fetchJoinedServers]);
+
+    // Listen for active channel changes to mark notifications as read
+    useEffect(() => {
+        if (!activeServerId || !activeChannelId || !address) return;
+
+        // Check if we have unread notifications for this channel
+        const hasUnreadNotificationsForChannel = notifications.some(
+            notification =>
+                notification.SID === activeServerId &&
+                notification.CID === activeChannelId.toString() &&
+                !notification.isRead
+        );
+
+        if (hasUnreadNotificationsForChannel) {
+            // Update local state to mark notifications for this channel as read
+            setNotifications(prevNotifications => {
+                const updatedNotifications = prevNotifications.map(n => {
+                    if (n.SID === activeServerId && n.CID === activeChannelId.toString() && !n.isRead) {
+                        return { ...n, isRead: true };
+                    }
+                    return n;
+                });
+
+                // Save to localStorage
+                if (address) {
+                    localStorage.setItem(`notifications-${address}`, JSON.stringify(updatedNotifications));
+                }
+
+                return updatedNotifications;
+            });
+        }
+    }, [activeServerId, activeChannelId, address, notifications]);
 
     // Load stored notifications from localStorage
     useEffect(() => {
@@ -44,6 +107,45 @@ export default function NotificationsPanel() {
             console.error("Failed to load notifications from localStorage:", error);
         }
     }, [address]);
+
+    // Update global state with unread notifications whenever notifications change
+    useEffect(() => {
+        // Group unread notifications by server and channel, but only for joined servers
+        const unreadByServer: Record<string, Set<string>> = {};
+        // Track counts of unread notifications per server and channel
+        const unreadCountsByServer: Record<string, number> = {};
+        const unreadCountsByChannel: Record<string, Record<string, number>> = {};
+
+        notifications.forEach(notification => {
+            // Only process notifications from servers the user has joined
+            if (!notification.isRead && joinedServers.includes(notification.SID)) {
+                // Add to server/channel mapping
+                if (!unreadByServer[notification.SID]) {
+                    unreadByServer[notification.SID] = new Set();
+                    unreadCountsByServer[notification.SID] = 0;
+                    unreadCountsByChannel[notification.SID] = {};
+                }
+                unreadByServer[notification.SID].add(notification.CID);
+
+                // Increment server count
+                unreadCountsByServer[notification.SID]++;
+
+                // Increment channel count
+                if (!unreadCountsByChannel[notification.SID][notification.CID]) {
+                    unreadCountsByChannel[notification.SID][notification.CID] = 0;
+                }
+                unreadCountsByChannel[notification.SID][notification.CID]++;
+            }
+        });
+
+        // Update global state with all notification data
+        setUnreadNotifications({
+            serverChannelMap: unreadByServer,
+            serverCounts: unreadCountsByServer,
+            channelCounts: unreadCountsByChannel
+        });
+
+    }, [notifications, setUnreadNotifications, joinedServers]);
 
     // Fetch notifications and merge with local storage
     useEffect(() => {
@@ -106,11 +208,16 @@ export default function NotificationsPanel() {
         return () => clearInterval(intervalId);
     }, [address]);
 
-    // Count unread notifications
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    // Get filtered notifications (only from joined servers)
+    const filteredNotifications = notifications.filter(notification =>
+        joinedServers.includes(notification.SID)
+    );
 
-    // Group notifications by server
-    const notificationsByServer = notifications.reduce((acc, notification) => {
+    // Count unread notifications (only from joined servers)
+    const unreadCount = filteredNotifications.filter(n => !n.isRead).length;
+
+    // Group notifications by server (only from joined servers)
+    const notificationsByServer = filteredNotifications.reduce((acc, notification) => {
         if (!acc[notification.SID]) {
             acc[notification.SID] = {
                 serverName: notification.server,
@@ -220,7 +327,7 @@ export default function NotificationsPanel() {
                     </div>
 
                     <div className="max-h-[min(400px,70vh)] overflow-y-auto p-2">
-                        {notifications.length === 0 ? (
+                        {filteredNotifications.length === 0 ? (
                             <div className="text-center py-6 text-muted-foreground">
                                 No mentions to display
                             </div>

@@ -70,6 +70,13 @@ interface CachedUserProfiles {
     };
 }
 
+// Unread notifications
+interface UnreadNotificationData {
+    serverChannelMap: Record<string, Set<string>>;
+    serverCounts: Record<string, number>;
+    channelCounts: Record<string, Record<string, number>>;
+}
+
 // Helper functions for cache persistence
 const loadServerCache = (): Map<string, CachedServer> => {
     try {
@@ -273,6 +280,12 @@ export interface GlobalState {
     updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, primaryName?: string, timestamp: number }) => void
     fetchUserProfileAndCache: (userId: string, forceRefresh?: boolean) => Promise<any | null>
     clearUserProfilesCache: () => void
+
+    // Unread notifications
+    unreadNotifications: UnreadNotificationData
+    setUnreadNotifications: (unread: UnreadNotificationData) => void
+    hasUnreadNotifications: (serverId: string, channelId?: string) => boolean
+    getUnreadCount: (serverId: string, channelId?: string) => number
 }
 
 export const useGlobalState = create<GlobalState>((set, get) => ({
@@ -923,6 +936,29 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     clearUserProfilesCache: () => {
         set({ userProfilesCache: {} });
         localStorage.removeItem(USER_PROFILES_CACHE_KEY);
+    },
+
+    // Unread notifications
+    unreadNotifications: {
+        serverChannelMap: {},
+        serverCounts: {},
+        channelCounts: {}
+    },
+    setUnreadNotifications: (unread: UnreadNotificationData) => set({ unreadNotifications: unread }),
+    hasUnreadNotifications: (serverId: string, channelId?: string) => {
+        const { unreadNotifications } = get();
+        const channelSet = unreadNotifications.serverChannelMap[serverId] || new Set();
+        return channelId ? channelSet.has(channelId) : channelSet.size > 0;
+    },
+    getUnreadCount: (serverId: string, channelId?: string) => {
+        const { unreadNotifications } = get();
+        if (channelId) {
+            // Return the count for a specific channel
+            return unreadNotifications.channelCounts[serverId]?.[channelId] || 0;
+        } else {
+            // Return the count for the entire server
+            return unreadNotifications.serverCounts[serverId] || 0;
+        }
     }
 }))
 

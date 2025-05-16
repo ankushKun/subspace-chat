@@ -30,7 +30,7 @@ export default defineConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico,json,woff,woff2,ttf,eot}'],
-      maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+      maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
       // Cache app shell for offline use
       navigateFallback: 'index.html',
       // Don't try to validate offline connectivity for these paths

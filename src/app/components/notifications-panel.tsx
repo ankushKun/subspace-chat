@@ -211,7 +211,7 @@ export default function NotificationsPanel() {
 
             {/* Notification panel */}
             {open && (
-                <div className="absolute right-0 top-full mt-0 w-80 bg-background/60 backdrop-blur-2xl border border-border rounded-lg shadow-lg z-50">
+                <div className="absolute right-0 top-full mt-0 w-80 max-w-[calc(100vw-20px)] bg-background/60 backdrop-blur-2xl border border-border rounded-lg shadow-lg z-50 md:right-0 right-0 max-sm:left-auto max-sm:right-0 max-sm:translate-x-0">
                     <div className="flex items-center justify-between p-3 border-b border-border">
                         <h3 className="font-medium">Mentions</h3>
                         <button onClick={() => setOpen(false)}>
@@ -219,7 +219,7 @@ export default function NotificationsPanel() {
                         </button>
                     </div>
 
-                    <div className="max-h-[400px] overflow-y-auto p-2">
+                    <div className="max-h-[min(400px,70vh)] overflow-y-auto p-2">
                         {notifications.length === 0 ? (
                             <div className="text-center py-6 text-muted-foreground">
                                 No mentions to display

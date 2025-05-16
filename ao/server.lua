@@ -615,6 +615,11 @@ app.post("/send-message", function(req, res)
     local msg_id = req.msg.Id
     local content = req.body.content
     local channel_id = req.body.channel_id
+    -- Extract mentions from content
+    local mentions = {}
+    for name, address in content:gmatch("@%[([^%]]+)%]%(([^%)]+)%)") do
+        mentions[name] = address
+    end
 
     -- check if channel exists
     local channel = SQLRead("SELECT * FROM channels WHERE id = ?", channel_id)
@@ -631,12 +636,32 @@ app.post("/send-message", function(req, res)
     if not member or #member == 0 then
         -- Auto-register the member if they don't exist
         SQLWrite("INSERT INTO members (id) VALUES (?)", author_id)
+        -- Re-fetch member data after insert
+        member = SQLRead("SELECT * FROM members WHERE id = ?", author_id)
     end
 
     local rows_updated = SQLWrite(
         "INSERT INTO messages (content, channel_id, author_id, timestamp, msg_id) VALUES (?, ?, ?, ?, ?)",
         content, channel_id, author_id, timestamp, msg_id)
     if rows_updated == 1 then
+        -- Print mentions for debugging
+        print("Found mentions:", #mentions)
+        for name, address in pairs(mentions) do
+            print("Sending notification to:", name, address)
+            ao.send({
+                Target = tostring(address),
+                Action = "Subspace-Notification",
+                SID = tostring(ao.id),
+                CID = tostring(channel_id),
+                MID = tostring(msg_id),
+                Author = tostring(member[1].nickname or author_id),
+                Content = tostring(content),
+                CName = tostring(channel[1].name),
+                SName = tostring(server_name),
+                Timestamp = tostring(timestamp)
+            })
+        end
+
         res:json({
             success = true
         })

@@ -51,6 +51,7 @@ function Main() {
         console.log(userDetails)
         if (!!userDetails) {
           try {
+            await connect();
             await window.arweaveWallet.connect([
               "ACCESS_ADDRESS",
               "SIGN_TRANSACTION",
@@ -59,7 +60,6 @@ function Main() {
               "DECRYPT",
               "SIGNATURE",
             ]);
-            await connect();
           } catch (e) {
             console.error("Error", e);
           }

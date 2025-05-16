@@ -258,10 +258,10 @@ end)
 app.get("/get-notifications", function(req, res)
     local id = req.body.id or req.msg.From
 
-    -- Get all unread notifications for this user
+    -- Get all notifications for this user (since we're now deleting them instead of marking as read)
     local notifications = SQLRead([[
         SELECT * FROM notifications
-        WHERE user_id = ? AND read = 0
+        WHERE user_id = ?
         ORDER BY timestamp DESC
     ]], id)
 
@@ -285,16 +285,15 @@ app.post("/mark-read", function(req, res)
         return
     end
 
-    -- Mark all notifications as read for this user, server, and channel
+    -- Delete all notifications for this user, server, and channel
     local rows_updated = SQLWrite([[
-        UPDATE notifications
-        SET read = 1
-        WHERE user_id = ? AND server_id = ? AND channel_id = ? AND read = 0
+        DELETE FROM notifications
+        WHERE user_id = ? AND server_id = ? AND channel_id = ?
     ]], id, server_id, channel_id)
 
     res:json({
         success = true,
-        notifications_marked_read = rows_updated
+        notifications_deleted = rows_updated
     })
 end)
 
@@ -310,6 +309,12 @@ Handlers.add("Add-Notification", function(msg)
     local channel_name = msg.Tags.Channel_Name
     local server_name = msg.Tags.Server_Name
     local timestamp = tonumber(msg.Tags.Timestamp)
+
+    -- Security check: ensure the notification is coming from the claimed server
+    if msg.From ~= server_id then
+        print("Security violation: message sender (" .. msg.From .. ") doesn't match server_id (" .. server_id .. ")")
+        return
+    end
 
     if not user_id or not server_id or not channel_id or not message_id then
         print("Invalid notification data")

@@ -13,6 +13,7 @@ import { useMobile } from '@/hooks';
 import UsersList from './components/users-list';
 import UserDM from './user';
 import { sendNotification } from '@/lib/utils';
+import NotificationsPanel from './components/notifications-panel';
 
 // Create global rate limiting middleware for the app
 // This ensures we don't spam servers with requests

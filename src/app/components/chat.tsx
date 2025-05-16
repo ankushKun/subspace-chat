@@ -19,6 +19,9 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { FaInbox } from "react-icons/fa6";
+import { BiSolidInbox } from "react-icons/bi";
+import NotificationsPanel from "./notifications-panel";
 
 // Message type from server
 interface Message {
@@ -750,9 +753,11 @@ export default function Chat() {
                 </Button>}
                 <HashIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="font-medium">{activeChannel?.name}</span>
+                <div className="w-full" />
+                <NotificationsPanel />
                 {(activeServer?.member_count > 0 || showUsers) && (
                     <Button variant="ghost" size="icon" data-state={showUsers ? "active" : "inactive"}
-                        className="!p-0 ml-auto data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                        className="!p-0 data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                         onClick={() => {
                             // Toggle users panel visibility
                             setShowUsers(!showUsers);

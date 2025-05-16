@@ -53,6 +53,8 @@ export default function App() {
         serverId: null,
         channelId: null
     });
+    const hasFocusRef = useRef<boolean>(true); // Track if window has focus
+    const hasStoredRouteRef = useRef<boolean>(false); // Track if we've stored a route 
 
     // Initialize global request limiting on first render only
     useEffect(() => {
@@ -60,6 +62,34 @@ export default function App() {
             initRef.current = true;
             initializeRequestLimiting();
         }
+
+        // Add focus/blur event listeners to track window focus state
+        const handleVisibilityChange = () => {
+            hasFocusRef.current = document.visibilityState === 'visible';
+            console.log(`[App] Window visibility changed: ${document.visibilityState}`);
+        };
+
+        const handleBlur = () => {
+            hasFocusRef.current = false;
+            console.log('[App] Window lost focus');
+        };
+
+        const handleFocus = () => {
+            hasFocusRef.current = true;
+            console.log('[App] Window gained focus');
+        };
+
+        // Add event listeners
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
+
+        // Remove event listeners on cleanup
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, []);
 
     // Mark notifications as read when entering a channel
@@ -289,14 +319,24 @@ export default function App() {
     }, [connected, address]);
 
     useEffect(() => {
-        console.log(connected)
+        // Prevent unnecessary navigations when app blurs and refocuses
+        // Only redirect to landing if truly disconnected and window has focus
         const t = setTimeout(() => {
-            if (!connected) {
+            // Only redirect if window has focus and connection is lost
+            if (!connected && hasFocusRef.current && document.visibilityState === 'visible') {
+                // Only store the route once per session to prevent duplication
+                if ((serverId || channelId || userId) && !hasStoredRouteRef.current) {
+                    sessionStorage.setItem('last_app_route', window.location.hash);
+                    hasStoredRouteRef.current = true;
+                }
                 navigate("/");
+            } else if (connected) {
+                // Reset the stored route flag when connected
+                hasStoredRouteRef.current = false;
             }
-        }, 200);
+        }, 800); // Increased timeout to handle brief connection blips
         return () => clearTimeout(t);
-    }, [connected]);
+    }, [connected, navigate, serverId, channelId, userId]);
 
     // Use hooks for server synchronization and cache persistence
     useServerSync();

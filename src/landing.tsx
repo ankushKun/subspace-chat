@@ -33,17 +33,34 @@ export default function Landing() {
 
 
   useEffect(() => {
-    console.log(connected)
     if (connected && address) {
-      console.log("connected", address);
-      navigate("/app");
+      // Check for a stored route from a previous session
+      const lastRoute = sessionStorage.getItem('last_app_route');
+      if (lastRoute) {
+        // Clear the stored route
+        sessionStorage.removeItem('last_app_route');
+        // Navigate to the stored route directly
+        window.location.hash = lastRoute;
+      } else {
+        // Otherwise, navigate to the default app route
+        navigate("/app");
+      }
     }
-  }, [connected, address]);
+  }, [connected, address, navigate]);
 
   async function start() {
     if (connected && address) {
-      console.log("connected", address);
-      navigate("/app");
+      // Check for a stored route from a previous session
+      const lastRoute = sessionStorage.getItem('last_app_route');
+      if (lastRoute) {
+        // Clear the stored route
+        sessionStorage.removeItem('last_app_route');
+        // Navigate to the stored route directly
+        window.location.hash = lastRoute;
+      } else {
+        // Otherwise, navigate to the default app route
+        navigate("/app");
+      }
     }
     else
       setLoginStep(LoginStep.Login);

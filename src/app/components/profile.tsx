@@ -82,9 +82,14 @@ export default function Profile() {
             // Update the ref to current address
             previousAddressRef.current = activeAddress;
 
-            // If we have a previous address (not initial load), navigate to /app
+            // If we have a previous address (not initial load), store current route and navigate to /app
             if (previousAddressRef.current !== null) {
                 console.log(`[Profile] Navigating to /app due to wallet address change`);
+                // Store the current URL hash before redirecting
+                const currentHash = window.location.hash;
+                if (currentHash && currentHash !== '#/app') {
+                    sessionStorage.setItem('last_app_route', currentHash);
+                }
                 navigate('/app');
             }
 
@@ -259,7 +264,7 @@ export default function Profile() {
 
     // Save profile changes
     const handleSaveProfile = async () => {
-        if (!activeAddress || !activeServerId) return;
+        if (!activeAddress) return;
 
         setIsSaving(true);
         try {
@@ -286,8 +291,8 @@ export default function Profile() {
                 }
             }
 
-            // Update server-specific nickname
-            if (nickname !== getServerNickname()) {
+            // Update server-specific nickname if on a server
+            if (activeServerId && nickname !== getServerNickname()) {
                 toast.loading("Updating server nickname...");
                 const nicknameResult = await updateNickname(activeServerId, nickname);
                 toast.dismiss();
@@ -500,7 +505,7 @@ export default function Profile() {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center justify-between">
                             <span>Your Profile</span>
-                            {!isEditing && activeServerId && (
+                            {!isEditing && activeAddress && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -516,7 +521,7 @@ export default function Profile() {
                         <AlertDialogDescription>
                             {activeServerId
                                 ? "Your server nickname and profile picture are visible to other members."
-                                : "Select a server first to set your server-specific nickname."}
+                                : "You can update your profile picture which will be visible across all servers."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
 
@@ -529,7 +534,7 @@ export default function Profile() {
                                 <Skeleton className="h-10 w-full" />
                                 <Skeleton className="h-10 w-full" />
                             </div>
-                        ) : isEditing && activeServerId ? (
+                        ) : isEditing ? (
                             <div className="space-y-4">
                                 <FileDropzone
                                     onFileChange={setProfilePic}
@@ -539,16 +544,18 @@ export default function Profile() {
                                     placeholder="Drag & drop profile picture or click to select"
                                 />
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="nickname">Server Nickname</Label>
-                                    <Input
-                                        id="nickname"
-                                        value={nickname}
-                                        onChange={(e) => setNickname(e.target.value)}
-                                        placeholder="Enter a nickname for this server"
-                                    />
-                                    <p className="text-xs text-muted-foreground">This nickname will only be shown in {activeServer?.name || "this server"}.</p>
-                                </div>
+                                {activeServerId && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="nickname">Server Nickname</Label>
+                                        <Input
+                                            id="nickname"
+                                            value={nickname}
+                                            onChange={(e) => setNickname(e.target.value)}
+                                            placeholder="Enter a nickname for this server"
+                                        />
+                                        <p className="text-xs text-muted-foreground">This nickname will only be shown in {activeServer?.name || "this server"}.</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-6">
@@ -627,7 +634,7 @@ export default function Profile() {
                                 </Button>
                                 <Button
                                     onClick={handleSaveProfile}
-                                    disabled={isSaving || !activeServerId}
+                                    disabled={isSaving || !activeAddress}
                                     className="flex items-center gap-2"
                                 >
                                     {isSaving ? (

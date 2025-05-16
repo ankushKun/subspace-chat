@@ -657,7 +657,7 @@ app.post("/edit-message", function(req, res)
     if #original_message == 1 then
         original_message = original_message[1]
         if original_message.author_id == editor then
-            local rows_updated = SQLWrite("UPDATE messages SET content = ? WHERE msg_id = ?", content, msg_id)
+            local rows_updated = SQLWrite("UPDATE messages SET content = ?, edited = 1 WHERE msg_id = ?", content, msg_id)
             if rows_updated == 1 then
                 res:json({
                     success = true

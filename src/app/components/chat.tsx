@@ -1,9 +1,9 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ArrowLeft, HashIcon, Send, Users, Loader2 } from "lucide-react";
+import { ArrowLeft, HashIcon, Send, Users, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
-import { getMessages, sendMessage, getProfile } from "@/lib/ao";
+import { getMessages, sendMessage, getProfile, editMessage, deleteMessage } from "@/lib/ao";
 import { toast } from "sonner";
 import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { MentionsInput, Mention } from 'react-mentions';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Message type from server
 interface Message {
@@ -97,6 +103,27 @@ export default function Chat() {
     const activeUserProfilesRef = useRef<Set<string>>(new Set());
     const abortControllerRef = useRef<AbortController | null>(null);
     const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
+    // State for editing messages
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [editedContent, setEditedContent] = useState("");
+    const [isEditing, setIsEditing] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    // Current user address
+    const [currentAddress, setCurrentAddress] = useState<string>("");
+
+    // Load current user address
+    useEffect(() => {
+        const loadCurrentAddress = async () => {
+            try {
+                const address = await window.arweaveWallet.getActiveAddress();
+                setCurrentAddress(address);
+            } catch (error) {
+                console.error("Error loading wallet address:", error);
+            }
+        };
+
+        loadCurrentAddress();
+    }, []);
 
     // Find the active channel from the server data
     const activeChannel = useMemo(() => {
@@ -578,6 +605,91 @@ export default function Chat() {
         return result;
     };
 
+    // Handle edit message
+    const handleEditMessage = async () => {
+        if (!editingMessage || !editedContent.trim() || !activeServerId) {
+            return;
+        }
+
+        setIsEditing(true);
+
+        try {
+            // Create an optimistic update
+            const updatedMessages = messages.map(msg =>
+                msg.msg_id === editingMessage.msg_id
+                    ? { ...msg, content: editedContent.trim(), edited: 1 }
+                    : msg
+            );
+
+            setMessages(updatedMessages);
+
+            // Send the edit to the server
+            await editMessage(
+                activeServerId,
+                editingMessage.msg_id,
+                editedContent.trim()
+            );
+
+            // Fetch updated messages after a small delay
+            setTimeout(() => fetchMessages(false), 500);
+
+            // Exit edit mode
+            setEditingMessage(null);
+            setEditedContent("");
+        } catch (error) {
+            console.error("Error editing message:", error);
+            toast.error("Failed to edit message");
+
+            // Revert to original messages if editing failed
+            fetchMessages(false);
+        } finally {
+            setIsEditing(false);
+        }
+    };
+
+    // Handle delete message
+    const handleDeleteMessage = async (message: Message) => {
+        if (!activeServerId) return;
+
+        setIsDeleting(true);
+
+        try {
+            // Optimistically remove the message from UI
+            setMessages(messages.filter(msg => msg.msg_id !== message.msg_id));
+
+            // Send delete request to server
+            await deleteMessage(activeServerId, message.msg_id);
+
+            // Fetch updated messages after a small delay
+            setTimeout(() => fetchMessages(false), 500);
+        } catch (error) {
+            console.error("Error deleting message:", error);
+            toast.error("Failed to delete message");
+
+            // Refresh messages if deletion failed
+            fetchMessages(false);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Cancel editing
+    const cancelEditing = () => {
+        setEditingMessage(null);
+        setEditedContent("");
+    };
+
+    // Check if user is the author of a message
+    const isMessageAuthor = async (authorId: string) => {
+        try {
+            const currentAddress = await window.arweaveWallet.getActiveAddress();
+            return currentAddress === authorId;
+        } catch (error) {
+            console.error("Error checking message author:", error);
+            return false;
+        }
+    };
+
     // Loading or no server selected - show placeholder
     if (!activeServer) {
         return (
@@ -683,9 +795,16 @@ export default function Chat() {
 
                                             <span
                                                 className="text-xs text-muted-foreground whitespace-nowrap"
-                                                title={formatFullDate(message.timestamp)}
+                                                title={message.edited
+                                                    ? `${formatFullDate(message.timestamp)} (edited)`
+                                                    : formatFullDate(message.timestamp)}
                                             >
                                                 {formatTimestamp(message.timestamp)}
+                                                {message.edited ?
+                                                    <span className="text-xs ml-1 text-muted-foreground/80 italic" title="This message has been edited">
+                                                        (edited)
+                                                    </span> :
+                                                    null}
                                             </span>
 
                                             {/* Add wallet address as tooltip/subtitle if we're showing a username */}
@@ -694,10 +813,71 @@ export default function Chat() {
                                                     {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
                                                 </span>
                                             )}
+
+                                            {/* Message actions - direct buttons instead of dropdown */}
+                                            {message.author_id === currentAddress && (
+                                                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => {
+                                                            setEditingMessage(message);
+                                                            setEditedContent(message.content);
+                                                        }}
+                                                        disabled={isEditing || isDeleting}
+                                                        title="Edit message"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-destructive hover:text-destructive"
+                                                        onClick={() => handleDeleteMessage(message)}
+                                                        disabled={isEditing || isDeleting}
+                                                        title="Delete message"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
-                                        <p className="mt-1 text-sm break-words">
-                                            {formatMessageWithMentions(message.content)}
-                                        </p>
+
+                                        {/* Show edit input if editing this message */}
+                                        {editingMessage?.msg_id === message.msg_id ? (
+                                            <div className="mt-1">
+                                                <div className="flex gap-2 mt-2">
+                                                    <input
+                                                        type="text"
+                                                        value={editedContent}
+                                                        onChange={(e) => setEditedContent(e.target.value)}
+                                                        className="w-full p-2 text-sm bg-muted/50 rounded-md"
+                                                        autoFocus
+                                                    />
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={handleEditMessage}
+                                                        disabled={isEditing}
+                                                    >
+                                                        {isEditing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={cancelEditing}
+                                                        disabled={isEditing}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1 text-sm break-words">
+                                                {formatMessageWithMentions(message.content)}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

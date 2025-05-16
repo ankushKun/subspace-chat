@@ -16,9 +16,6 @@ import { useEffect, useRef } from 'react'
 import { WanderConnect } from '@wanderapp/connect'
 import { useGlobalState } from '@/hooks'
 import { useLocalStorage } from '@uidotdev/usehooks'
-import { createConfig, http } from 'wagmi'
-import { mainnet, arbitrum } from 'wagmi/chains'
-import { injected, walletConnect } from 'wagmi/connectors'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Create a QueryClient for React Query
@@ -26,7 +23,7 @@ const queryClient = new QueryClient()
 
 function Main() {
   const { wanderInstance, setWanderInstance } = useGlobalState()
-  const [useWC, setUseWC] = useLocalStorage("useWC", true);
+  const [useWC, setUseWC] = useLocalStorage("useWC", false);
   const { connect } = useConnection();
 
   useEffect(() => {
@@ -47,7 +44,14 @@ function Main() {
         console.log(userDetails)
         if (!!userDetails) {
           try {
-            await window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION"]);
+            await window.arweaveWallet.connect([
+              "ACCESS_ADDRESS",
+              "SIGN_TRANSACTION",
+              "ACCESS_PUBLIC_KEY",
+              "ENCRYPT",
+              "DECRYPT",
+              "SIGNATURE",
+            ]);
             await connect();
           } catch (e) {
             console.error("Error", e);
@@ -77,6 +81,10 @@ function Main() {
           permissions: [
             "ACCESS_ADDRESS",
             "SIGN_TRANSACTION",
+            "ACCESS_PUBLIC_KEY",
+            "ENCRYPT",
+            "DECRYPT",
+            "SIGNATURE",
           ],
           ensurePermissions: true,
           strategies: [

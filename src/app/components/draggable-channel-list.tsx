@@ -713,7 +713,9 @@ export default function DraggableChannelList() {
                                                                 </div>
 
                                                                 {isServerOwner && (
-                                                                    <button
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleCreateChannelInCategory(category.id);
@@ -722,7 +724,7 @@ export default function DraggableChannelList() {
                                                                         title="Create channel"
                                                                     >
                                                                         <Plus className="w-3 h-3" />
-                                                                    </button>
+                                                                    </Button>
                                                                 )}
                                                             </div>
                                                         </ContextMenuTrigger>

@@ -43,20 +43,11 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
     const isMounted = useRef(true);
 
     // Function to check connectivity by making a small HEAD request
-    const checkConnectivity = useCallback(async () => {
+    const checkConnectivity = useCallback(() => {
         if (!isMounted.current) return false;
 
-        try {
-            // Try to fetch a small resource with a cache-busting query param
-            const response = await fetch('/s.png?_=' + new Date().getTime(), {
-                method: 'HEAD',
-                // Short timeout to quickly detect issues
-                signal: AbortSignal.timeout(3000)
-            });
-            return response.ok;
-        } catch (err) {
-            return false;
-        }
+        // Simply return the browser's navigator.onLine status
+        return navigator.onLine;
     }, []);
 
     useEffect(() => {
@@ -98,12 +89,11 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
         };
 
         // Immediately check connectivity on mount
-        checkConnectivity().then(isConnected => {
-            if (!isMounted.current) return;
+        const isConnected = checkConnectivity()
+        if (!isMounted.current) return;
 
-            setIsOnline(isConnected);
-            setShowLoader(!isConnected);
-        });
+        setIsOnline(isConnected);
+        setShowLoader(!isConnected);
 
         // Event listeners for connection status changes
         window.addEventListener('online', handleOnline);

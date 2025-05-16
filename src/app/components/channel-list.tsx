@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight, Link as LinkIcon } from "lucide-react";
+import { ChevronDown, Loader2, FolderPlus, MessageSquarePlus, Settings, Upload, X, CloudAlertIcon, ShieldAlertIcon, TrashIcon, HashIcon, ChevronRight, Link as LinkIcon, Pencil, MoreHorizontal } from "lucide-react";
 import type { Server, Category, Channel } from "@/lib/types";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
-import { updateServer, uploadFileAndGetId, createCategory, createChannel, runLua } from "@/lib/ao";
+import { updateServer, uploadFileAndGetId, createCategory, createChannel, updateCategory, deleteCategory, updateChannel, deleteChannel, runLua } from "@/lib/ao";
 import { useActiveAddress } from "arwalletkit-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -29,9 +29,28 @@ import DraggableChannelList from "./draggable-channel-list";
 import { useMobile } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileDropzone } from "@/components/ui/file-dropzone";
+import { createContext, useContext } from 'react';
 
 // @ts-ignore
 const serverSource = `${__SERVER_SRC__}`
+
+// Create a context to pass handlers to the DraggableChannelList component
+type ChannelListContextType = {
+    onEditCategory: (category: Category) => void;
+    onDeleteCategory: (category: Category) => void;
+    onEditChannel: (channel: Channel) => void;
+    onDeleteChannel: (channel: Channel) => void;
+};
+
+const ChannelListContext = createContext<ChannelListContextType | undefined>(undefined);
+
+export const useChannelListContext = () => {
+    const context = useContext(ChannelListContext);
+    if (!context) {
+        throw new Error('useChannelListContext must be used within a ChannelListProvider');
+    }
+    return context;
+};
 
 export default function ChannelList() {
     const { activeServer, setActiveServer, activeServerId, activeChannelId } = useGlobalState();
@@ -41,6 +60,21 @@ export default function ChannelList() {
     const [isUpdatingServer, setIsUpdatingServer] = useState(false);
     const [isCreatingCategory, setIsCreatingCategory] = useState(false);
     const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+
+    // New state variables for editing and deleting categories and channels
+    const [editCategoryOpen, setEditCategoryOpen] = useState(false);
+    const [deleteCategoryOpen, setDeleteCategoryOpen] = useState(false);
+    const [editChannelOpen, setEditChannelOpen] = useState(false);
+    const [deleteChannelOpen, setDeleteChannelOpen] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+    const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+    const [isEditingCategory, setIsEditingCategory] = useState(false);
+    const [isDeletingCategory, setIsDeletingCategory] = useState(false);
+    const [isEditingChannel, setIsEditingChannel] = useState(false);
+    const [isDeletingChannel, setIsDeletingChannel] = useState(false);
+    const [editCategoryName, setEditCategoryName] = useState("");
+    const [editChannelName, setEditChannelName] = useState("");
+
     const activeAddress = useActiveAddress();
     const isMobile = useMobile();
     // Form states
@@ -58,6 +92,20 @@ export default function ChannelList() {
             setServerName(activeServer.name);
         }
     }, [updateServerOpen, activeServer]);
+
+    // Initialize category edit dialog when opened
+    useEffect(() => {
+        if (editCategoryOpen && selectedCategory) {
+            setEditCategoryName(selectedCategory.name);
+        }
+    }, [editCategoryOpen, selectedCategory]);
+
+    // Initialize channel edit dialog when opened
+    useEffect(() => {
+        if (editChannelOpen && selectedChannel) {
+            setEditChannelName(selectedChannel.name);
+        }
+    }, [editChannelOpen, selectedChannel]);
 
     const handleCreateCategory = async () => {
         if (!activeServerId) {
@@ -329,6 +377,109 @@ export default function ChannelList() {
         }
     }, [activeServer?.categories]);
 
+    // Add new handler functions for editing and deleting categories and channels
+    const handleEditCategory = async () => {
+        if (!activeServerId || !selectedCategory) {
+            return toast.error("No category selected");
+        }
+
+        if (!editCategoryName.trim()) {
+            return toast.error("Please enter a category name");
+        }
+
+        setIsEditingCategory(true);
+
+        try {
+            toast.loading("Updating category...");
+            await updateCategory(activeServerId, selectedCategory.id, editCategoryName.trim());
+            toast.dismiss();
+            toast.success("Category updated successfully");
+
+            setEditCategoryName("");
+            setEditCategoryOpen(false);
+            setSelectedCategory(null);
+        } catch (error) {
+            console.error("Error updating category:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to update category");
+        } finally {
+            setIsEditingCategory(false);
+        }
+    };
+
+    const handleDeleteCategory = async () => {
+        if (!activeServerId || !selectedCategory) {
+            return toast.error("No category selected");
+        }
+
+        setIsDeletingCategory(true);
+
+        try {
+            toast.loading("Deleting category...");
+            await deleteCategory(activeServerId, selectedCategory.id);
+            toast.dismiss();
+            toast.success("Category deleted successfully");
+
+            setDeleteCategoryOpen(false);
+            setSelectedCategory(null);
+        } catch (error) {
+            console.error("Error deleting category:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to delete category");
+        } finally {
+            setIsDeletingCategory(false);
+        }
+    };
+
+    const handleEditChannel = async () => {
+        if (!activeServerId || !selectedChannel) {
+            return toast.error("No channel selected");
+        }
+
+        if (!editChannelName.trim()) {
+            return toast.error("Please enter a channel name");
+        }
+
+        setIsEditingChannel(true);
+
+        try {
+            toast.loading("Updating channel...");
+            await updateChannel(activeServerId, selectedChannel.id, editChannelName.trim());
+            toast.dismiss();
+            toast.success("Channel updated successfully");
+
+            setEditChannelName("");
+            setEditChannelOpen(false);
+            setSelectedChannel(null);
+        } catch (error) {
+            console.error("Error updating channel:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to update channel");
+        } finally {
+            setIsEditingChannel(false);
+        }
+    };
+
+    const handleDeleteChannel = async () => {
+        if (!activeServerId || !selectedChannel) {
+            return toast.error("No channel selected");
+        }
+
+        setIsDeletingChannel(true);
+
+        try {
+            toast.loading("Deleting channel...");
+            await deleteChannel(activeServerId, selectedChannel.id);
+            toast.dismiss();
+            toast.success("Channel deleted successfully");
+
+            setDeleteChannelOpen(false);
+            setSelectedChannel(null);
+        } catch (error) {
+            console.error("Error deleting channel:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to delete channel");
+        } finally {
+            setIsDeletingChannel(false);
+        }
+    };
+
     return (
         <div className="relative w-full flex flex-col h-full">
             <DropdownMenu>
@@ -470,8 +621,27 @@ export default function ChannelList() {
                             </div>
                         )}
 
-                        {/* Use the draggable channel list component instead */}
-                        <DraggableChannelList />
+                        {/* Pass edit/delete handlers to DraggableChannelList via context */}
+                        <ChannelListContext.Provider value={{
+                            onEditCategory: (category) => {
+                                setSelectedCategory(category);
+                                setEditCategoryOpen(true);
+                            },
+                            onDeleteCategory: (category) => {
+                                setSelectedCategory(category);
+                                setDeleteCategoryOpen(true);
+                            },
+                            onEditChannel: (channel) => {
+                                setSelectedChannel(channel);
+                                setEditChannelOpen(true);
+                            },
+                            onDeleteChannel: (channel) => {
+                                setSelectedChannel(channel);
+                                setDeleteChannelOpen(true);
+                            }
+                        }}>
+                            <DraggableChannelList />
+                        </ChannelListContext.Provider>
                     </div>
                 )}
             </div>
@@ -617,61 +787,154 @@ export default function ChannelList() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
-    );
-}
 
-// Category Header Component
-function CategoryHeader({
-    category,
-    isExpanded,
-    onToggle
-}: {
-    category: Category;
-    isExpanded: boolean;
-    onToggle: () => void;
-}) {
-    return (
-        <button
-            onClick={onToggle}
-            className="w-full flex items-center justify-between px-2 py-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors"
-        >
-            <div className="flex items-center gap-1">
-                <ChevronRight
-                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                />
-                <span>{category.name}</span>
-            </div>
-        </button>
-    );
-}
+            {/* Edit Category Dialog */}
+            <AlertDialog open={editCategoryOpen} onOpenChange={setEditCategoryOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Edit Category</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Update the category name.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
 
-// Channel Item Component
-function ChannelItem({ channel }: { channel: Channel }) {
-    const navigate = useNavigate();
-    const { activeServerId, activeChannelId, setActiveChannelId } = useGlobalState();
+                    <div className="py-4">
+                        <div className="space-y-2">
+                            <label htmlFor="edit-category-name" className="text-sm font-medium text-foreground">
+                                Category Name
+                            </label>
+                            <Input
+                                id="edit-category-name"
+                                placeholder="e.g. General Discussion"
+                                value={editCategoryName}
+                                onChange={(e) => setEditCategoryName(e.target.value)}
+                            />
+                        </div>
+                    </div>
 
-    // Check if this channel is the active one
-    const isActive = activeChannelId === channel.id;
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isEditingCategory}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleEditCategory}
+                            disabled={isEditingCategory}
+                            className="relative"
+                        >
+                            {isEditingCategory ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Updating...
+                                </>
+                            ) : (
+                                "Update"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
-    const handleChannelClick = () => {
-        // Update global state
-        setActiveChannelId(channel.id);
-        // Navigate to the channel
-        navigate(`/app/${activeServerId}/${channel.id}`);
-    };
+            {/* Delete Category Dialog */}
+            <AlertDialog open={deleteCategoryOpen} onOpenChange={setDeleteCategoryOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Category</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this category? All channels in this category will become uncategorized.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
 
-    return (
-        <div
-            className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-colors
-                ${isActive
-                    ? 'bg-primary/20 text-foreground'
-                    : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
-            }
-            onClick={handleChannelClick}
-        >
-            <HashIcon className="h-4 w-4" />
-            <span className="text-sm font-medium truncate">{channel.name}</span>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingCategory}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteCategory}
+                            disabled={isDeletingCategory}
+                            className="relative bg-destructive hover:bg-destructive/90"
+                        >
+                            {isDeletingCategory ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                "Delete"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Edit Channel Dialog */}
+            <AlertDialog open={editChannelOpen} onOpenChange={setEditChannelOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Edit Channel</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Update the channel name.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <div className="py-4">
+                        <div className="space-y-2">
+                            <label htmlFor="edit-channel-name" className="text-sm font-medium text-foreground">
+                                Channel Name
+                            </label>
+                            <Input
+                                id="edit-channel-name"
+                                placeholder="e.g. general"
+                                value={editChannelName}
+                                onChange={(e) => setEditChannelName(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isEditingChannel}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleEditChannel}
+                            disabled={isEditingChannel}
+                            className="relative"
+                        >
+                            {isEditingChannel ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Updating...
+                                </>
+                            ) : (
+                                "Update"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Channel Dialog */}
+            <AlertDialog open={deleteChannelOpen} onOpenChange={setDeleteChannelOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Channel</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this channel? All messages will be permanently lost.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingChannel}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteChannel}
+                            disabled={isDeletingChannel}
+                            className="relative bg-destructive hover:bg-destructive/90"
+                        >
+                            {isDeletingChannel ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                "Delete"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

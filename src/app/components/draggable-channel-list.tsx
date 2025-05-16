@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useGlobalState } from '@/hooks/global-state';
-import { HashIcon, ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { HashIcon, ChevronRight, Loader2, Plus, RefreshCw, Pencil, TrashIcon } from 'lucide-react';
 import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
 import { updateChannel, updateCategory, createChannel, refreshCurrentServerData } from '@/lib/ao';
@@ -19,6 +19,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useChannelListContext } from './channel-list';
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export default function DraggableChannelList() {
     const { activeServer, activeServerId, activeChannelId, setActiveChannelId, refreshServerData } = useGlobalState();
@@ -54,6 +62,9 @@ export default function DraggableChannelList() {
 
     // Check if current user is server owner
     const isServerOwner = activeServer?.owner === activeAddress;
+
+    // Get edit/delete handlers from context
+    const { onEditCategory, onDeleteCategory, onEditChannel, onDeleteChannel } = useChannelListContext();
 
     // Enhanced refresh function with debounce
     const scheduleRefresh = (immediate = false) => {
@@ -528,7 +539,7 @@ export default function DraggableChannelList() {
 
     return (
         <>
-            <div className="flex items-center justify-between px-2 mb-2">
+            <div className="flex items-center justify-end px-2 w-fit -mb-1  absolute bottom-0">
                 {isRefreshingUI ? (
                     <span className="text-xs text-muted-foreground flex items-center opacity-40">
                         <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
@@ -538,7 +549,7 @@ export default function DraggableChannelList() {
                     <span className="text-xs text-muted-foreground opacity-0">•</span>
                 )}
 
-                <Button
+                {/* <Button
                     variant="ghost"
                     size="icon"
                     className="h-5 w-5 opacity-30 hover:opacity-100 transition-opacity"
@@ -547,7 +558,7 @@ export default function DraggableChannelList() {
                     title="Refresh data"
                 >
                     <RefreshCw className="h-3 w-3 text-muted-foreground" />
-                </Button>
+                </Button> */}
             </div>
 
             <DragDropContext
@@ -565,47 +576,94 @@ export default function DraggableChannelList() {
                     {/* Uncategorized Channels Section - always show it */}
                     <Droppable droppableId="uncategorized" type="CHANNEL">
                         {(provided, snapshot) => (
-                            <div
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                className="space-y-1 px-2 mb-4 min-h-[8px]"
-                            >
-                                {uncategorizedChannels.map((channel, index) => (
-                                    <Draggable
-                                        key={channel.id.toString()}
-                                        draggableId={`channel-${channel.id}`}
-                                        index={index}
+                            <ContextMenu>
+                                <ContextMenuTrigger asChild>
+                                    <div
+                                        ref={provided.innerRef}
+                                        {...provided.droppableProps}
+                                        className="space-y-1 px-2 mb-4 min-h-[8px] relative"
                                     >
-                                        {(provided, snapshot) => (
-                                            <div
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                {...provided.dragHandleProps}
-                                                className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all relative
-                                                    ${snapshot.isDragging
-                                                        ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30'
-                                                        : ''
-                                                    }
-                                                    ${activeChannelId === channel.id
-                                                        ? 'bg-primary/20 text-foreground'
-                                                        : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
-                                                }
-                                                onClick={() => handleChannelClick(channel)}
-                                            >
-                                                <HashIcon className="h-4 w-4" />
-                                                <span className="text-sm font-medium truncate">{channel.name}</span>
-
-                                                {/* Show loading indicator when channel is being updated */}
-                                                {updatingChannels.includes(channel.id) && (
-                                                    <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
-                                                )}
+                                        {/* Add a header for the uncategorized section */}
+                                        {/* <div className="flex items-center justify-between mb-1">
+                                            <div className="text-xs uppercase font-semibold text-muted-foreground">
+                                                Channels
                                             </div>
-                                        )}
-                                    </Draggable>
-                                ))}
+                                            {isServerOwner && (
+                                                <button
+                                                    onClick={handleCreateUncategorizedChannel}
+                                                    className="p-1 w-4 h-4 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 opacity-0 group-hover:opacity-100 transition-all"
+                                                    title="Create channel"
+                                                >
+                                                    <Plus className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div> */}
 
-                                {provided.placeholder}
-                            </div>
+                                        {uncategorizedChannels.map((channel, index) => (
+                                            <Draggable
+                                                key={channel.id}
+                                                draggableId={`channel-${channel.id}`}
+                                                index={index}
+                                                isDragDisabled={!isServerOwner || isUpdating}
+                                            >
+                                                {(provided, snapshot) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                    >
+                                                        <ContextMenu>
+                                                            <ContextMenuTrigger asChild>
+                                                                <div
+                                                                    onClick={() => handleChannelClick(channel)}
+                                                                    className={`flex items-center py-1 px-2 rounded-md cursor-pointer group transition-colors
+                                                                        ${snapshot.isDragging ? 'bg-accent' : ''}
+                                                                        ${channel.id === activeChannelId
+                                                                            ? 'bg-primary/20 text-foreground'
+                                                                            : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
+                                                                    }
+                                                                >
+                                                                    <div className="flex items-center gap-2 flex-1">
+                                                                        <HashIcon className="h-4 w-4" />
+                                                                        <span className="text-sm font-medium truncate">{channel.name}</span>
+                                                                        {updatingChannels.includes(channel.id) &&
+                                                                            <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            </ContextMenuTrigger>
+
+                                                            {isServerOwner && (
+                                                                <ContextMenuContent className="w-48">
+                                                                    <ContextMenuItem onClick={() => onEditChannel(channel)}>
+                                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                                        Edit Channel
+                                                                    </ContextMenuItem>
+                                                                    <ContextMenuItem onClick={() => onDeleteChannel(channel)} className="text-destructive focus:text-destructive">
+                                                                        <TrashIcon className="mr-2 h-4 w-4" />
+                                                                        Delete Channel
+                                                                    </ContextMenuItem>
+                                                                </ContextMenuContent>
+                                                            )}
+                                                        </ContextMenu>
+                                                    </div>
+                                                )}
+                                            </Draggable>
+                                        ))}
+
+                                        {provided.placeholder}
+                                    </div>
+                                </ContextMenuTrigger>
+
+                                {isServerOwner && (
+                                    <ContextMenuContent className="w-48">
+                                        <ContextMenuItem onClick={handleCreateUncategorizedChannel}>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add Channel
+                                        </ContextMenuItem>
+                                    </ContextMenuContent>
+                                )}
+                            </ContextMenu>
                         )}
                     </Droppable>
 
@@ -628,47 +686,65 @@ export default function DraggableChannelList() {
                                                 ref={provided.innerRef}
                                                 {...provided.draggableProps}
                                                 className={`space-y-1 rounded-md overflow-hidden
-                                                    ${snapshot.isDragging
+                                                ${snapshot.isDragging
                                                         ? 'opacity-90 shadow-lg ring-1 ring-primary/30 bg-background'
                                                         : ''
                                                     }`
                                                 }
                                             >
-                                                {/* Category Header */}
-                                                <div
-                                                    {...provided.dragHandleProps}
-                                                    className="w-full flex items-center justify-between px-2 py-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors cursor-pointer"
-                                                >
-                                                    <div
-                                                        className="flex items-center gap-1"
-                                                        onClick={() => toggleCategory(category.id)}
-                                                    >
-                                                        <ChevronRight
-                                                            className={`h-3 w-3 transition-transform ${expandedCategories.has(category.id) ? 'rotate-90' : ''}`}
-                                                        />
-                                                        <span>{category.name}</span>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-1">
-                                                        {/* Show loading indicator when category is being updated */}
-                                                        {updatingCategories.includes(category.id) && (
-                                                            <Loader2 className="h-3 w-3 animate-spin text-primary mr-1" />
-                                                        )}
-
-                                                        {/* Add plus button for creating channels in this category */}
-                                                        {isServerOwner && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleCreateChannelInCategory(category.id);
-                                                                }}
-                                                                className="w-5 h-5 rounded-full hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title={`Add channel to ${category.name}`}
+                                                {/* Category Header with drag handle */}
+                                                <div {...provided.dragHandleProps}>
+                                                    <ContextMenu>
+                                                        <ContextMenuTrigger asChild>
+                                                            <div
+                                                                className="flex items-center justify-between px-2 py-1 group select-none"
+                                                                onClick={() => toggleCategory(category.id)}
                                                             >
-                                                                <Plus className="w-3.5 h-3.5" />
-                                                            </button>
+                                                                <div className="flex items-center justify-between flex-1 text-xs uppercase font-semibold text-muted-foreground hover:text-foreground group transition-colors">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <ChevronRight
+                                                                            className={`h-3 w-3 transition-transform ${expandedCategories.has(category.id) ? 'rotate-90' : ''}`}
+                                                                        />
+                                                                        <span>{category.name}</span>
+                                                                        {updatingCategories.includes(category.id) &&
+                                                                            <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
+                                                                        }
+                                                                    </div>
+                                                                </div>
+
+                                                                {isServerOwner && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleCreateChannelInCategory(category.id);
+                                                                        }}
+                                                                        className="p-1 w-4 h-4 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 opacity-0 group-hover:opacity-100 transition-all"
+                                                                        title="Create channel"
+                                                                    >
+                                                                        <Plus className="w-3 h-3" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </ContextMenuTrigger>
+
+                                                        {isServerOwner && (
+                                                            <ContextMenuContent className="w-48">
+                                                                <ContextMenuItem onClick={() => onEditCategory(category)}>
+                                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                                    Edit Category
+                                                                </ContextMenuItem>
+                                                                <ContextMenuItem onClick={() => onDeleteCategory(category)} className="text-destructive focus:text-destructive">
+                                                                    <TrashIcon className="mr-2 h-4 w-4" />
+                                                                    Delete Category
+                                                                </ContextMenuItem>
+                                                                <ContextMenuSeparator />
+                                                                <ContextMenuItem onClick={() => handleCreateChannelInCategory(category.id)}>
+                                                                    <Plus className="mr-2 h-4 w-4" />
+                                                                    Add Channel
+                                                                </ContextMenuItem>
+                                                            </ContextMenuContent>
                                                         )}
-                                                    </div>
+                                                    </ContextMenu>
                                                 </div>
 
                                                 {/* Category Channels */}
@@ -682,33 +758,51 @@ export default function DraggableChannelList() {
                                                             >
                                                                 {getChannelsForCategory(category.id).map((channel, channelIndex) => (
                                                                     <Draggable
-                                                                        key={channel.id.toString()}
+                                                                        key={channel.id}
                                                                         draggableId={`channel-${channel.id}`}
                                                                         index={channelIndex}
+                                                                        isDragDisabled={!isServerOwner || isUpdating}
                                                                     >
                                                                         {(provided, snapshot) => (
                                                                             <div
                                                                                 ref={provided.innerRef}
                                                                                 {...provided.draggableProps}
                                                                                 {...provided.dragHandleProps}
-                                                                                className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer group transition-all
-                                                                                    ${snapshot.isDragging
-                                                                                        ? 'opacity-80 bg-primary/20 shadow-lg scale-105 border border-primary/30 z-50'
-                                                                                        : ''
-                                                                                    }
-                                                                                    ${activeChannelId === channel.id
-                                                                                        ? 'bg-primary/20 text-foreground'
-                                                                                        : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
-                                                                                }
-                                                                                onClick={() => handleChannelClick(channel)}
                                                                             >
-                                                                                <HashIcon className="h-4 w-4" />
-                                                                                <span className="text-sm font-medium truncate">{channel.name}</span>
+                                                                                <ContextMenu>
+                                                                                    <ContextMenuTrigger asChild>
+                                                                                        <div
+                                                                                            onClick={() => handleChannelClick(channel)}
+                                                                                            className={`flex items-center py-1 px-2 rounded-md cursor-pointer group transition-colors
+                                                                                            ${snapshot.isDragging ? 'bg-accent' : ''}
+                                                                                            ${channel.id === activeChannelId
+                                                                                                    ? 'bg-primary/20 text-foreground'
+                                                                                                    : 'hover:bg-accent/40 text-muted-foreground hover:text-foreground'}`
+                                                                                            }
+                                                                                        >
+                                                                                            <div className="flex items-center gap-2 flex-1">
+                                                                                                <HashIcon className="h-4 w-4" />
+                                                                                                <span className="text-sm font-medium truncate">{channel.name}</span>
+                                                                                                {updatingChannels.includes(channel.id) &&
+                                                                                                    <Loader2 className="ml-1 h-3 w-3 animate-spin text-primary" />
+                                                                                                }
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </ContextMenuTrigger>
 
-                                                                                {/* Show loading indicator when channel is being updated */}
-                                                                                {updatingChannels.includes(channel.id) && (
-                                                                                    <Loader2 className="h-3 w-3 ml-auto animate-spin text-primary" />
-                                                                                )}
+                                                                                    {isServerOwner && (
+                                                                                        <ContextMenuContent className="w-48">
+                                                                                            <ContextMenuItem onClick={() => onEditChannel(channel)}>
+                                                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                                                Edit Channel
+                                                                                            </ContextMenuItem>
+                                                                                            <ContextMenuItem onClick={() => onDeleteChannel(channel)} className="text-destructive focus:text-destructive">
+                                                                                                <TrashIcon className="mr-2 h-4 w-4" />
+                                                                                                Delete Channel
+                                                                                            </ContextMenuItem>
+                                                                                        </ContextMenuContent>
+                                                                                    )}
+                                                                                </ContextMenu>
                                                                             </div>
                                                                         )}
                                                                     </Draggable>

@@ -752,7 +752,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             // Once we have the server info, update our cache
             const updatedCache = new Map(get().serverCache);
             updatedCache.set(serverId, {
-                data: serverInfo,
+                data: serverInfo as Server,
                 timestamp: Date.now()
             });
             saveServerCache(updatedCache);

@@ -812,6 +812,15 @@ export default function Chat() {
         return messageAuthorId === currentAddress || isServerOwner;
     };
 
+    // Check if a message mentions the current user
+    const messageContainsCurrentUserMention = (content: string, currentAddress: string) => {
+        if (!content || !currentAddress) return false;
+
+        // Check for mentions in the format @[display](id) where id matches current address
+        const mentionRegex = new RegExp(`@\\[.*?\\]\\(${currentAddress}\\)`, 'g');
+        return mentionRegex.test(content);
+    };
+
     // Loading or no server selected - show placeholder
     if (!activeServer) {
         return (
@@ -875,151 +884,160 @@ export default function Chat() {
                     </div>
                 ) : (
                     <div className="space-y-4 mt-5">
-                        {messages.map((message) => (
-                            <div key={message.msg_id} className="group px-4 py-1 pb-3 m-0 mb-1 hover:bg-accent/30">
-                                <div className="flex items-start gap-3">
-                                    {/* Profile avatar - wrapped in the popover */}
-                                    <UserProfilePopover
-                                        userId={message.author_id}
-                                        side="right"
-                                        align="start"
-                                    >
-                                        <PopoverTrigger asChild>
-                                            <div className="w-10 h-10 mt-1 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer">
-                                                {getProfilePicture(message.author_id) ? (
-                                                    <img
-                                                        src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
-                                                        alt={getDisplayName(message.author_id)}
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => {
-                                                            // Handle broken images by showing fallback
-                                                            e.currentTarget.src = '';
-                                                            e.currentTarget.style.display = 'none';
-                                                            e.currentTarget.parentElement!.innerHTML = message.author_id.substring(0, 2).toUpperCase();
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <span className="text-base font-medium">{message.author_id.substring(0, 2).toUpperCase()}</span>
-                                                )}
-                                            </div>
-                                        </PopoverTrigger>
-                                    </UserProfilePopover>
+                        {messages.map((message) => {
+                            // Check if the message mentions the current user
+                            const isCurrentUserMentioned = messageContainsCurrentUserMention(message.content, currentAddress);
 
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center h-6 gap-2">
-                                            {/* Username with popover */}
-                                            <UserProfilePopover
-                                                userId={message.author_id}
-                                                side="bottom"
-                                                align="start"
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    {(() => {
-                                                        const displayName = getDisplayName(message.author_id);
-                                                        const userProfile = getUserProfileFromCache(message.author_id);
-                                                        const hasNicknameOrPrimary = userProfile?.username || userProfile?.primaryName;
-                                                        return (
-                                                            <span
-                                                                className={`font-semibold text-sm truncate cursor-pointer hover:underline${!hasNicknameOrPrimary ? " text-muted-foreground" : ""}`}
-                                                            >
-                                                                {displayName}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </PopoverTrigger>
-                                            </UserProfilePopover>
+                            return (
+                                <div
+                                    key={message.msg_id}
+                                    className={`group px-4 py-1 pb-3 m-0 mb-1 hover:bg-foreground/5 ${isCurrentUserMentioned ? 'bg-yellow-400/10 border-l-2 border-yellow-400' : ''
+                                        }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        {/* Profile avatar - wrapped in the popover */}
+                                        <UserProfilePopover
+                                            userId={message.author_id}
+                                            side="right"
+                                            align="start"
+                                        >
+                                            <PopoverTrigger asChild>
+                                                <div className="w-10 h-10 mt-1 rounded-full bg-muted flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer">
+                                                    {getProfilePicture(message.author_id) ? (
+                                                        <img
+                                                            src={`https://arweave.net/${getProfilePicture(message.author_id)}`}
+                                                            alt={getDisplayName(message.author_id)}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                // Handle broken images by showing fallback
+                                                                e.currentTarget.src = '';
+                                                                e.currentTarget.style.display = 'none';
+                                                                e.currentTarget.parentElement!.innerHTML = message.author_id.substring(0, 2).toUpperCase();
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-base font-medium">{message.author_id.substring(0, 2).toUpperCase()}</span>
+                                                    )}
+                                                </div>
+                                            </PopoverTrigger>
+                                        </UserProfilePopover>
 
-                                            <span
-                                                className="text-xs text-muted-foreground whitespace-nowrap"
-                                                title={message.edited
-                                                    ? `${formatFullDate(message.timestamp)} (edited)`
-                                                    : formatFullDate(message.timestamp)}
-                                            >
-                                                {formatTimestamp(message.timestamp)}
-                                                {message.edited ?
-                                                    <span className="text-xs ml-1 text-muted-foreground/80 italic" title="This message has been edited">
-                                                        (edited)
-                                                    </span> :
-                                                    null}
-                                            </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center h-6 gap-2">
+                                                {/* Username with popover */}
+                                                <UserProfilePopover
+                                                    userId={message.author_id}
+                                                    side="bottom"
+                                                    align="start"
+                                                >
+                                                    <PopoverTrigger asChild>
+                                                        {(() => {
+                                                            const displayName = getDisplayName(message.author_id);
+                                                            const userProfile = getUserProfileFromCache(message.author_id);
+                                                            const hasNicknameOrPrimary = userProfile?.username || userProfile?.primaryName;
+                                                            return (
+                                                                <span
+                                                                    className={`font-semibold text-sm truncate cursor-pointer hover:underline${!hasNicknameOrPrimary ? " text-muted-foreground" : ""}`}
+                                                                >
+                                                                    {displayName}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </PopoverTrigger>
+                                                </UserProfilePopover>
 
-                                            {/* Add wallet address as tooltip/subtitle if we're showing a username or primary name */}
-                                            {(getUserProfileFromCache(message.author_id)?.username || getUserProfileFromCache(message.author_id)?.primaryName) && (
-                                                <span className="text-xs text-muted-foreground hidden group-hover:inline">
-                                                    {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
+                                                <span
+                                                    className="text-xs text-muted-foreground whitespace-nowrap"
+                                                    title={message.edited
+                                                        ? `${formatFullDate(message.timestamp)} (edited)`
+                                                        : formatFullDate(message.timestamp)}
+                                                >
+                                                    {formatTimestamp(message.timestamp)}
+                                                    {message.edited ?
+                                                        <span className="text-xs ml-1 text-muted-foreground/80 italic" title="This message has been edited">
+                                                            (edited)
+                                                        </span> :
+                                                        null}
                                                 </span>
-                                            )}
 
-                                            {/* Message actions - direct buttons instead of dropdown */}
-                                            <div className="ml-auto relative z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                                {message.author_id === currentAddress && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => {
-                                                            setEditingMessage(message);
-                                                            setEditedContent(message.content);
-                                                        }}
-                                                        disabled={isEditing || isDeleting}
-                                                        title="Edit message"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </Button>
+                                                {/* Add wallet address as tooltip/subtitle if we're showing a username or primary name */}
+                                                {(getUserProfileFromCache(message.author_id)?.username || getUserProfileFromCache(message.author_id)?.primaryName) && (
+                                                    <span className="text-xs text-muted-foreground hidden group-hover:inline">
+                                                        {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
+                                                    </span>
                                                 )}
-                                                {canDeleteMessage(message.author_id) && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6 text-destructive hover:text-destructive"
-                                                        onClick={() => handleDeleteMessage(message)}
-                                                        disabled={isEditing || isDeleting}
-                                                        title={isServerOwner && message.author_id !== currentAddress ? "Delete as server owner" : "Delete message"}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
 
-                                        {/* Show edit input if editing this message */}
-                                        {editingMessage?.msg_id === message.msg_id ? (
-                                            <div className="mt-1">
-                                                <div className="flex gap-2 mt-2">
-                                                    <Input
-                                                        type="text"
-                                                        value={editedContent}
-                                                        onChange={(e) => setEditedContent(e.target.value)}
-                                                        className="w-full p-2 text-sm bg-muted/50 rounded-md"
-                                                        autoFocus
-                                                    />
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={handleEditMessage}
-                                                        disabled={isEditing}
-                                                    >
-                                                        {isEditing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={cancelEditing}
-                                                        disabled={isEditing}
-                                                    >
-                                                        Cancel
-                                                    </Button>
+                                                {/* Message actions - direct buttons instead of dropdown */}
+                                                <div className="ml-auto relative z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                                    {message.author_id === currentAddress && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={() => {
+                                                                setEditingMessage(message);
+                                                                setEditedContent(message.content);
+                                                            }}
+                                                            disabled={isEditing || isDeleting}
+                                                            title="Edit message"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
+                                                    {canDeleteMessage(message.author_id) && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-destructive hover:text-destructive"
+                                                            onClick={() => handleDeleteMessage(message)}
+                                                            disabled={isEditing || isDeleting}
+                                                            title={isServerOwner && message.author_id !== currentAddress ? "Delete as server owner" : "Delete message"}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <p className=" text-sm break-words">
-                                                {formatMessageWithMentions(message.content)}
-                                            </p>
-                                        )}
+
+                                            {/* Show edit input if editing this message */}
+                                            {editingMessage?.msg_id === message.msg_id ? (
+                                                <div className="mt-1">
+                                                    <div className="flex gap-2 mt-2">
+                                                        <Input
+                                                            type="text"
+                                                            value={editedContent}
+                                                            onChange={(e) => setEditedContent(e.target.value)}
+                                                            className="w-full p-2 text-sm bg-muted/50 rounded-md"
+                                                            autoFocus
+                                                        />
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={handleEditMessage}
+                                                            disabled={isEditing}
+                                                        >
+                                                            {isEditing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={cancelEditing}
+                                                            disabled={isEditing}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className=" text-sm break-words">
+                                                    {formatMessageWithMentions(message.content)}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         <div ref={messagesEndRef} />
                     </div>
                 )}

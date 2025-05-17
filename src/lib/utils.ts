@@ -52,10 +52,10 @@ export function sendNotification(title: string, message: any) {
   // Play a custom notification sound
   try {
     // Check if we have the audio file by testing with a HEAD request first
-    fetch('/notification.mp3', { method: 'HEAD' })
+    fetch('/audio/notification.wav', { method: 'HEAD' })
       .then(response => {
         if (response.ok) {
-          const audio = new Audio('/notification.mp3');
+          const audio = new Audio('/audio/notification.wav');
           audio.volume = 0.5; // Set volume to 50%
           audio.play().catch(err => console.warn("Could not play notification sound:", err));
         } else {
@@ -81,6 +81,7 @@ export function sendNotification(title: string, message: any) {
       window.location.href = `/#/app`;
       window.focus();
     }
+    notif.close();
   };
 }
 

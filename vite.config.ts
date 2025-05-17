@@ -25,7 +25,7 @@ export default defineConfig({
     registerType: 'autoUpdate',
     strategies: 'generateSW',
     injectRegister: 'auto',
-    includeAssets: ['/s.png', '/offline.html', '/stars.gif'],
+    includeAssets: ['/s.png', '/offline.html', '/stars.gif', '/audio/dum.wav', '/audio/laugh.wav', '/audio/notification.wav'],
     devOptions: {
       enabled: true
     },

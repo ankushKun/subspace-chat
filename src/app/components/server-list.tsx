@@ -26,7 +26,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-import { createServer, getServerInfo, joinServer, leaveServer } from "@/lib/ao";
+import { createServer, getServerInfo, joinServer, leaveServer, forceReconnectServer } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
@@ -56,6 +56,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
     const [hover, setHover] = useState(false);
     const [isLeavingServer, setIsLeavingServer] = useState(false);
     const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
 
     const isInvalid = !isServerValid(id);
     const isActive = activeServerId === id;
@@ -127,6 +128,36 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
         }
     }, [id, isInvalid, hasServerData, isLoading, isRefreshing, fetchServerInfo]);
 
+    // Handle reconnection attempt
+    async function handleReconnect(e: React.MouseEvent) {
+        e.stopPropagation();
+
+        // Show loading state
+        setIsReconnecting(true);
+        toast.loading("Attempting to reconnect to server...");
+
+        try {
+            // Use the new forceful reconnect function
+            await forceReconnectServer(id);
+
+            // Show success message and dismiss loading toast
+            toast.dismiss();
+            toast.success("Successfully reconnected to server!");
+
+            // Force refresh server list
+            refreshServerList();
+        } catch (error) {
+            // Show failure message with hard refresh advice
+            toast.dismiss();
+            toast.error("Failed to reconnect to server", {
+                description: "Try refreshing the app (Ctrl+F5 or Cmd+Shift+R) or remove the server",
+                duration: 5000
+            });
+        } finally {
+            setIsReconnecting(false);
+        }
+    }
+
     return (
         <div className="relative group">
             <Button
@@ -150,14 +181,14 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                             size="icon"
                             className="absolute inset-0 w-full h-full p-0 opacity-0 hover:opacity-100 rounded-lg"
                             title="Try reconnecting to server"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Force refresh the server info
-                                fetchServerInfo(id, false);
-                                toast.info("Attempting to reconnect to server...");
-                            }}
+                            onClick={handleReconnect}
+                            disabled={isReconnecting}
                         >
-                            <RefreshCw className="w-5 h-5" />
+                            {isReconnecting ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                                <RefreshCw className="w-5 h-5" />
+                            )}
                         </Button>
                     </div>
                 )}
@@ -222,7 +253,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     ${hover ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
                 `}
             >
-                {isLoading ? (
+                {isLoading || isReconnecting ? (
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-3 w-20" />
                     </div>
@@ -256,6 +287,9 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                         <AlertDialogTitle>Leave Server</AlertDialogTitle>
                         <AlertDialogDescription>
                             This server appears to be invalid or no longer accessible. Would you like to remove it from your server list?
+                            <div className="mt-2 p-2 bg-muted/50 rounded-md text-sm">
+                                <b>Note:</b> If you're experiencing connection issues with multiple servers, try hard refreshing the app (Ctrl+F5 or Cmd+Shift+R) before removing servers.
+                            </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

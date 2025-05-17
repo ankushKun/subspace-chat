@@ -130,27 +130,21 @@ export default defineConfig({
     sourcemap: false,
     minify: true,
     target: 'es2015',
-    // Set chunk size warning limit
-    chunkSizeWarningLimit: 2000,
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
     },
     rollupOptions: {
-      // Basic configuration to reduce memory usage during build
+      // Basic configuration for single bundle output
       input: {
         main: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        // Use a simplified chunking strategy
-        manualChunks: {
-          // This will be our main vendor chunk with core dependencies
-          vendor: ['react', 'react-dom', 'react-router-dom', 'tslib'],
-        },
-        // Ensure chunk and asset names include hashes
-        chunkFileNames: 'assets/[name].[hash].js',
-        entryFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash][extname]',
+        // Disable code splitting
+        inlineDynamicImports: true,
+        // Simple asset naming without hashes
+        entryFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
       }
     },
   },

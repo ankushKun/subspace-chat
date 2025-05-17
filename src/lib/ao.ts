@@ -2,7 +2,7 @@ import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
 import { ArconnectSigner, ArweaveSigner, type JWKInterface } from "@dha-team/arbundles"
 import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
-import type { Tag, Member } from "@/lib/types"
+import type { Tag, Member, Server } from "@/lib/types"
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
@@ -981,6 +981,64 @@ export async function leaveServer(serverId: string): Promise<boolean> {
         }
     } catch (error) {
         logger.error("Error leaving server:", error);
+        throw error;
+    }
+}
+
+/**
+ * Forcefully attempts to reconnect to a server that was previously marked as invalid
+ * @param serverId The server ID to reconnect to
+ */
+export async function forceReconnectServer(serverId: string): Promise<boolean> {
+    try {
+        logger.info(`[forceReconnectServer] Forcefully reconnecting to server: ${serverId}`);
+
+        // Get global state reference
+        const globalState = useGlobalState.getState();
+
+        // Try to fetch server info to confirm it's working
+        const serverInfo = await getServerInfo(serverId);
+
+        // If we got here without an error, the server is responsive
+        logger.info(`[forceReconnectServer] Successfully reconnected to server: ${serverId}`);
+
+        // Explicitly clear server from invalid server tracking
+        if (globalState.temporaryInvalidServers && globalState.temporaryInvalidServers.has(serverId)) {
+            logger.info(`[forceReconnectServer] Removing server from temporaryInvalidServers: ${serverId}`);
+            globalState.temporaryInvalidServers.delete(serverId);
+        }
+
+        if (globalState.invalidServerIds && globalState.invalidServerIds.has(serverId)) {
+            logger.info(`[forceReconnectServer] Removing server from invalidServerIds: ${serverId}`);
+            globalState.invalidServerIds.delete(serverId);
+        }
+
+        // Reset server cache to force a refresh
+        const oldCache = globalState.serverCache.get(serverId);
+        if (oldCache) {
+            // Update timestamp to force refreshes
+            globalState.serverCache.set(serverId, {
+                ...oldCache,
+                timestamp: Date.now() - 10000000 // Set timestamp to past to force refresh
+            });
+        }
+
+        // Force a refresh of server data
+        await globalState.refreshServerData();
+
+        // Force immediate UI update for the active server
+        if (globalState.activeServerId === serverId) {
+            // Update the active server data directly from serverInfo
+            // Cast serverInfo to Server type since we know it has the right structure
+            useGlobalState.setState({
+                isLoadingServer: false,
+                activeServer: serverInfo as unknown as Server
+            });
+        }
+
+        return true;
+    } catch (error) {
+        logger.error(`[forceReconnectServer] Failed to reconnect to server ${serverId}:`, error);
         throw error;
     }
 }

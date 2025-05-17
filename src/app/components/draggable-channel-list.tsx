@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+// TODO: Replace react-beautiful-dnd with framer-motion's drag functionality
+// Example: import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+// For implementation details, see: https://www.framer.com/motion/examples/#drag-to-reorder
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useGlobalState } from '@/hooks/global-state';
 import { HashIcon, ChevronRight, Loader2, Plus, RefreshCw, Pencil, TrashIcon } from 'lucide-react';

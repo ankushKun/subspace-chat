@@ -7,12 +7,6 @@ import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
 import { toast } from "sonner";  // Use sonner for toast messages
-import {
-    TurboAuthenticatedClient,
-    TurboFactory,
-    TurboWebArweaveSigner,
-} from '@ardrive/turbo-sdk/web';
-import { ReadableStream } from 'web-streams-polyfill';
 import type { JWKPublicInterface } from "arweave/web/lib/wallet";
 import { createLogger } from '@/lib/logger'
 

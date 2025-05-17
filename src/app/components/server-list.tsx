@@ -1,4 +1,6 @@
-import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, ShieldAlertIcon, Trash2, Download, WalletCards } from "lucide-react"
+import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, RefreshCw, Trash2, Download, WalletCards } from "lucide-react"
+import { ShieldAlert as ShieldAlertIcon } from "lucide-react"
+import { toast } from "sonner"
 import type { Server } from "@/lib/types"
 
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,6 @@ import {
 
 import { createServer, getServerInfo, joinServer, leaveServer } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
 import { useActiveAddress } from "arwalletkit-react";
@@ -144,6 +145,20 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                 {isInvalid && (
                     <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
                         <ShieldAlertIcon className="w-6 h-6 text-destructive" />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute inset-0 w-full h-full p-0 opacity-0 hover:opacity-100 rounded-lg"
+                            title="Try reconnecting to server"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // Force refresh the server info
+                                fetchServerInfo(id, false);
+                                toast.info("Attempting to reconnect to server...");
+                            }}
+                        >
+                            <RefreshCw className="w-5 h-5" />
+                        </Button>
                     </div>
                 )}
 

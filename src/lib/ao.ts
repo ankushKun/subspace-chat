@@ -293,13 +293,55 @@ export async function getJoinedServers(address: string): Promise<string[]> {
 
 export async function getServerInfo(id: string) {
     logger.info(`[getServerInfo] Fetching server info for: ${id}`);
-    const res = await aofetch(`${id}/`);
-    logger.info(`[getServerInfo] Response:`, res);
-    if (res.status == 200) {
-        return res.json;
-    } else {
-        throw new Error(res.error);
+
+    // Add retry logic for potentially temporary connection issues
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second between retries
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const res = await aofetch(`${id}/`);
+            logger.info(`[getServerInfo] Response on attempt ${attempt}:`, res);
+
+            if (res.status == 200) {
+                // If we previously marked this server as temporarily invalid, clear that
+                try {
+                    const globalState = useGlobalState.getState();
+                    if (globalState.temporaryInvalidServers &&
+                        globalState.temporaryInvalidServers.has(id)) {
+                        globalState.temporaryInvalidServers.delete(id);
+                    }
+                } catch (err) {
+                    // Ignore errors in this cleanup step
+                }
+
+                return res.json;
+            } else {
+                // If we get a clear "not found" or "forbidden" type error, no need to retry
+                if (res.status === 404 || res.status === 403) {
+                    throw new Error(res.error || `Server returned ${res.status}`);
+                }
+            }
+        } catch (error) {
+            // On the last attempt, or if we get certain error types, throw the error
+            const errorStr = String(error).toLowerCase();
+            const isFatalError = errorStr.includes("not found") ||
+                errorStr.includes("does not exist") ||
+                errorStr.includes("forbidden");
+
+            if (attempt === maxRetries || isFatalError) {
+                logger.error(`[getServerInfo] Failed after ${attempt} attempts for server ${id}:`, error);
+                throw error;
+            }
+
+            // Otherwise log and retry
+            logger.warn(`[getServerInfo] Attempt ${attempt} failed for server ${id}, retrying in ${retryDelay}ms:`, error);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
     }
+
+    // If we got here, all retries failed
+    throw new Error("Failed to connect to server after multiple attempts");
 }
 
 // Global request tracking to persist across the entire application

@@ -242,8 +242,12 @@ export interface GlobalState {
     clearMessageCache: () => void
     // Invalid server tracking
     invalidServerIds: Set<string>
+    temporaryInvalidServers: Map<string, number>
     markServerAsInvalid: (serverId: string) => void
     isServerValid: (serverId: string) => boolean
+
+    // Method to permanently mark a server as invalid (for admin use or confirmed invalid servers)
+    markServerAsPermanentlyInvalid: (serverId: string) => void
 
     // Member management
     serverMembers: Map<string, CachedMembers>
@@ -463,11 +467,55 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     // Add tracking for invalid server IDs
     invalidServerIds: new Set<string>(),
 
+    // Add a temporary tracking mechanism for servers that might be temporarily unavailable
+    temporaryInvalidServers: new Map<string, number>(), // serverId -> timestamp of when to retry
+
     markServerAsInvalid: (serverId: string) => {
-        const { invalidServerIds } = get();
+        // Instead of permanently marking as invalid, add a temporary timeout
+        const { temporaryInvalidServers } = get();
+        const retryAfter = Date.now() + 60000; // Try again after 1 minute
+        temporaryInvalidServers.set(serverId, retryAfter);
+
+        logger.log(`[markServerAsInvalid] Marked server as temporarily invalid: ${serverId}, will retry after ${new Date(retryAfter).toLocaleTimeString()}`);
+    },
+
+    isServerValid: (serverId: string) => {
+        const { invalidServerIds, temporaryInvalidServers } = get();
+
+        // If in permanent invalid set, it's invalid
+        if (invalidServerIds.has(serverId)) {
+            return false;
+        }
+
+        // Check if in temporary invalid list and if it's time to retry
+        if (temporaryInvalidServers.has(serverId)) {
+            const retryTime = temporaryInvalidServers.get(serverId);
+            if (retryTime && Date.now() < retryTime) {
+                // Still in timeout period
+                return false;
+            } else {
+                // Timeout expired, remove from temporary list and try again
+                temporaryInvalidServers.delete(serverId);
+                return true;
+            }
+        }
+
+        return true;
+    },
+
+    // Method to permanently mark a server as invalid (for admin use or confirmed invalid servers)
+    markServerAsPermanentlyInvalid: (serverId: string) => {
+        const { invalidServerIds, temporaryInvalidServers } = get();
+
+        // Add to permanent invalid set
         const updatedInvalidServers = new Set(invalidServerIds);
         updatedInvalidServers.add(serverId);
         set({ invalidServerIds: updatedInvalidServers });
+
+        // Remove from temporary set if present
+        if (temporaryInvalidServers.has(serverId)) {
+            temporaryInvalidServers.delete(serverId);
+        }
 
         // Optionally clear this server from cache
         const { serverCache } = get();
@@ -478,12 +526,7 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             saveServerCache(updatedCache);
         }
 
-        logger.log(`[markServerAsInvalid] Marked server as invalid: ${serverId}`);
-    },
-
-    isServerValid: (serverId: string) => {
-        const { invalidServerIds } = get();
-        return !invalidServerIds.has(serverId);
+        logger.log(`[markServerAsPermanentlyInvalid] Marked server as permanently invalid: ${serverId}`);
     },
 
     // Member management
@@ -655,12 +698,30 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     fetchServerInfo: async (serverId: string, isBackgroundRefresh = false) => {
         if (!serverId) return;
 
-        const { serverCache, refreshingServers, activeServerId, invalidServerIds } = get();
+        const { serverCache, refreshingServers, activeServerId, invalidServerIds, temporaryInvalidServers } = get();
 
-        // Skip if this server is already known to be invalid
+        // Skip if this server is already known to be permanently invalid
         if (invalidServerIds.has(serverId)) {
-            logger.log(`[fetchServerInfo] Skipping fetch for invalid server: ${serverId}`);
+            logger.log(`[fetchServerInfo] Skipping fetch for permanently invalid server: ${serverId}`);
             return;
+        }
+
+        // Check if this server is temporarily invalid but due for a retry
+        if (temporaryInvalidServers.has(serverId)) {
+            const retryTime = temporaryInvalidServers.get(serverId);
+            if (retryTime && Date.now() < retryTime) {
+                // Still in timeout period, skip unless this is an explicit refresh request
+                if (!isBackgroundRefresh) {
+                    logger.log(`[fetchServerInfo] Server ${serverId} is in timeout period, but attempting refresh anyway due to user action`);
+                } else {
+                    logger.log(`[fetchServerInfo] Skipping fetch for temporarily invalid server: ${serverId}, will retry after ${new Date(retryTime).toLocaleTimeString()}`);
+                    return;
+                }
+            } else {
+                // Timeout expired, remove from temporary list and try again
+                temporaryInvalidServers.delete(serverId);
+                logger.log(`[fetchServerInfo] Retry timeout expired for server: ${serverId}, attempting to reconnect`);
+            }
         }
 
         // If this is already being refreshed, don't duplicate the request
@@ -674,27 +735,26 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             }
         }
 
+        // Add to refreshing set
+        const updatedRefreshing = new Set(get().refreshingServers);
+        updatedRefreshing.add(serverId);
+        set({
+            isLoadingServer: !isBackgroundRefresh,
+            refreshingServers: updatedRefreshing
+        });
+
         try {
-            // Only show loading indicator for non-background refreshes or when no cache exists
-            if (!isBackgroundRefresh || !serverCache.has(serverId)) {
-                set({ isLoadingServer: true });
-            }
-
-            // Mark this server as being refreshed
-            const updatedRefreshing = new Set(refreshingServers);
-            updatedRefreshing.add(serverId);
-            set({ refreshingServers: updatedRefreshing });
-
+            logger.log(`[fetchServerInfo] Fetching server info for ${serverId}`);
             const serverInfo = await getServerInfo(serverId);
 
-            // Update cache with new data and timestamp
-            const updatedCache = new Map(serverCache);
+            logger.log(`[fetchServerInfo] Successfully fetched server info for ${serverId}`);
+
+            // Once we have the server info, update our cache
+            const updatedCache = new Map(get().serverCache);
             updatedCache.set(serverId, {
-                data: serverInfo as Server,
+                data: serverInfo,
                 timestamp: Date.now()
             });
-
-            // Save to browser storage
             saveServerCache(updatedCache);
 
             // Only update active server if this is still the active server
@@ -721,16 +781,33 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         } catch (error) {
             logger.error(`Failed to fetch server info for ${serverId}:`, error);
 
-            // Mark server as invalid if we get specific errors that indicate the server doesn't exist
-            // Examine error message to determine if this is a "server not found" type error
+            // Use more resilient logic to determine if a server should be marked as invalid
             const errorMessage = String(error).toLowerCase();
-            if (
+            const isPermanentError =
                 errorMessage.includes("not found") ||
                 errorMessage.includes("does not exist") ||
-                errorMessage.includes("cannot read properties") ||
-                errorMessage.includes("internal server error")
-            ) {
-                logger.log(`[fetchServerInfo] Marking server as invalid due to error: ${serverId}`);
+                errorMessage.includes("403") ||
+                errorMessage.includes("forbidden");
+
+            const isTemporaryError =
+                errorMessage.includes("timeout") ||
+                errorMessage.includes("network") ||
+                errorMessage.includes("connection") ||
+                errorMessage.includes("internal server error") ||
+                errorMessage.includes("temporarily unavailable") ||
+                errorMessage.includes("multiple attempts");
+
+            if (isPermanentError) {
+                // Clear permanent errors - these are truly invalid servers
+                logger.log(`[fetchServerInfo] Marking server as permanently invalid due to error: ${serverId}`);
+                get().markServerAsPermanentlyInvalid(serverId);
+            } else if (isTemporaryError) {
+                // Use the temporary invalid system for likely temporary errors
+                logger.log(`[fetchServerInfo] Marking server as temporarily invalid due to connection error: ${serverId}`);
+                get().markServerAsInvalid(serverId);
+            } else {
+                // For unknown errors, use temporary system as well but log differently
+                logger.log(`[fetchServerInfo] Marking server as temporarily invalid due to unknown error: ${serverId}`);
                 get().markServerAsInvalid(serverId);
             }
 

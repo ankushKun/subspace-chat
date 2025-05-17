@@ -7,42 +7,25 @@ html,body{
   overflow:hidden;
 }
 
-/* Scrollbar styles */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(200, 200, 200, 0.2);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(140, 140, 140, 0.5);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(120, 120, 120, 0.7);
-}
-
-/* Firefox scrollbar */
 * {
-  scrollbar-color: rgba(140, 140, 140, 0.5) rgba(200, 200, 200, 0.2);
-  scrollbar-width: thin;
+  -ms-overflow-style: thin;  /* Internet Explorer 10+ */
+  scrollbar-width: thin;  /* Firefox */
 }
-
-.dark ::-webkit-scrollbar-track {
-  background: rgba(60, 60, 60, 0.2);
+*::-webkit-scrollbar {
+  width: 4px;  /* Width of scrollbar */
+  height: 4px; /* Height of horizontal scrollbar */
 }
-
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(120, 120, 120, 0.5);
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 140, 140, 0.7);
+*::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  opacity: 0.5;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+  opacity: 0.8;
 }
 
 @theme inline {

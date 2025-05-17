@@ -1,19 +1,28 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGlobalState, useServerSync, useCachePersistence, useBackgroundPreload } from '@/hooks/global-state';
-import ChannelList from '@/app/components/channel-list';
-import DmList from '@/app/components/dm-list';
-import Hero from '@/app/components/hero';
-import Chat from '@/app/components/chat';
-import ServerList from '@/app/components/server-list';
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { getNotifications, markNotificationsAsRead } from '@/lib/ao';
-import Profile from './components/profile';
 import { useActiveAddress, useConnection } from 'arwalletkit-react';
 import { useMobile } from '@/hooks';
-import UsersList from './components/users-list';
-import UserDM from './user';
 import { sendNotification } from '@/lib/utils';
-import NotificationsPanel from './components/notifications-panel';
+
+// Use lazy loading for components
+const ChannelList = lazy(() => import('@/app/components/channel-list'));
+const DmList = lazy(() => import('@/app/components/dm-list'));
+const Hero = lazy(() => import('@/app/components/hero'));
+const Chat = lazy(() => import('@/app/components/chat'));
+const ServerList = lazy(() => import('@/app/components/server-list'));
+const Profile = lazy(() => import('./components/profile'));
+const UsersList = lazy(() => import('./components/users-list'));
+const UserDM = lazy(() => import('./user'));
+const NotificationsPanel = lazy(() => import('./components/notifications-panel'));
+
+// Loading component
+const ComponentLoader = () => (
+    <div className="flex items-center justify-center h-full w-full">
+        <div className="animate-spin h-6 w-6 border-2 border-accent rounded-full border-t-transparent"></div>
+    </div>
+);
 
 // Create global rate limiting middleware for the app
 // This ensures we don't spam servers with requests
@@ -367,16 +376,20 @@ export default function App() {
         return <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>
             {!channelId ? <>
                 <div className='w-16 bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
-                    <ServerList />
+                    <Suspense fallback={<ComponentLoader />}>
+                        <ServerList />
+                    </Suspense>
                 </div>
                 {/* channels / dm list */}
                 <div className='w-full bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
-                    {activeServerId === null ? <DmList /> : <ChannelList />}
-                    <Profile />
+                    {activeServerId === null ? <Suspense fallback={<ComponentLoader />}><DmList /></Suspense> : <Suspense fallback={<ComponentLoader />}><ChannelList /></Suspense>}
+                    <Suspense fallback={<ComponentLoader />}>
+                        <Profile />
+                    </Suspense>
                 </div>
             </> : <>
                 <div className='w-full bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
-                    {showUsers ? userId ? <UserDM /> : <UsersList /> : <Chat />}
+                    {showUsers ? userId ? <Suspense fallback={<ComponentLoader />}><UserDM /></Suspense> : <Suspense fallback={<ComponentLoader />}><UsersList /></Suspense> : <Suspense fallback={<ComponentLoader />}><Chat /></Suspense>}
                 </div>
             </>}
         </div>;
@@ -385,19 +398,25 @@ export default function App() {
     return (
         <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>
             <div className='w-16 bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
-                <ServerList />
+                <Suspense fallback={<ComponentLoader />}>
+                    <ServerList />
+                </Suspense>
             </div>
             {/* channels / dm list */}
             <div className='w-[333px] max-w-[333px] min-w-[333px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2'>
-                {activeServerId === null ? <DmList /> : <ChannelList />}
-                <Profile />
+                {activeServerId === null ? <Suspense fallback={<ComponentLoader />}><DmList /></Suspense> : <Suspense fallback={<ComponentLoader />}><ChannelList /></Suspense>}
+                <Suspense fallback={<ComponentLoader />}>
+                    <Profile />
+                </Suspense>
             </div>
             {/* main view */}
             <div className='grow w-fit overflow-scroll bg-muted/50 rounded-lg flex flex-col items-center justify-start gap-2'>
-                {activeServerId === null ? userId ? <UserDM /> : <Hero /> : <Chat />}
+                {activeServerId === null ? userId ? <Suspense fallback={<ComponentLoader />}><UserDM /></Suspense> : <Suspense fallback={<ComponentLoader />}><Hero /></Suspense> : <Suspense fallback={<ComponentLoader />}><Chat /></Suspense>}
             </div>
             {activeServerId !== null && showUsers && <div className='min-w-[300px] bg-muted/30 rounded-lg flex flex-col items-center justify-start gap-2 p-2 py-3'>
-                <UsersList />
+                <Suspense fallback={<ComponentLoader />}>
+                    <UsersList />
+                </Suspense>
             </div>}
         </div>
     )

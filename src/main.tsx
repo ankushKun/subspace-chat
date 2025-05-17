@@ -8,11 +8,7 @@ import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
 import { EthereumStrategy } from "arwalletkit-wagmi"
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import Landing from '@/landing'
-import App from '@/app'
-import Settings from '@/settings'
-import Invite from '@/invite'
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { WanderConnect } from '@wanderapp/connect'
 import { useGlobalState } from '@/hooks'
 import { useLocalStorage } from '@uidotdev/usehooks'
@@ -20,6 +16,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OfflineDetector } from '@/components/offline-detector'
 import { registerServiceWorker } from '@/pwa-handler'
 import { setLogLevel, LogLevel } from './lib/logger'
+
+// Use React.lazy for code splitting
+const Landing = lazy(() => import('@/landing'))
+const App = lazy(() => import('@/app'))
+const Settings = lazy(() => import('@/settings'))
+const Invite = lazy(() => import('@/invite'))
 
 // Create a QueryClient for React Query
 const queryClient = new QueryClient()
@@ -32,6 +34,13 @@ setLogLevel(import.meta.env.PROD ? LogLevel.ERROR : LogLevel.INFO)
 if (import.meta.env.PROD) {
   registerServiceWorker();
 }
+
+// Loading component for use with React.lazy
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-screen w-screen bg-background">
+    <div className="animate-spin h-10 w-10 border-4 border-accent rounded-full border-t-transparent"></div>
+  </div>
+);
 
 function Main() {
   const { wanderInstance, setWanderInstance } = useGlobalState()
@@ -114,17 +123,19 @@ function Main() {
         >
           <Toaster />
           <HashRouter>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/app" element={<App />} />
-              <Route path="/app/user/:userId" element={<App />} />
-              <Route path="/app/:serverId" element={<App />} />
-              <Route path="/app/:serverId/:channelId" element={<App />} />
-              <Route path="/app/settings" element={<Settings />} />
-              <Route path="/invite" element={<Invite />} />
-              <Route path="/invite/:serverId" element={<Invite />} />
-              <Route path='*' element={<Navigate to='/' />} />
-            </Routes>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/app" element={<App />} />
+                <Route path="/app/user/:userId" element={<App />} />
+                <Route path="/app/:serverId" element={<App />} />
+                <Route path="/app/:serverId/:channelId" element={<App />} />
+                <Route path="/app/settings" element={<Settings />} />
+                <Route path="/invite" element={<Invite />} />
+                <Route path="/invite/:serverId" element={<Invite />} />
+                <Route path='*' element={<Navigate to='/' />} />
+              </Routes>
+            </Suspense>
           </HashRouter>
         </ArweaveWalletKit>
       </OfflineDetector>

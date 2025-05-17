@@ -136,6 +136,21 @@ app.get("/profile", function(req, res)
     end
 end)
 
+app.get("/bulk-profile", function(req, res)
+    local ids = req.body.ids
+    local profiles = {}
+    for _, id in ipairs(ids) do
+        local profile = GetProfile(id)
+        if profile then
+            table.insert(profiles, profile)
+        end
+    end
+    res:json({
+        success = true,
+        profiles = profiles
+    })
+end)
+
 app.post("/update-profile", function(req, res)
     local id = req.msg.From
     local username = req.body.username

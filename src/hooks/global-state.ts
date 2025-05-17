@@ -264,6 +264,7 @@ export interface GlobalState {
 
     // Track servers with invalid member endpoints
     invalidMemberServers: Set<string>
+    setInvalidMemberServers: (serverIds: Set<string>) => void
 
     // User profile management
     userProfile: CachedUserProfile | null
@@ -283,6 +284,7 @@ export interface GlobalState {
     getUserProfileFromCache: (userId: string) => { username?: string, pfp?: string, primaryName?: string, timestamp: number } | null
     updateUserProfileCache: (userId: string, profile: { username?: string, pfp?: string, primaryName?: string, timestamp: number }) => void
     fetchUserProfileAndCache: (userId: string, forceRefresh?: boolean) => Promise<any | null>
+    fetchBulkUserProfilesAndCache: (userIds: string[], forceRefresh?: boolean) => Promise<any[]>
     clearUserProfilesCache: () => void
 
     // Unread notifications
@@ -568,6 +570,12 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         if (!forceRefresh && cachedMembers && now - cachedMembers.timestamp <= MEMBERS_CACHE_TTL) {
             logger.log(`[fetchServerMembers] Using cached members for ${serverId}`);
+            return;
+        }
+
+        // Use a flag to track if this server is currently being fetched to prevent recursive calls
+        if (get().isLoadingMembers && serverId === get().activeServerId) {
+            logger.log(`[fetchServerMembers] Already fetching members for ${serverId}, avoiding recursive call`);
             return;
         }
 
@@ -937,6 +945,52 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
 
         return null;
     },
+
+    // New function to fetch and cache multiple user profiles at once
+    fetchBulkUserProfilesAndCache: async (userIds: string[], forceRefresh = false) => {
+        if (!userIds || userIds.length === 0) return [];
+
+        try {
+            logger.log(`[fetchBulkUserProfilesAndCache] Fetching profiles for ${userIds.length} users`);
+
+            // Filter out IDs that are already in the cache (unless forceRefresh is true)
+            let idsToFetch = userIds;
+            if (!forceRefresh) {
+                idsToFetch = userIds.filter(id => {
+                    const cachedProfile = get().getUserProfileFromCache(id);
+                    return !cachedProfile || (Date.now() - cachedProfile.timestamp > USER_PROFILE_CACHE_TTL);
+                });
+
+                if (idsToFetch.length === 0) {
+                    logger.log(`[fetchBulkUserProfilesAndCache] All profiles already in cache`);
+                    return [];
+                }
+            }
+
+            logger.log(`[fetchBulkUserProfilesAndCache] Fetching ${idsToFetch.length} profiles from network`);
+
+            // Import the getBulkProfiles function from ao.ts
+            const { getBulkProfiles } = await import('@/lib/ao');
+
+            // Fetch profiles in bulk
+            const bulkResult = await getBulkProfiles(idsToFetch);
+
+            if (bulkResult && bulkResult.profiles && bulkResult.profiles.length > 0) {
+                logger.log(`[fetchBulkUserProfilesAndCache] Successfully fetched ${bulkResult.profiles.length} profiles`);
+
+                // Profiles are already cached in the getBulkProfiles function
+                // The function handles the caching of profiles in the global state
+                return bulkResult.profiles;
+            } else {
+                logger.log(`[fetchBulkUserProfilesAndCache] No profiles returned from bulk fetch`);
+            }
+        } catch (error) {
+            logger.error(`[fetchBulkUserProfilesAndCache] Error fetching bulk profiles:`, error);
+        }
+
+        return [];
+    },
+
     clearUserProfilesCache: () => {
         set({ userProfilesCache: {} });
         localStorage.removeItem(USER_PROFILES_CACHE_KEY);
@@ -963,7 +1017,10 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             // Return the count for the entire server
             return unreadNotifications.serverCounts[serverId] || 0;
         }
-    }
+    },
+
+    // Add setter for invalid member servers
+    setInvalidMemberServers: (serverIds: Set<string>) => set({ invalidMemberServers: serverIds }),
 }))
 
 // Hook to synchronize server ID with server data

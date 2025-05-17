@@ -5,6 +5,7 @@ import path from "path"
 import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from "rollup-plugin-visualizer";
 
 // More robust way to get package version
 let packageVersion = 'DEV-FALLBACK'; // Default fallback version
@@ -103,7 +104,7 @@ export default defineConfig({
         }
       ]
     }
-  })],
+  }), visualizer({ open: true })], // Set visualizer to not open automatically to save memory
   base: "./",
   resolve: {
     alias: {
@@ -125,16 +126,32 @@ export default defineConfig({
     "__AOXPRESS_SRC__": JSON.stringify(aoxpressSrc),
   },
   build: {
+    // Ensure TypeScript helpers are properly handled
+    sourcemap: false,
+    minify: true,
+    target: 'es2015',
+    // Set chunk size warning limit
+    chunkSizeWarningLimit: 2000,
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
+      // Basic configuration to reduce memory usage during build
       input: {
         main: path.resolve(__dirname, 'index.html'),
-        // Don't include service worker in input - let VitePWA handle it
       },
       output: {
+        // Use a simplified chunking strategy
         manualChunks: {
-          vendor: ['react', 'react-dom'],
+          // This will be our main vendor chunk with core dependencies
+          vendor: ['react', 'react-dom', 'react-router-dom', 'tslib'],
         },
-      },
+        // Ensure chunk and asset names include hashes
+        chunkFileNames: 'assets/[name].[hash].js',
+        entryFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]',
+      }
     },
   },
 })

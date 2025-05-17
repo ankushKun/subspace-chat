@@ -54,7 +54,8 @@ export default function UsersList() {
         userProfilesCache,
         getUserProfileFromCache,
         updateUserProfileCache,
-        fetchUserProfileAndCache
+        fetchUserProfileAndCache,
+        fetchBulkUserProfilesAndCache
     } = useGlobalState();
     const [error, setError] = useState<string | null>(null);
     const [isRetrying, setIsRetrying] = useState(false);
@@ -119,58 +120,13 @@ export default function UsersList() {
         try {
             console.log(`[UsersList] Loading profiles for ${membersList.length} members`);
 
-            // Identify which members need profile loading
-            const membersToLoad = membersList.filter(member => {
-                const cachedProfile = getUserProfileFromCache(member.id);
-                // Skip if we have fresh cache (less than 15 minutes old)
-                return !(cachedProfile &&
-                    Date.now() - cachedProfile.timestamp < 15 * 60 * 1000);
-            });
+            // Extract unique member IDs for bulk loading
+            const memberIds = membersList.map(member => member.id);
 
-            if (membersToLoad.length === 0) {
-                console.log(`[UsersList] All member profiles already in cache`);
-                setIsLoadingProfiles(false);
-                return;
-            }
+            // Use the bulk profile loading function instead of individual fetches
+            await fetchBulkUserProfilesAndCache(memberIds, false);
 
-            console.log(`[UsersList] Need to load ${membersToLoad.length} member profiles`);
-
-            // Track loaded profiles to avoid repeated requests
-            const loadedIds = new Set<string>();
-
-            // Process members in batches to avoid rate limiting
-            for (let i = 0; i < membersToLoad.length; i++) {
-                // Break if component unmounted or fetch aborted
-                if (signal.aborted) break;
-
-                const member = membersToLoad[i];
-
-                // Skip if already processed in this batch
-                if (loadedIds.has(member.id)) continue;
-                loadedIds.add(member.id);
-
-                // Prioritize loading the current user's profile from global state
-                if (member.id === activeAddress) {
-                    const currentUserProfile = getUserProfile();
-                    if (currentUserProfile && currentUserProfile.profile) {
-                        updateUserProfileCache(member.id, {
-                            username: currentUserProfile.profile.username,
-                            pfp: currentUserProfile.profile.pfp,
-                            primaryName: currentUserProfile.primaryName,
-                            timestamp: Date.now()
-                        });
-                        continue;
-                    }
-                }
-
-                // Load profile for this member
-                await fetchUserProfileAndCache(member.id, false);
-
-                // Add a delay between requests to prevent rate limiting
-                if (!signal.aborted && i < membersToLoad.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-            }
+            console.log(`[UsersList] Successfully loaded member profiles in bulk`);
         } catch (error) {
             console.error('[UsersList] Error loading member profiles:', error);
         } finally {
@@ -181,11 +137,7 @@ export default function UsersList() {
     }, [
         isLoadingProfiles,
         setIsLoadingProfiles,
-        getUserProfileFromCache,
-        activeAddress,
-        getUserProfile,
-        updateUserProfileCache,
-        fetchUserProfileAndCache
+        fetchBulkUserProfilesAndCache
     ]);
 
     // This useEffect manages component setup and cleanup
@@ -335,6 +287,30 @@ export default function UsersList() {
         }
     }, [showUsers, members, isLoadingProfiles, loadMembersProfiles, activeServerId]);
 
+    // Ensure primary names for all displayed members
+    useEffect(() => {
+        if (members && members.length > 0 && !isLoadingProfiles) {
+            // Find members without primary names in the cache
+            const membersNeedingPrimaryName = members.filter(member => {
+                const cachedProfile = getUserProfileFromCache(member.id);
+                return !cachedProfile?.primaryName;
+            });
+
+            if (membersNeedingPrimaryName.length > 0) {
+                console.log(`[UsersList] Fetching primary names for ${membersNeedingPrimaryName.length} members`);
+
+                // Extract member IDs that need primary names
+                const memberIds = membersNeedingPrimaryName.map(member => member.id);
+
+                // Use the bulk profile loading instead of individual requests
+                fetchBulkUserProfilesAndCache(memberIds, true)
+                    .catch(error => {
+                        console.error('[UsersList] Error fetching primary names in bulk:', error);
+                    });
+            }
+        }
+    }, [members, isLoadingProfiles, getUserProfileFromCache, fetchBulkUserProfilesAndCache]);
+
     // Handle retrying the member fetch for servers previously marked as invalid
     const handleRetryFetch = async () => {
         if (!activeServerId) return;
@@ -441,35 +417,6 @@ export default function UsersList() {
 
     // Check if this server is in the invalid members list
     const isServerMarkedInvalid = activeServerId ? invalidMemberServers.has(activeServerId) : false;
-
-    // Ensure primary names for all displayed members
-    useEffect(() => {
-        if (members && members.length > 0 && !isLoadingProfiles) {
-            // Find members without primary names in the cache
-            const membersNeedingPrimaryName = members.filter(member => {
-                const cachedProfile = getUserProfileFromCache(member.id);
-                return !cachedProfile?.primaryName;
-            });
-
-            if (membersNeedingPrimaryName.length > 0) {
-                console.log(`[UsersList] Fetching primary names for ${membersNeedingPrimaryName.length} members`);
-
-                // Load primary names for these members (one at a time to avoid overwhelming the network)
-                const loadPrimaryNames = async () => {
-                    for (const member of membersNeedingPrimaryName) {
-                        // Skip if component unmounted
-                        if (abortControllerRef.current?.signal.aborted) break;
-
-                        await fetchUserProfileAndCache(member.id, true);
-                        // Add a small delay between requests
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                    }
-                };
-
-                loadPrimaryNames();
-            }
-        }
-    }, [members, isLoadingProfiles, getUserProfileFromCache, fetchUserProfileAndCache]);
 
     return (
         <div className="h-full w-full flex flex-col">

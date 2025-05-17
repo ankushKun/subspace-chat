@@ -393,13 +393,17 @@ export async function getMembers(serverId: string) {
 // Helper function to mark a server as having invalid members endpoint
 function markServerInvalidMembers(serverId: string) {
     try {
+        // Get the global state
         const globalState = useGlobalState.getState();
 
-        // Trigger a fetch that will fail and properly update the state
-        globalState.fetchServerMembers(serverId, true)
-            .catch(() => {
-                logger.info(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
-            });
+        // Create a new Set with the existing invalid servers plus the new one
+        const updatedInvalidMemberServers = new Set(globalState.invalidMemberServers);
+        updatedInvalidMemberServers.add(serverId);
+
+        // Update the global state directly
+        globalState.setInvalidMemberServers(updatedInvalidMemberServers);
+
+        logger.info(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
     } catch (error) {
         logger.warn('[markServerInvalidMembers] Error:', error);
     }
@@ -780,6 +784,81 @@ export async function getProfile(address?: string) {
 
         return profileData;
     } else {
+        throw new Error(res.error);
+    }
+}
+
+/**
+ * Fetches multiple user profiles in a single request to improve performance
+ * @param addresses Array of user addresses to fetch profiles for
+ * @returns Object containing all fetched profiles
+ */
+export async function getBulkProfiles(addresses: string[]) {
+    if (!addresses || addresses.length === 0) {
+        logger.warn(`[getBulkProfiles] No addresses provided`);
+        return { profiles: [] };
+    }
+
+    // Remove any duplicate addresses to optimize the request
+    const uniqueAddresses = [...new Set(addresses)];
+
+    logger.info(`[getBulkProfiles] Fetching profiles for ${uniqueAddresses.length} users`);
+    // Convert the array to a JSON string to ensure proper serialization
+    const res = await aofetch(`${PROFILES}/bulk-profile`, {
+        method: "GET",
+        body: {
+            ids: JSON.stringify(uniqueAddresses)
+        }
+    });
+    logger.info(`[getBulkProfiles] Response status:`, res.status);
+
+    if (res.status == 200) {
+        const profilesData = res.json as { success: boolean, profiles: any[] };
+
+        // Cache all the profiles in the global state
+        if (profilesData.profiles && profilesData.profiles.length > 0) {
+            try {
+                const globalState = useGlobalState.getState();
+                const now = Date.now();
+
+                // Process and cache each profile
+                const profileFetchPromises = profilesData.profiles.map(async (profile) => {
+                    if (!profile.id) return null;
+
+                    // Try to fetch primary name for each profile
+                    try {
+                        const primaryNameData = await ario.getPrimaryName({ address: profile.id });
+                        const primaryName = primaryNameData?.name;
+
+                        // Update the profiles cache
+                        globalState.updateUserProfileCache(profile.id, {
+                            username: profile.username,
+                            pfp: profile.pfp,
+                            primaryName: primaryName,
+                            timestamp: now
+                        });
+
+                        // Also add the primary name to the returned profile data
+                        if (primaryName) {
+                            profile.primaryName = primaryName;
+                        }
+                    } catch (error) {
+                        logger.warn(`[getBulkProfiles] Failed to fetch primary name for ${profile.id}:`, error);
+                    }
+                });
+
+                // Wait for all primary name fetches to complete
+                await Promise.allSettled(profileFetchPromises);
+
+                logger.info(`[getBulkProfiles] Successfully cached ${profilesData.profiles.length} profiles`);
+            } catch (error) {
+                logger.warn(`[getBulkProfiles] Error caching profiles:`, error);
+            }
+        }
+
+        return profilesData;
+    } else {
+        logger.error(`[getBulkProfiles] Error fetching profiles:`, res.error);
         throw new Error(res.error);
     }
 }

@@ -55,7 +55,8 @@ export default function App() {
         activeServerId,
         isLoadingServer,
         setActiveChannelId,
-        showUsers
+        showUsers,
+        setShowUsers
     } = useGlobalState();
     const address = useActiveAddress();
     const initRef = useRef(false);
@@ -482,7 +483,10 @@ export default function App() {
             // Clear active channel if not in URL
             setActiveChannelId(null);
         }
-    }, [serverId, channelId, userId, setActiveServerId, setActiveChannelId]);
+
+        // Collapse users list when server changes
+        setShowUsers(false);
+    }, [serverId, channelId, userId, setActiveServerId, setActiveChannelId, setShowUsers]);
 
     if (isMobile) {
         return <div className='flex h-screen max-h-screen w-screen gap-2 p-2'>

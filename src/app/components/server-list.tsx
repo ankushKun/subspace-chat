@@ -1,5 +1,4 @@
 import { Plus, Upload, File, X, Home, Users, PlusCircle, Loader2, RefreshCw, Trash2, Download, WalletCards } from "lucide-react"
-import { ShieldAlert as ShieldAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 import type { Server } from "@/lib/types"
 
@@ -26,7 +25,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-import { createServer, getServerInfo, joinServer, leaveServer, forceReconnectServer } from "@/lib/ao";
+import { createServer, getServerInfo, joinServer, getMembers } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
@@ -34,6 +33,62 @@ import { useActiveAddress } from "arwalletkit-react";
 import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "@uidotdev/usehooks";
 import { FileDropzone } from "@/components/ui/file-dropzone";
+
+// Helper function to clean up server data from browser storage
+export function cleanupServerFromBrowserStorage(serverId: string) {
+    try {
+        console.log(`[cleanupServerFromBrowserStorage] Cleaning up storage for server: ${serverId}`);
+
+        // Clean localStorage items related to this server
+        const keysToCheck = [
+            `server-${serverId}`,
+            `server-members-${serverId}`,
+            `server-messages-${serverId}`,
+            `server-channels-${serverId}`,
+            `server-categories-${serverId}`,
+            `server-data-${serverId}`
+        ];
+
+        // Remove all potentially related keys
+        keysToCheck.forEach(key => {
+            try {
+                localStorage.removeItem(key);
+            } catch (err) {
+                console.warn(`Failed to remove ${key} from localStorage:`, err);
+            }
+        });
+
+        // Find any other keys that might contain this server ID
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.includes(serverId)) {
+                try {
+                    localStorage.removeItem(key);
+                    console.log(`Removed additional key from localStorage: ${key}`);
+                } catch (err) {
+                    console.warn(`Failed to remove ${key} from localStorage:`, err);
+                }
+            }
+        }
+
+        // Also attempt to remove from sessionStorage if used
+        try {
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                if (key && key.includes(serverId)) {
+                    sessionStorage.removeItem(key);
+                    console.log(`Removed key from sessionStorage: ${key}`);
+                }
+            }
+        } catch (err) {
+            console.warn("Error cleaning up sessionStorage:", err);
+        }
+
+        console.log(`[cleanupServerFromBrowserStorage] Cleanup completed for server: ${serverId}`);
+    } catch (error) {
+        console.error("[cleanupServerFromBrowserStorage] Error cleaning up storage:", error);
+    }
+}
 
 const sampleInvites = [
     "wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8",
@@ -48,24 +103,19 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
         isLoadingServer,
         serverCache,
         refreshingServers,
-        isServerValid,
-        fetchServerInfo,
         hasUnreadNotifications,
-        getUnreadCount
+        getUnreadCount,
+        fetchServerInfo
     } = useGlobalState();
     const [hover, setHover] = useState(false);
-    const [isLeavingServer, setIsLeavingServer] = useState(false);
-    const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
-    const [isReconnecting, setIsReconnecting] = useState(false);
 
-    const isInvalid = !isServerValid(id);
     const isActive = activeServerId === id;
-    const hasUnread = !isInvalid && hasUnreadNotifications(id);
-    const unreadCount = !isInvalid ? getUnreadCount(id) : 0;
+    const hasUnread = hasUnreadNotifications(id);
+    const unreadCount = getUnreadCount(id);
 
     // When this icon mounts, ensure we have server data (or start fetching it)
     useEffect(() => {
-        if (!isInvalid && !isActive) {
+        if (!isActive) {
             // Check if we need to fetch server data
             const cachedData = serverCache.get(id);
             if (!cachedData || Date.now() - cachedData.timestamp > 3600000) { // 1 hour
@@ -73,107 +123,96 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                 fetchServerInfo(id, true);
             }
         }
-    }, [id, isInvalid, isActive, serverCache, fetchServerInfo]);
+    }, [id, isActive, serverCache, fetchServerInfo]);
 
     const handleMouseEnter = () => setHover(true);
     const handleMouseLeave = () => setHover(false);
 
-    function clicked() {
-        if (!isInvalid) {
-            navigate(`/app/${id}`);
-            setHover(false);
-        }
-    }
+    async function clicked() {
+        // First navigate to the server
+        navigate(`/app/${id}`);
+        setHover(false);
 
-    async function handleLeaveServer() {
         try {
-            setIsLeavingServer(true);
-            await leaveServer(id);
-            toast.success("Server removed successfully");
+            // Get global state to update
+            const globalState = useGlobalState.getState();
 
-            // Refresh the server list
-            refreshServerList();
-            navigate('/app');
+            // Force refresh server info (silently in background)
+            fetchServerInfo(id, true);
+
+            // Also refresh server members
+            console.log(`[ServerIcon] Force refreshing members for server: ${id}`);
+
+            // Show a subtle loading indicator for members
+            // Add to refreshing servers set
+            globalState.refreshingServers.add(id);
+
+            try {
+                // Fetch fresh member data
+                const { members } = await getMembers(id);
+
+                // Update the members cache with the fresh data
+                if (members && Array.isArray(members)) {
+                    const now = Date.now();
+                    globalState.serverMembers.set(id, {
+                        data: members,
+                        timestamp: now
+                    });
+                    console.log(`[ServerIcon] Updated members cache for ${id} with ${members.length} members`);
+
+                    // If this server is now the active server, update its data
+                    if (globalState.activeServerId === id && globalState.activeServer) {
+                        globalState.setActiveServer({
+                            ...globalState.activeServer,
+                            // Preserve other properties but update members count if the property exists
+                            ...(globalState.activeServer.member_count !== undefined ? { member_count: members.length } : {})
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn(`[ServerIcon] Failed to refresh members for ${id}:`, error);
+                // Non-critical error, don't show to user
+            } finally {
+                // Remove loading indicator after a short delay
+                setTimeout(() => {
+                    // Remove from refreshing servers set
+                    globalState.refreshingServers.delete(id);
+                }, 500);
+            }
         } catch (error) {
-            console.error("Error leaving server:", error);
-            toast.error("Failed to leave server");
-        } finally {
-            setIsLeavingServer(false);
-            setConfirmLeaveOpen(false);
+            console.error(`[ServerIcon] Error refreshing server data for ${id}:`, error);
         }
     }
 
-    // Get server info from the global state or cache, but only if not invalid
-    const cachedData = !isInvalid ? serverCache.get(id) : null;
+    // Get server info from the global state or cache
+    const cachedData = serverCache.get(id);
 
     // Important: Only use activeServer data if this specific server is active
     // This prevents carrying over data from previous servers
-    const serverInfo = !isInvalid && isActive ? activeServer :
+    const serverInfo = isActive ? activeServer :
         (cachedData ? cachedData.data : null);
 
     // Determine if we're loading this specific server
-    const isLoading = !isInvalid && isActive && isLoadingServer;
+    const isLoading = isActive && isLoadingServer;
 
     // Only show refreshing indicator if this specific server is being refreshed
-    const isRefreshing = !isInvalid && refreshingServers.has(id);
+    const isRefreshing = refreshingServers.has(id);
 
     // Determine if we have valid server data to display
-    const hasServerData = !isInvalid && serverInfo && serverInfo.icon;
+    const hasServerData = serverInfo && serverInfo.icon;
 
     // If we don't have icon data yet, try to get it directly
     useEffect(() => {
-        if (!isInvalid && !hasServerData && !isLoading && !isRefreshing) {
+        if (!hasServerData && !isLoading && !isRefreshing) {
             // Try to get server data silently in the background
             fetchServerInfo(id, true);
         }
-    }, [id, isInvalid, hasServerData, isLoading, isRefreshing, fetchServerInfo]);
-
-    // Handle reconnection attempt
-    async function handleReconnect(e: React.MouseEvent) {
-        e.stopPropagation();
-
-        // Show loading state
-        setIsReconnecting(true);
-
-        // Show a toast that explains what's happening
-        toast.loading(
-            "Reconnecting to server...",
-            { description: "Attempting to restore connection with multiple backend services." }
-        );
-
-        try {
-            // Use the forceful reconnect function
-            await forceReconnectServer(id);
-
-            // Show success message and dismiss loading toast
-            toast.dismiss();
-            toast.success("Successfully reconnected to server!", {
-                description: "The server connection has been restored."
-            });
-
-            // Force refresh server list
-            refreshServerList();
-
-            // Navigate to the server after successful reconnection
-            setTimeout(() => {
-                navigate(`/app/${id}`);
-            }, 500);
-        } catch (error) {
-            // Show failure message with hard refresh advice
-            toast.dismiss();
-            toast.error("Failed to reconnect to server", {
-                description: "If this keeps happening, try refreshing the app (Ctrl+F5 or Cmd+Shift+R) or remove the server",
-                duration: 7000
-            });
-        } finally {
-            setIsReconnecting(false);
-        }
-    }
+    }, [id, hasServerData, isLoading, isRefreshing, fetchServerInfo]);
 
     return (
         <div className="relative group">
             <Button
-                className={`w-12 h-12 p-0 rounded-lg bg-transparent hover:bg-primary/5 relative ${isInvalid ? 'opacity-80 grayscale' : ''}`}
+                className="w-12 h-12 p-0 rounded-lg bg-transparent hover:bg-primary/5 relative"
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={clicked}
@@ -184,36 +223,15 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     className='w-[2px] absolute -left-2 z-10 bg-foreground rounded-r transition-all duration-100 h-2 data-[expand=true]:h-6 data-[visible=true]:opacity-100 data-[visible=false]:opacity-0'
                 />
 
-                {/* Invalid server display */}
-                {isInvalid && (
-                    <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
-                        <ShieldAlertIcon className="w-6 h-6 text-destructive" />
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute inset-0 w-full h-full p-0 opacity-0 hover:opacity-100 rounded-lg"
-                            title="Try reconnecting to server"
-                            onClick={handleReconnect}
-                            disabled={isReconnecting}
-                        >
-                            {isReconnecting ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <RefreshCw className="w-5 h-5" />
-                            )}
-                        </Button>
-                    </div>
-                )}
-
                 {/* Loading state */}
-                {!isInvalid && isLoading && (
+                {isLoading && (
                     <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
                         <Skeleton className="h-full w-full rounded-lg" />
                     </div>
                 )}
 
                 {/* Server with data */}
-                {!isInvalid && !isLoading && hasServerData && (
+                {!isLoading && hasServerData && (
                     <img
                         src={`https://arweave.net/${serverInfo.icon}`}
                         className='w-full h-full object-cover rounded-lg'
@@ -222,7 +240,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                 )}
 
                 {/* Default placeholder when not loading but no data yet */}
-                {!isInvalid && !isLoading && !hasServerData && (
+                {!isLoading && !hasServerData && (
                     <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
                         <div className="w-6 h-6 bg-foreground/20 rounded-full" />
                     </div>
@@ -232,18 +250,6 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     <div className="absolute bottom-0 right-0 w-2 h-2">
                         <div className="animate-ping absolute h-2 w-2 rounded-full bg-palette-lavender opacity-75"></div>
                         <div className="relative rounded-full h-2 w-2 bg-palette-lavender"></div>
-                    </div>
-                )}
-
-                {isInvalid && (
-                    <div
-                        className="absolute -bottom-1 -right-1 w-5 h-5 bg-destructive rounded-full flex items-center justify-center cursor-pointer"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmLeaveOpen(true);
-                        }}
-                    >
-                        <Trash2 className="w-3 h-3 text-white" />
                     </div>
                 )}
 
@@ -265,19 +271,9 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     ${hover ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
                 `}
             >
-                {isLoading || isReconnecting ? (
+                {isLoading ? (
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-3 w-20" />
-                    </div>
-                ) : isInvalid ? (
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1 text-destructive">
-                            <ShieldAlertIcon className="h-3 w-3" />
-                            <span>Invalid Server</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                            ID: {id.substring(0, 6)}...
-                        </div>
                     </div>
                 ) : (
                     <div className="flex items-center gap-1">
@@ -291,38 +287,6 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
                     </div>
                 )}
             </div>
-
-            {/* Confirm Leave Dialog */}
-            <AlertDialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Leave Server</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This server appears to be invalid or no longer accessible. Would you like to remove it from your server list?
-                            <div className="mt-2 p-2 bg-muted/50 rounded-md text-sm">
-                                <b>Note:</b> If you're experiencing connection issues with multiple servers, try hard refreshing the app (Ctrl+F5 or Cmd+Shift+R) before removing servers.
-                            </div>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isLeavingServer}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleLeaveServer}
-                            disabled={isLeavingServer}
-                            className="bg-destructive hover:bg-destructive/90"
-                        >
-                            {isLeavingServer ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Removing...
-                                </>
-                            ) : (
-                                "Remove Server"
-                            )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </div>
     )
 }
@@ -342,7 +306,6 @@ if (typeof window !== 'undefined') {
 export default function ServerList() {
     const {
         activeServerId,
-        isServerValid,
         wanderInstance,
         fetchServerInfo,
         fetchJoinedServers,
@@ -471,13 +434,11 @@ export default function ServerList() {
 
         try {
             console.log("[ServerList] Fetching joined servers list");
-            const res = await fetchJoinedServers(address, false);
+            const res = await fetchJoinedServers(address, true); // Force refresh
             setJoinedServers(res);
 
             // After we have the servers list, start prefetching their data in the background
             for (const serverId of res) {
-                if (!isServerValid(serverId)) continue;
-
                 // Queue up prefetching with a delay to avoid overwhelming API
                 setTimeout(async () => {
                     try {
@@ -512,7 +473,7 @@ export default function ServerList() {
         try {
             // Try to fetch server info first to validate it exists
             toast.loading("Verifying server...");
-            await getServerInfo(serverId);
+            const serverInfo = await getServerInfo(serverId);
 
             // If server info fetch succeeded, join the server
             toast.dismiss();
@@ -524,6 +485,22 @@ export default function ServerList() {
             // Refresh joined servers list
             await runGetJoinedServers();
 
+            // Update global state caches
+            const globalState = useGlobalState.getState();
+
+            // Update server cache with fetched data
+            globalState.serverCache.set(serverId, {
+                data: serverInfo,
+                timestamp: Date.now()
+            });
+
+            // Force refresh server list in global state
+            if (address) {
+                // Update the server list cache
+                const joinedServers = await fetchJoinedServers(address, true);
+                setJoinedServers(joinedServers);
+            }
+
             // Close dialog and navigate to the server
             setJoinDialogOpen(false);
             setJoinInput("");
@@ -531,10 +508,6 @@ export default function ServerList() {
         } catch (error) {
             console.error("Error joining server:", error);
             toast.dismiss();
-
-            // Mark as invalid in global state
-            useGlobalState.getState().markServerAsInvalid(serverId);
-
             toast.error("Invalid server ID or server not found");
         }
     }

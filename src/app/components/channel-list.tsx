@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
-import { updateServer, uploadFileAndGetId, createCategory, createChannel, updateCategory, deleteCategory, updateChannel, deleteChannel, runLua } from "@/lib/ao";
+import { updateServer, uploadFileAndGetId, createCategory, createChannel, updateCategory, deleteCategory, updateChannel, deleteChannel, runLua, leaveServer } from "@/lib/ao";
 import { useActiveAddress } from "arwalletkit-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -30,6 +30,7 @@ import { useMobile } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { createContext, useContext } from 'react';
+import { cleanupServerFromBrowserStorage } from "./server-list";
 
 // @ts-ignore
 const serverSource = `${__SERVER_SRC__}`
@@ -60,6 +61,8 @@ export default function ChannelList() {
     const [isUpdatingServer, setIsUpdatingServer] = useState(false);
     const [isCreatingCategory, setIsCreatingCategory] = useState(false);
     const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+    const [isLeavingServer, setIsLeavingServer] = useState(false);
+    const [leaveServerOpen, setLeaveServerOpen] = useState(false);
 
     // New state variables for editing and deleting categories and channels
     const [editCategoryOpen, setEditCategoryOpen] = useState(false);
@@ -77,6 +80,7 @@ export default function ChannelList() {
 
     const activeAddress = useActiveAddress();
     const isMobile = useMobile();
+    const navigate = useNavigate();
     // Form states
     const [categoryName, setCategoryName] = useState("");
     const [channelName, setChannelName] = useState("");
@@ -287,7 +291,56 @@ export default function ChannelList() {
             return toast.error("No active server selected");
         }
 
-        toast.info("TODO: Leave server")
+        setLeaveServerOpen(true);
+    }
+
+    const confirmLeaveServer = async () => {
+        if (!activeServerId) {
+            return toast.error("No active server selected");
+        }
+
+        setIsLeavingServer(true);
+
+        try {
+            toast.loading("Leaving server...");
+            await leaveServer(activeServerId);
+            toast.dismiss();
+            toast.success("Server left successfully");
+
+            // Get global state to update caches
+            const globalState = useGlobalState.getState();
+
+            // Remove the server from the server cache
+            globalState.serverCache.delete(activeServerId);
+
+            // Clean up browser storage for this server
+            cleanupServerFromBrowserStorage(activeServerId);
+
+            // Force refresh the joined servers list in global state
+            if (activeAddress) {
+                try {
+                    // Force refresh the server list
+                    await globalState.fetchJoinedServers(activeAddress, true);
+                } catch (error) {
+                    console.error("Error refreshing server list after leave:", error);
+                }
+            }
+
+            // Reset active server in global state
+            globalState.setActiveServer(null);
+            globalState.setActiveServerId(null);
+            globalState.setActiveChannelId(null);
+
+            // Navigate to home page
+            navigate('/app');
+        } catch (error) {
+            console.error("Error leaving server:", error);
+            toast.dismiss();
+            toast.error(error instanceof Error ? error.message : "Failed to leave server");
+        } finally {
+            setIsLeavingServer(false);
+            setLeaveServerOpen(false);
+        }
     }
 
     // Organize channels by categories in a clean, performant way
@@ -930,6 +983,36 @@ export default function ChannelList() {
                                 </>
                             ) : (
                                 "Delete"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Leave Server Dialog */}
+            <AlertDialog open={leaveServerOpen} onOpenChange={setLeaveServerOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Leave Server</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to leave this server? You'll need a new invite to join again.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isLeavingServer}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmLeaveServer}
+                            disabled={isLeavingServer}
+                            className="relative bg-destructive hover:bg-destructive/90"
+                        >
+                            {isLeavingServer ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Leaving...
+                                </>
+                            ) : (
+                                "Leave Server"
                             )}
                         </AlertDialogAction>
                     </AlertDialogFooter>

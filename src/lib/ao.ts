@@ -360,21 +360,6 @@ export async function getServerInfo(id: string) {
             logger.info(`[getServerInfo] Response on attempt ${attempt}:`, res);
 
             if (res.status == 200) {
-                // If we previously marked this server as temporarily invalid, clear that
-                try {
-                    const globalState = useGlobalState.getState();
-                    if (globalState.temporaryInvalidServers &&
-                        globalState.temporaryInvalidServers.has(id)) {
-                        globalState.temporaryInvalidServers.delete(id);
-                    }
-                    if (globalState.invalidServerIds &&
-                        globalState.invalidServerIds.has(id)) {
-                        globalState.invalidServerIds.delete(id);
-                    }
-                } catch (err) {
-                    // Ignore errors in this cleanup step
-                }
-
                 return res.json;
             } else {
                 // Only fail immediately on clear "not found" or "forbidden" errors
@@ -1081,109 +1066,6 @@ export async function leaveServer(serverId: string): Promise<boolean> {
         }
     } catch (error) {
         logger.error("Error leaving server:", error);
-        throw error;
-    }
-}
-
-/**
- * Forcefully attempts to reconnect to a server that was previously marked as invalid
- * @param serverId The server ID to reconnect to
- */
-export async function forceReconnectServer(serverId: string): Promise<boolean> {
-    try {
-        logger.info(`[forceReconnectServer] Forcefully reconnecting to server: ${serverId}`);
-
-        // Get global state reference
-        const globalState = useGlobalState.getState();
-
-        // First, clear server from invalid server tracking preemptively
-        // This allows getServerInfo to try fresh connections
-        if (globalState.temporaryInvalidServers && globalState.temporaryInvalidServers.has(serverId)) {
-            logger.info(`[forceReconnectServer] Preemptively removing server from temporaryInvalidServers: ${serverId}`);
-            globalState.temporaryInvalidServers.delete(serverId);
-        }
-
-        if (globalState.invalidServerIds && globalState.invalidServerIds.has(serverId)) {
-            logger.info(`[forceReconnectServer] Preemptively removing server from invalidServerIds: ${serverId}`);
-            globalState.invalidServerIds.delete(serverId);
-        }
-
-        // Try to fetch server info with stronger retry logic
-        let retryAttempt = 0;
-        const maxReconnectRetries = 3;
-        let serverInfo = null;
-        let lastError = null;
-
-        while (retryAttempt < maxReconnectRetries) {
-            try {
-                // Add a small delay between retries to reduce API load
-                if (retryAttempt > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1500 * retryAttempt));
-                }
-
-                logger.info(`[forceReconnectServer] Attempt ${retryAttempt + 1}/${maxReconnectRetries} to fetch server info for ${serverId}`);
-                serverInfo = await getServerInfo(serverId);
-
-                // If successful, break out of retry loop
-                if (serverInfo) {
-                    break;
-                }
-            } catch (error) {
-                lastError = error;
-                logger.warn(`[forceReconnectServer] Retry ${retryAttempt + 1} failed:`, error);
-                retryAttempt++;
-            }
-        }
-
-        // If we couldn't get server info after all retries, throw the last error
-        if (!serverInfo) {
-            throw lastError || new Error("Failed to fetch server info after multiple attempts");
-        }
-
-        // If we got here, the server is responsive
-        logger.info(`[forceReconnectServer] Successfully reconnected to server: ${serverId}`);
-
-        // Make absolutely sure server is not in any invalid lists
-        if (globalState.temporaryInvalidServers) {
-            globalState.temporaryInvalidServers.delete(serverId);
-        }
-        if (globalState.invalidServerIds) {
-            globalState.invalidServerIds.delete(serverId);
-        }
-
-        // Reset server cache to force a refresh
-        const oldCache = globalState.serverCache.get(serverId);
-        if (oldCache) {
-            // Update timestamp to force refreshes but keep the data
-            globalState.serverCache.set(serverId, {
-                ...oldCache,
-                data: serverInfo, // Update with fresh data
-                timestamp: Date.now() - 10000000 // Set timestamp to past to force refresh
-            });
-        } else {
-            // If no cache exists, create one
-            globalState.serverCache.set(serverId, {
-                data: serverInfo,
-                timestamp: Date.now()
-            });
-        }
-
-        // Force a refresh of server data
-        await globalState.refreshServerData();
-
-        // Force immediate UI update for the active server
-        if (globalState.activeServerId === serverId) {
-            // Update the active server data directly from serverInfo
-            // Cast serverInfo to Server type since we know it has the right structure
-            useGlobalState.setState({
-                isLoadingServer: false,
-                activeServer: serverInfo as unknown as Server
-            });
-        }
-
-        return true;
-    } catch (error) {
-        logger.error(`[forceReconnectServer] Failed to reconnect to server ${serverId}:`, error);
         throw error;
     }
 }

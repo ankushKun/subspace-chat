@@ -82,6 +82,20 @@ export default function UsersList() {
         return () => unsubscribe();
     }, [members]);
 
+    // Reset state when server changes
+    useEffect(() => {
+        // Reset error state when server changes
+        setError(null);
+        setIsRetrying(false);
+
+        // This ensures a clean slate for each server
+        hasLoadedProfilesRef.current = false;
+        processedMembersRef.current = '';
+        fetchFailedRef.current = false;
+
+        console.log('[UsersList] Reset state for new server:', activeServerId);
+    }, [activeServerId]);
+
     // This function loads profiles for all members efficiently using ProfileManager
     const loadMembersProfiles = useCallback(async (membersList: Member[]) => {
         if (!membersList || membersList.length === 0) return;

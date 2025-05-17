@@ -116,6 +116,8 @@ export default function Chat() {
     const [currentAddress, setCurrentAddress] = useState<string>("");
     // Add a state to track profile cache updates
     const [profileCacheVersion, setProfileCacheVersion] = useState(0);
+    // Create a ref to track previous server ID for handling collapsing users panel
+    const prevServerIdRef = useRef<string | null>(null);
 
     // Load current user address
     useEffect(() => {
@@ -160,6 +162,21 @@ export default function Chat() {
         if (!activeServer || activeChannelId === null) return null;
         return activeServer.channels.find(channel => channel.id === activeChannelId) || null;
     }, [activeServer, activeChannelId]);
+
+    // Collapse users panel when server changes
+    useEffect(() => {
+        // Only collapse if the server has actually changed (not on first mount)
+        if (prevServerIdRef.current !== activeServerId && activeServerId !== null) {
+            // Only collapse if this isn't the initial render
+            if (prevServerIdRef.current !== null) {
+                console.log('[Chat] Server changed, collapsing users panel');
+                setShowUsers(false);
+            }
+
+            // Update the ref for the next change
+            prevServerIdRef.current = activeServerId;
+        }
+    }, [activeServerId, setShowUsers]);
 
     // Handle channel changes
     useEffect(() => {

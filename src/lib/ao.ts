@@ -42,7 +42,7 @@ const CommonTags: Tag[] = [
 // Define multiple CU endpoints for fallback
 const CU_ENDPOINTS = [
     "https://cu.arnode.asia",
-    // "https://cu.ardrive.io",
+    "https://cu.ardrive.io",
 ];
 
 // Track the current endpoint index
@@ -128,7 +128,8 @@ export async function createServer(name: string, icon: File) {
         body: {
             name: name,
             icon: serverId
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     })
     logger.info("Update server response:", JSON.stringify(updateServerRes));
 
@@ -143,7 +144,8 @@ export async function createServer(name: string, icon: File) {
         method: "POST",
         body: {
             server_id: serverId
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     })
     logger.info("Join server response:", JSON.stringify(joinServerRes));
     if (joinServerRes.status == 200) {
@@ -283,6 +285,7 @@ export async function getJoinedServers(address: string): Promise<string[]> {
         body: {
             id: address
         },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     })
     logger.info(`[getJoinedServers] Response:`, res);
 
@@ -340,7 +343,9 @@ export async function getServerInfo(id: string) {
 
                 // Race the fetch against the timeout
                 return Promise.race([
-                    aofetch(`${id}/`),
+                    aofetch(`${id}/`, {
+                        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+                    }),
                     timeoutPromise
                 ]);
             };
@@ -488,7 +493,9 @@ export async function getMembers(serverId: string) {
                 return { success: true, members: cachedMembers };
             }
 
-            const res = await aofetch(`${serverId}/get-members`);
+            const res = await aofetch(`${serverId}/get-members`, {
+                CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            });
             logger.info(`[getMembers] Response:`, res);
 
             if (res.status == 200) {
@@ -525,7 +532,8 @@ export async function updateServer(id: string, name: string, icon: string) {
         body: {
             name,
             icon
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[updateServer] Response:`, res);
     if (res.status == 200) {
@@ -558,7 +566,8 @@ export async function createCategory(serverId: string, name: string, order?: num
 
     const res = await aofetch(`${serverId}/create-category`, {
         method: "POST",
-        body: body
+        body: body,
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[createCategory] Response:`, res);
     if (res.status == 200) {
@@ -590,7 +599,8 @@ export async function updateCategory(serverId: string, id: number, name: string,
 
     const res = await aofetch(`${serverId}/update-category`, {
         method: "POST",
-        body: body
+        body: body,
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[updateCategory] Response:`, res);
     if (res.status == 200) {
@@ -612,7 +622,8 @@ export async function deleteCategory(serverId: string, id: number) {
         method: "POST",
         body: {
             id
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[deleteCategory] Response:`, res);
     if (res.status == 200) {
@@ -648,7 +659,8 @@ export async function createChannel(serverId: string, name: string, categoryId?:
 
     const res = await aofetch(`${serverId}/create-channel`, {
         method: "POST",
-        body: body
+        body: body,
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[createChannel] Response:`, res);
     if (res.status == 200) {
@@ -693,7 +705,8 @@ export async function updateChannel(serverId: string, id: number, name?: string,
 
     const res = await aofetch(`${serverId}/update-channel`, {
         method: "POST",
-        body: body
+        body: body,
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[updateChannel] Response:`, res);
     if (res.status == 200) {
@@ -715,7 +728,8 @@ export async function deleteChannel(serverId: string, id: number) {
         method: "POST",
         body: {
             id
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[deleteChannel] Response:`, res);
     if (res.status == 200) {
@@ -737,7 +751,8 @@ export async function getMessages(serverId: string, channelId: number) {
         method: "GET",
         body: {
             channel_id: channelId
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[getMessages] Response:`, res);
     if (res.status == 200) {
@@ -754,7 +769,8 @@ export async function sendMessage(serverId: string, channelId: number, content: 
         body: {
             channel_id: channelId,
             content
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[sendMessage] Response:`, res);
     if (res.status == 200) {
@@ -771,7 +787,8 @@ export async function editMessage(serverId: string, msgId: string, content: stri
         body: {
             msg_id: msgId,
             content
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[editMessage] Response:`, res);
     if (res.status == 200) {
@@ -787,7 +804,8 @@ export async function deleteMessage(serverId: string, msgId: string) {
         method: "POST",
         body: {
             msg_id: msgId
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[deleteMessage] Response:`, res);
     if (res.status == 200) {
@@ -808,7 +826,8 @@ export async function updateNickname(serverId: string, nickname: string) {
             method: "POST",
             body: {
                 nickname: safeNickname
-            }
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex],
         });
         logger.info(`[updateNickname] Response:`, res);
 
@@ -846,7 +865,8 @@ export async function getProfile(address?: string) {
     logger.info(`[getProfile] Fetching profile for:`, address || "current user");
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
-        body: address ? { id: address } : undefined
+        body: address ? { id: address } : undefined,
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[getProfile] Response:`, res);
 
@@ -917,7 +937,8 @@ export async function getBulkProfiles(addresses: string[]) {
         method: "GET",
         body: {
             ids: JSON.stringify(uniqueAddresses)
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[getBulkProfiles] Response status:`, res.status);
 
@@ -997,7 +1018,8 @@ export async function updateProfile(username?: string, pfp?: string) {
         body: {
             username,
             pfp
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[updateProfile] Response:`, res);
     if (res.status == 200) {
@@ -1013,7 +1035,8 @@ export async function joinServer(serverId: string) {
         method: "POST",
         body: {
             server_id: serverId
-        }
+        },
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
     });
     logger.info(`[joinServer] Response:`, res);
     if (res.status == 200) {
@@ -1040,7 +1063,8 @@ export async function leaveServer(serverId: string): Promise<boolean> {
             method: "POST",
             body: {
                 server_id: serverId
-            }
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex],
         });
         logger.info(`[leaveServer] Response:`, res);
 
@@ -1261,7 +1285,8 @@ export async function getNotifications(address: string) {
                 method: "GET",
                 body: {
                     id: address
-                }
+                },
+                CU_URL: CU_ENDPOINTS[currentEndpointIndex],
             });
 
             logger.info(`[getNotifications] Response status:`, res.status);
@@ -1325,7 +1350,8 @@ export async function markNotificationsAsRead(serverId: string, channelId: numbe
             body: {
                 server_id: serverId,
                 channel_id: channelId
-            }
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex],
         });
 
         logger.info(`[markNotificationsAsRead] Response:`, res);

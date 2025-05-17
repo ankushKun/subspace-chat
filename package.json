@@ -35,7 +35,7 @@
     "@uidotdev/usehooks": "^2.4.1",
     "@vela-ventures/aosync-strategy": "^1.0.12",
     "@wanderapp/connect": "^0.1.1",
-    "ao-fetch": "^1.0.2",
+    "ao-fetch": "^1.0.4",
     "arwalletkit-react": "^0.4.0",
     "arwalletkit-wagmi": "^0.1.0",
     "arweave": "^1.15.7",

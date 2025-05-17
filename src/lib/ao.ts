@@ -41,9 +41,8 @@ const CommonTags: Tag[] = [
 
 // Define multiple CU endpoints for fallback
 const CU_ENDPOINTS = [
-    "https://cu.ardrive.io",
-    "https://cu.arweave.dev",
-    "https://cu.arnode.asia"
+    "https://cu.arnode.asia",
+    // "https://cu.ardrive.io",
 ];
 
 // Track the current endpoint index

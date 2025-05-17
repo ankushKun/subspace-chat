@@ -262,10 +262,6 @@ export interface GlobalState {
     wanderInstance: WanderConnect | null
     setWanderInstance: (instance: WanderConnect | null) => void
 
-    // Track servers with invalid member endpoints
-    invalidMemberServers: Set<string>
-    setInvalidMemberServers: (serverIds: Set<string>) => void
-
     // User profile management
     userProfile: CachedUserProfile | null
     setUserProfile: (profileData: any) => void
@@ -493,75 +489,14 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     // Member management
     serverMembers: loadMembersCache(),
     isLoadingMembers: false,
-    // Track servers with invalid member endpoints
-    invalidMemberServers: new Set<string>(),
-
-    // Add function to update a single member's nickname in the cache
-    updateMemberNickname: (serverId: string, memberId: string, nickname: string) => {
-        if (!serverId || !memberId) return;
-
-        const { serverMembers } = get();
-        const cachedServerMembers = serverMembers.get(serverId);
-
-        // If we don't have cached members for this server, do nothing
-        if (!cachedServerMembers || !cachedServerMembers.data) return;
-
-        // Find and update the member's nickname
-        const updatedMembers = [...cachedServerMembers.data];
-        const memberIndex = updatedMembers.findIndex(m => m.id === memberId);
-
-        if (memberIndex !== -1) {
-            // Update the nickname
-            updatedMembers[memberIndex] = {
-                ...updatedMembers[memberIndex],
-                nickname: nickname
-            };
-
-            // Update the cache with the new members array
-            const updatedCache = new Map(serverMembers);
-            updatedCache.set(serverId, {
-                data: updatedMembers,
-                timestamp: Date.now() // Update timestamp to reflect the change
-            });
-
-            // Save to storage
-            saveMembersCache(updatedCache);
-
-            // Update state
-            set({ serverMembers: updatedCache });
-
-            logger.log(`[updateMemberNickname] Updated nickname for member ${memberId} in server ${serverId}`);
-        } else {
-            logger.log(`[updateMemberNickname] Member ${memberId} not found in server ${serverId} cache`);
-        }
-    },
-
     fetchServerMembers: async (serverId: string, forceRefresh = false) => {
         if (!serverId) return;
-        const { serverMembers, invalidServerIds, invalidMemberServers } = get();
+        const { serverMembers, invalidServerIds } = get();
 
         // Skip if this server is already known to be invalid
         if (invalidServerIds.has(serverId)) {
             logger.log(`[fetchServerMembers] Skipping fetch for invalid server: ${serverId}`);
             return;
-        }
-
-        // When forceRefresh is true, we'll retry even if previously marked as invalid
-        // ONLY if it's explicitly a user action (isLoadingServer is true)
-        if (invalidMemberServers.has(serverId) && (!forceRefresh || !get().isLoadingServer)) {
-            logger.log(`[fetchServerMembers] Skipping fetch for server with invalid members endpoint: ${serverId}`);
-            return;
-        }
-
-        // If this is a force refresh from a user action for a server previously marked as invalid,
-        // remove it from the invalid set to allow retrying
-        if (forceRefresh && invalidMemberServers.has(serverId) && get().isLoadingServer) {
-            logger.log(`[fetchServerMembers] Retrying previously invalid member server due to user action: ${serverId}`);
-            const updatedInvalidMemberServers = new Set(invalidMemberServers);
-            updatedInvalidMemberServers.delete(serverId);
-            set({
-                invalidMemberServers: updatedInvalidMemberServers
-            });
         }
 
         // Check if we have cached members and if the cache is still valid
@@ -606,20 +541,20 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
             } else {
                 logger.error(`[fetchServerMembers] Invalid response format for ${serverId}:`, response);
                 // Mark this server as having an invalid member endpoint
-                const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
-                updatedInvalidMemberServers.add(serverId);
+                const updatedInvalidServers = new Set(get().invalidServerIds);
+                updatedInvalidServers.add(serverId);
                 set({
-                    invalidMemberServers: updatedInvalidMemberServers,
+                    invalidServerIds: updatedInvalidServers,
                     isLoadingMembers: false
                 });
             }
         } catch (error) {
             logger.error(`[fetchServerMembers] Error fetching members for ${serverId}:`, error);
             // Mark this server as having an invalid member endpoint
-            const updatedInvalidMemberServers = new Set(get().invalidMemberServers);
-            updatedInvalidMemberServers.add(serverId);
+            const updatedInvalidServers = new Set(get().invalidServerIds);
+            updatedInvalidServers.add(serverId);
             set({
-                invalidMemberServers: updatedInvalidMemberServers,
+                invalidServerIds: updatedInvalidServers,
                 isLoadingMembers: false
             });
         }
@@ -628,12 +563,12 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     getServerMembers: (serverId: string) => {
         if (!serverId) return null;
 
-        const { serverMembers, invalidMemberServers } = get();
+        const { serverMembers, invalidServerIds } = get();
         const cachedMembers = serverMembers.get(serverId);
 
         // If this server is known to have an invalid members endpoint,
         // BUT we have cached data, return the cached data instead
-        if (invalidMemberServers.has(serverId)) {
+        if (invalidServerIds.has(serverId)) {
             if (cachedMembers) {
                 logger.log(`[getServerMembers] Using cached data for server with invalid members endpoint: ${serverId}`);
                 return cachedMembers.data;
@@ -1019,8 +954,45 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
         }
     },
 
-    // Add setter for invalid member servers
-    setInvalidMemberServers: (serverIds: Set<string>) => set({ invalidMemberServers: serverIds }),
+    // Add function to update a single member's nickname in the cache
+    updateMemberNickname: (serverId: string, memberId: string, nickname: string) => {
+        if (!serverId || !memberId) return;
+
+        const { serverMembers } = get();
+        const cachedServerMembers = serverMembers.get(serverId);
+
+        // If we don't have cached members for this server, do nothing
+        if (!cachedServerMembers || !cachedServerMembers.data) return;
+
+        // Find and update the member's nickname
+        const updatedMembers = [...cachedServerMembers.data];
+        const memberIndex = updatedMembers.findIndex(m => m.id === memberId);
+
+        if (memberIndex !== -1) {
+            // Update the nickname
+            updatedMembers[memberIndex] = {
+                ...updatedMembers[memberIndex],
+                nickname: nickname
+            };
+
+            // Update the cache with the new members array
+            const updatedCache = new Map(serverMembers);
+            updatedCache.set(serverId, {
+                data: updatedMembers,
+                timestamp: Date.now() // Update timestamp to reflect the change
+            });
+
+            // Save to storage
+            saveMembersCache(updatedCache);
+
+            // Update state
+            set({ serverMembers: updatedCache });
+
+            logger.log(`[updateMemberNickname] Updated nickname for member ${memberId} in server ${serverId}`);
+        } else {
+            logger.log(`[updateMemberNickname] Member ${memberId} not found in server ${serverId} cache`);
+        }
+    },
 }))
 
 // Hook to synchronize server ID with server data

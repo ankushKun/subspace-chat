@@ -147,17 +147,53 @@ export default function NotificationsPanel() {
 
     }, [notifications, setUnreadNotifications, joinedServers]);
 
-    // Fetch notifications and merge with local storage
+    // Fetch notifications and merge with local storage - improved with better caching
     useEffect(() => {
         if (!address) return;
 
-        const fetchNotifications = async () => {
+        let pollInterval = 4000; // Start with 4 seconds
+        let consecutiveErrors = 0;
+        let isFetching = false;
+        let isMounted = true;
+        let lastFetchTime = 0;
+
+        // Load stored notifications first for immediate display
+        try {
+            const storedNotifications = localStorage.getItem(`notifications-${address}`);
+            if (storedNotifications) {
+                setNotifications(JSON.parse(storedNotifications));
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Failed to load notifications from localStorage:", error);
+        }
+
+        // Fetch notifications with debouncing, caching and error handling
+        const fetchNotificationsWithDebounce = async () => {
+            // Don't fetch if unmounted or another fetch is in progress
+            if (!isMounted || isFetching) return;
+
+            // Check if we need to throttle requests
+            const now = Date.now();
+            const timeSinceLastFetch = now - lastFetchTime;
+            if (timeSinceLastFetch < pollInterval) {
+                console.log(`[NotificationsPanel] Skipping fetch, too soon (${timeSinceLastFetch}ms < ${pollInterval}ms)`);
+                return;
+            }
+
+            isFetching = true;
+            lastFetchTime = now;
+
             try {
                 setLoading(true);
+                // This call now uses cached data when appropriate
                 const result = await getNotifications(address);
 
                 if (!result.messages || !Array.isArray(result.messages)) {
-                    setLoading(false);
+                    if (isMounted) {
+                        setLoading(false);
+                    }
+                    isFetching = false;
                     return;
                 }
 
@@ -167,45 +203,78 @@ export default function NotificationsPanel() {
                     isRead: false
                 }));
 
-                setNotifications(prevNotifications => {
-                    // Filter out old notifications that match the new ones from server
-                    const filteredPrevNotifications = prevNotifications.filter(
-                        prev => !serverNotifications.some(
-                            (serverNotif: Notification) => serverNotif.id === prev.id
-                        )
-                    );
+                if (isMounted) {
+                    setNotifications(prevNotifications => {
+                        // Filter out old notifications that match the new ones from server
+                        const filteredPrevNotifications = prevNotifications.filter(
+                            prev => !serverNotifications.some(
+                                (serverNotif: Notification) => serverNotif.id === prev.id
+                            )
+                        );
 
-                    // Combine with new notifications from server
-                    const updatedNotifications = [...filteredPrevNotifications, ...serverNotifications];
+                        // Combine with new notifications from server
+                        const updatedNotifications = [...filteredPrevNotifications, ...serverNotifications];
 
-                    // Sort by timestamp (newest first)
-                    updatedNotifications.sort((a, b) =>
-                        parseInt(b.timestamp) - parseInt(a.timestamp)
-                    );
+                        // Sort by timestamp (newest first)
+                        updatedNotifications.sort((a, b) =>
+                            parseInt(b.timestamp) - parseInt(a.timestamp)
+                        );
 
-                    // Limit to MAX_STORED_NOTIFICATIONS to prevent localStorage from growing too large
-                    const limitedNotifications = updatedNotifications.slice(0, MAX_STORED_NOTIFICATIONS);
+                        // Limit to MAX_STORED_NOTIFICATIONS to prevent localStorage from growing too large
+                        const limitedNotifications = updatedNotifications.slice(0, MAX_STORED_NOTIFICATIONS);
 
-                    // Save to localStorage
-                    if (address) {
-                        localStorage.setItem(`notifications-${address}`, JSON.stringify(limitedNotifications));
-                    }
+                        // Save to localStorage
+                        if (address) {
+                            localStorage.setItem(`notifications-${address}`, JSON.stringify(limitedNotifications));
+                        }
 
-                    return limitedNotifications;
-                });
+                        return limitedNotifications;
+                    });
+                }
+
+                // Reset error counter and polling interval on success
+                consecutiveErrors = 0;
+                pollInterval = 4000;
             } catch (error) {
                 console.error("Failed to fetch notifications:", error);
+
+                // Implement exponential backoff on errors
+                consecutiveErrors++;
+                pollInterval = Math.min(30000, pollInterval * (1 + 0.5 * consecutiveErrors));
+                console.warn(`Notification polling error, backing off to ${pollInterval}ms`);
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
+                isFetching = false;
             }
         };
 
-        fetchNotifications();
+        // Initial fetch - delayed slightly to avoid API congestion on startup
+        setTimeout(fetchNotificationsWithDebounce, 1000);
 
-        // Set up polling interval
-        const intervalId = setInterval(fetchNotifications, 4000);
+        // Set up polling with dynamic polling interval that adapts to errors
+        const updatePollingInterval = () => {
+            if (!isMounted) return;
 
-        return () => clearInterval(intervalId);
+            // Clear any existing interval
+            if (intervalId) clearInterval(intervalId);
+
+            // Set new interval based on current poll interval
+            intervalId = setInterval(fetchNotificationsWithDebounce, pollInterval);
+        };
+
+        // Initial polling setup
+        let intervalId = setInterval(fetchNotificationsWithDebounce, pollInterval);
+
+        // Check and update the polling interval periodically
+        const adjustmentInterval = setInterval(updatePollingInterval, 30000);
+
+        return () => {
+            isMounted = false;
+            if (intervalId) clearInterval(intervalId);
+            clearInterval(adjustmentInterval);
+        };
     }, [address]);
 
     // Get filtered notifications (only from joined servers)

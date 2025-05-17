@@ -5,6 +5,7 @@ import { getNotifications, markNotificationsAsRead } from '@/lib/ao';
 import { useActiveAddress, useConnection } from 'arwalletkit-react';
 import { useMobile } from '@/hooks';
 import { sendNotification } from '@/lib/utils';
+import profileManager, { warmupProfileCache } from '@/lib/profile-manager';
 
 // Use lazy loading for components
 const ChannelList = lazy(() => import('@/app/components/channel-list'));
@@ -113,103 +114,200 @@ export default function App() {
             lastChannelRef.current.channelId !== channelIdNum) {
 
             console.log(`[App] Channel changed to ${serverId}/${channelId}, marking notifications as read`);
-            markNotificationsAsRead(serverId, channelIdNum)
-                .then(() => {
-                    console.log(`[App] Marked notifications as read for ${serverId}/${channelId}`);
-                })
-                .catch(error => {
-                    console.warn(`[App] Error marking notifications as read:`, error);
-                });
+
+            // Debounce the markNotificationsAsRead call
+            const timerId = setTimeout(() => {
+                markNotificationsAsRead(serverId, channelIdNum)
+                    .then(() => {
+                        console.log(`[App] Marked notifications as read for ${serverId}/${channelId}`);
+                    })
+                    .catch(error => {
+                        console.warn(`[App] Error marking notifications as read:`, error);
+                    });
+            }, 300);
 
             // Update the last channel ref
             lastChannelRef.current = {
                 serverId,
                 channelId: channelIdNum
             };
+
+            return () => clearTimeout(timerId);
         }
     }, [connected, address, serverId, channelId]);
+
+    // Optimize profile loading: Instead of loading profiles one by one,
+    // batch load profiles for visible UI elements
+    useEffect(() => {
+        if (!connected || !address) return;
+
+        const profileOptimizer = {
+            loadedServerMembers: new Set<string>(),
+
+            // Map server IDs to their loaded member IDs
+            serverMembersMap: new Map<string, Set<string>>(),
+
+            // Find visible members to prioritize loading their profiles
+            collectVisibleMembers: (serverId: string) => {
+                try {
+                    // Skip if already processed this server
+                    if (profileOptimizer.serverMembersMap.has(serverId)) {
+                        return;
+                    }
+
+                    // Use global state to get server members
+                    const globalState = useGlobalState.getState();
+                    const members = globalState.getServerMembers(serverId);
+
+                    if (!members || members.length === 0) {
+                        return;
+                    }
+
+                    // Store members for this server
+                    const memberIds = members.map(m => m.id);
+
+                    // Create a set of member IDs for efficient lookup
+                    const memberSet = new Set(memberIds);
+                    profileOptimizer.serverMembersMap.set(serverId, memberSet);
+
+                    // Warm up the profile cache with these member IDs
+                    warmupProfileCache(memberIds);
+
+                    console.log(`[App] Optimized profile loading for ${memberIds.length} members in server ${serverId}`);
+                } catch (error) {
+                    console.warn(`[App] Error optimizing profiles for server ${serverId}:`, error);
+                }
+            }
+        };
+
+        // When server ID changes, optimize profile loading for visible members
+        const optimizeProfileLoading = () => {
+            const { activeServerId } = useGlobalState.getState();
+
+            if (activeServerId) {
+                profileOptimizer.collectVisibleMembers(activeServerId);
+            }
+        };
+
+        // Run initial optimization
+        optimizeProfileLoading();
+
+        // Set up listener for server changes to optimize profiles when needed
+        const unsubscribe = useGlobalState.subscribe(
+            (state) => {
+                const serverId = state.activeServerId;
+                if (serverId) {
+                    // Small delay to let other state updates happen first
+                    setTimeout(() => profileOptimizer.collectVisibleMembers(serverId), 200);
+                }
+            }
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [connected, address]);
 
     useEffect(() => {
         if (!connected || !address) return;
 
         // Store information about notification checking
         let notificationCheckActive = false;
+        let consecutiveErrors = 0;
+        let pollInterval = 4000; // Start with 4 seconds
+        let isMounted = true;
+        let lastCheckTime = 0;
 
-        // Load seen notification IDs from localStorage
-        const getSeenNotificationIds = (): Set<string> => {
-            try {
-                const seenIdsJson = localStorage.getItem('notifications-seen-ids');
-                if (seenIdsJson) {
-                    return new Set(JSON.parse(seenIdsJson));
-                }
-            } catch (error) {
-                console.warn('[checkNotifications] Error loading seen notification IDs:', error);
+        // Store seen notification IDs with improved memory management
+        const seenNotificationIds = new Set<string>();
+
+        // Load initially from localStorage
+        try {
+            const seenIdsJson = localStorage.getItem('notifications-seen-ids');
+            if (seenIdsJson) {
+                const ids = JSON.parse(seenIdsJson);
+                ids.forEach((id: string) => seenNotificationIds.add(id));
+                console.log(`[App] Loaded ${seenNotificationIds.size} seen notification IDs from storage`);
             }
-            return new Set<string>();
-        };
+        } catch (error) {
+            console.warn('[App] Error loading seen notification IDs:', error);
+        }
 
-        // Save seen notification IDs to localStorage
-        const saveSeenNotificationIds = (seenIds: Set<string>) => {
-            try {
-                // Convert Set to Array for JSON serialization
-                const idsArray = Array.from(seenIds);
+        // Save seen notification IDs to localStorage - with throttling
+        const saveSeenIds = (() => {
+            let saveTimeout: NodeJS.Timeout | null = null;
 
-                // Only keep the most recent 500 IDs to prevent localStorage from growing too large
-                const recentIds = idsArray.slice(-500);
+            return () => {
+                // Clear any existing timeout to debounce saves
+                if (saveTimeout) clearTimeout(saveTimeout);
 
-                localStorage.setItem('notifications-seen-ids', JSON.stringify(recentIds));
-            } catch (error) {
-                console.warn('[checkNotifications] Error saving seen notification IDs:', error);
-            }
-        };
+                // Schedule a save in 1 second
+                saveTimeout = setTimeout(() => {
+                    try {
+                        // Convert Set to Array for JSON serialization
+                        const idsArray = Array.from(seenNotificationIds);
 
-        // Store the initial seen notification IDs
-        let seenNotificationIds = getSeenNotificationIds();
+                        // Only keep the most recent 500 IDs to prevent localStorage from growing too large
+                        const recentIds = idsArray.slice(-500);
+
+                        localStorage.setItem('notifications-seen-ids', JSON.stringify(recentIds));
+                        console.log(`[App] Saved ${recentIds.length} seen notification IDs to storage`);
+                    } catch (error) {
+                        console.warn('[App] Error saving seen notification IDs:', error);
+                    }
+                    saveTimeout = null;
+                }, 1000);
+            };
+        })();
 
         // Format message content to simplify mentions for notifications
         const formatMessageContent = (content: string): string => {
             if (!content) return "";
-
             // Replace @[name](address) with @name
             return content.replace(/@\[(.*?)\]\((.*?)\)/g, '@$1');
         };
 
+        // Smart notification checking with improved performance
         const checkNotifications = async () => {
-            // Prevent multiple concurrent checks
-            if (notificationCheckActive) return;
+            // Skip if another check is active or we're unmounted
+            if (notificationCheckActive || !isMounted) return;
+
+            // Check if we need to throttle requests
+            const now = Date.now();
+            const timeSinceLastCheck = now - lastCheckTime;
+            if (timeSinceLastCheck < pollInterval) {
+                console.log(`[App] Skipping notification check, too soon (${timeSinceLastCheck}ms < ${pollInterval}ms)`);
+                return;
+            }
+
+            lastCheckTime = now;
             notificationCheckActive = true;
 
             try {
-                // Get user notification preference from localStorage
+                // Check user preference
                 const notificationsEnabled = localStorage.getItem('notifications-enabled') !== 'false';
                 if (!notificationsEnabled) {
+                    console.log(`[App] Notifications disabled by user preference`);
                     notificationCheckActive = false;
                     return;
                 }
 
-                // Load the set of already seen notification IDs
-                seenNotificationIds = getSeenNotificationIds();
+                console.log(`[App] Checking notifications...`);
 
-                console.log(`[checkNotifications] Fetching notifications...`);
-
-                // Get notifications from the profile registry
+                // This call now uses caching and queueing automatically
                 const notifications = await getNotifications(address);
 
-                // Skip if no valid data returned
-                if (!notifications) {
-                    console.warn('[checkNotifications] No notification data returned');
+                // Skip if no valid data or no messages
+                if (!notifications || !notifications.messages || notifications.messages.length === 0) {
+                    console.log('[App] No new notifications');
+
+                    // Reset polling on successful response
+                    consecutiveErrors = 0;
+                    pollInterval = 4000;
+
                     notificationCheckActive = false;
                     return;
                 }
-
-                // Skip processing if no messages
-                if (!notifications.messages || notifications.messages.length === 0) {
-                    console.log('[checkNotifications] No new notifications');
-                    notificationCheckActive = false;
-                    return;
-                }
-
-                console.log(`[checkNotifications] Processing ${notifications.messages.length} notifications`);
 
                 // Filter out already seen notifications
                 const newMessages = notifications.messages.filter(message => {
@@ -218,7 +316,7 @@ export default function App() {
                         return false;
                     }
 
-                    // Use the message ID as the primary deduplication key
+                    // Use message ID for deduplication
                     const notificationId = message.id;
 
                     // Skip if we've already seen this notification
@@ -231,31 +329,27 @@ export default function App() {
                     return true;
                 });
 
-                // Save the updated set of seen notification IDs
-                saveSeenNotificationIds(seenNotificationIds);
+                // Save seen IDs if we added any new ones
+                if (newMessages.length > 0) {
+                    saveSeenIds();
+                }
 
-                console.log(`[checkNotifications] ${newMessages.length} new notifications after deduplication`);
+                // Reset polling interval on successful response
+                consecutiveErrors = 0;
+                pollInterval = 4000;
 
-                // If all messages were duplicates, skip processing
+                // If no new messages after filtering, we're done
                 if (newMessages.length === 0) {
-                    console.log('[checkNotifications] All notifications were duplicates');
+                    console.log('[App] All notifications already seen');
                     notificationCheckActive = false;
                     return;
                 }
 
                 // Group messages by server for better organization
-                interface ServerMessages {
-                    serverName: string;
-                    messages: any[];
-                }
+                const messagesByServer = newMessages.reduce((acc, message) => {
+                    if (!message || !message.SID) return acc;
 
-                const messagesByServer: Record<string, ServerMessages> = newMessages.reduce((acc, message) => {
-                    // Ensure we have valid message data
-                    if (!message || !message.SID) {
-                        return acc;
-                    }
-
-                    const serverId = message.SID || 'unknown';
+                    const serverId = message.SID;
                     const serverName = message.server || 'Unknown Server';
 
                     if (!acc[serverId]) {
@@ -267,11 +361,17 @@ export default function App() {
 
                     acc[serverId].messages.push(message);
                     return acc;
-                }, {} as Record<string, ServerMessages>);
+                }, {} as Record<string, { serverName: string; messages: any[] }>);
 
-                // Handle notifications for each server
+                // Display notifications
                 Object.entries(messagesByServer).forEach(([serverId, data]) => {
-                    const { serverName, messages } = data;
+                    // Add explicit type checking for the destructured object
+                    if (!data) return;
+
+                    const { serverName = 'Unknown Server', messages = [] } = data as {
+                        serverName: string;
+                        messages: any[]
+                    };
 
                     if (messages.length > 3) {
                         // Group notification for multiple messages
@@ -287,11 +387,8 @@ export default function App() {
                         // Individual notifications for a few messages
                         messages.forEach(message => {
                             const authorName = message.author || 'Unknown User';
-
-                            // Format the message content to simplify mentions
                             const formattedContent = formatMessageContent(message.content);
 
-                            // Create a concise notification with just the essential info
                             sendNotification(
                                 `${authorName}`,
                                 {
@@ -304,6 +401,11 @@ export default function App() {
                 });
             } catch (error) {
                 console.error("Error checking notifications:", error);
+
+                // Apply exponential backoff
+                consecutiveErrors++;
+                pollInterval = Math.min(30000, pollInterval * (1 + 0.5 * consecutiveErrors));
+                console.warn(`Notification checking error, backing off to ${pollInterval}ms`);
             } finally {
                 notificationCheckActive = false;
             }
@@ -316,15 +418,25 @@ export default function App() {
             }
         }
 
-        // Run immediately on mount
-        checkNotifications();
+        // Initial check after a short delay to avoid startup congestion
+        const initialTimerId = setTimeout(checkNotifications, 2000);
 
-        // Set up interval - check every 4 seconds
-        const intervalId = setInterval(checkNotifications, 4000);
+        // Set up polling with dynamic interval
+        let intervalId = setInterval(checkNotifications, pollInterval);
 
-        // Cleanup interval on unmount
-        return () => clearInterval(intervalId);
+        // Update interval when pollInterval changes
+        const updateIntervalId = setInterval(() => {
+            clearInterval(intervalId);
+            intervalId = setInterval(checkNotifications, pollInterval);
+        }, 30000); // Check every 30 seconds if we need to adjust the interval
 
+        // Cleanup on unmount
+        return () => {
+            isMounted = false;
+            clearTimeout(initialTimerId);
+            clearInterval(intervalId);
+            clearInterval(updateIntervalId);
+        };
     }, [connected, address]);
 
     useEffect(() => {

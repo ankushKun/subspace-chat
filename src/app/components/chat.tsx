@@ -3,7 +3,7 @@ import { ArrowLeft, HashIcon, Send, Users, Loader2, MoreVertical, Pencil, Trash2
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
-import { getMessages, sendMessage, getProfile, editMessage, deleteMessage } from "@/lib/ao";
+import { getMessages, sendMessage, editMessage, deleteMessage, markNotificationsAsRead } from "@/lib/ao";
 import { toast } from "sonner";
 import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { FaInbox } from "react-icons/fa6";
 import { BiSolidInbox } from "react-icons/bi";
 import NotificationsPanel from "./notifications-panel";
+import { getProfile, fetchBulkProfiles, warmupProfileCache } from "@/lib/profile-manager";
 
 // Message type from server
 interface Message {
@@ -89,11 +90,9 @@ export default function Chat() {
         showUsers,
         setShowUsers,
         getUserProfile,
-        // Use the centralized profile cache
+        // Still use the global state profile cache for compatibility
         userProfilesCache,
         getUserProfileFromCache,
-        updateUserProfileCache,
-        fetchUserProfileAndCache,
         getServerMembers
     } = useGlobalState();
     const isMobile = useMobile();
@@ -106,7 +105,6 @@ export default function Chat() {
     const previousChannelIdRef = useRef<number | null>(null);
     const activeUserProfilesRef = useRef<Set<string>>(new Set());
     const abortControllerRef = useRef<AbortController | null>(null);
-    const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
     // State for editing messages
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
     const [editedContent, setEditedContent] = useState("");
@@ -114,6 +112,8 @@ export default function Chat() {
     const [isDeleting, setIsDeleting] = useState(false);
     // Current user address
     const [currentAddress, setCurrentAddress] = useState<string>("");
+    // Add a state to track profile cache updates
+    const [profileCacheVersion, setProfileCacheVersion] = useState(0);
 
     // Load current user address
     useEffect(() => {
@@ -129,51 +129,84 @@ export default function Chat() {
         loadCurrentAddress();
     }, []);
 
+    // Watch for profile changes that should trigger re-rendering of messages
+    useEffect(() => {
+        if (!messages || messages.length === 0) return;
+
+        // Check for profile updates every 5 seconds
+        const profileUpdateTimer = setInterval(() => {
+            // Get all unique author IDs from messages
+            const authorIds = Array.from(new Set(messages.map(m => m.author_id)));
+
+            // Check if any author profiles have been updated in the last 10 seconds
+            const hasRecentProfileUpdates = authorIds.some(authorId => {
+                const profile = getUserProfileFromCache(authorId);
+                return profile && profile.timestamp > (Date.now() - 10000);
+            });
+
+            if (hasRecentProfileUpdates) {
+                // Increment the profile cache version to force a re-render
+                setProfileCacheVersion(v => v + 1);
+            }
+        }, 5000);
+
+        return () => clearInterval(profileUpdateTimer);
+    }, [messages, getUserProfileFromCache]);
+
     // Find the active channel from the server data
     const activeChannel = useMemo(() => {
         if (!activeServer || activeChannelId === null) return null;
         return activeServer.channels.find(channel => channel.id === activeChannelId) || null;
     }, [activeServer, activeChannelId]);
 
-    // Clear messages and fetch new ones when channel changes
+    // Handle channel changes
     useEffect(() => {
-        // Channel has changed
-        if (previousChannelIdRef.current !== activeChannelId) {
-            // Clear messages when explicitly switching channels (not on initial load)
-            if (previousChannelIdRef.current !== null) {
-                setMessages([]);
-            }
-
-            previousChannelIdRef.current = activeChannelId;
-
-            // Reset active user profiles set when channel changes
-            activeUserProfilesRef.current = new Set();
-
-            // Check if there are cached messages for this channel
-            if (activeChannelId) {
-                const cachedMessages = getChannelMessages(activeChannelId);
-
-                if (cachedMessages) {
-                    console.log(`[Chat] Using cached messages for channel ${activeChannelId}`);
-                    setMessages(cachedMessages);
-                    // Don't show loading indicator when using cache
-                    setIsLoadingMessages(false);
-
-                    // Immediately preload profiles for the cached messages
-                    // This ensures profile data is loaded as soon as cached messages are displayed
-                    preloadAllProfiles(cachedMessages);
-                } else {
-                    // No cached messages found - keep messages empty
+        // Create an async function inside the effect
+        const handleChannelChange = async () => {
+            // Channel has changed
+            if (previousChannelIdRef.current !== activeChannelId) {
+                // Clear messages when explicitly switching channels (not on initial load)
+                if (previousChannelIdRef.current !== null) {
                     setMessages([]);
-                    // Load silently in background with no indicator
-                    setIsLoadingMessages(false);
+                }
+
+                previousChannelIdRef.current = activeChannelId;
+
+                // Reset active user profiles set when channel changes
+                activeUserProfilesRef.current = new Set();
+
+                // Check if there are cached messages for this channel
+                if (activeChannelId) {
+                    const cachedMessages = getChannelMessages(activeChannelId);
+
+                    if (cachedMessages) {
+                        console.log(`[Chat] Using cached messages for channel ${activeChannelId}`);
+                        setMessages(cachedMessages);
+                        // Don't show loading indicator when using cache
+                        setIsLoadingMessages(false);
+                    } else {
+                        // No cached messages found - keep messages empty
+                        setMessages([]);
+                        // Load silently in background with no indicator
+                        setIsLoadingMessages(false);
+                    }
+
+                    // Mark notifications as read when channel becomes active
+                    if (activeServerId) {
+                        try {
+                            console.log(`[Chat] Marking notifications as read for channel ${activeChannelId} in server ${activeServerId}`);
+                            const markReadResult = await markNotificationsAsRead(activeServerId, activeChannelId);
+                            console.log(`[Chat] Successfully marked notifications as read`, markReadResult);
+                        } catch (error) {
+                            console.warn(`[Chat] Error marking notifications as read:`, error);
+                        }
+                    }
                 }
             }
-        }
+        };
 
-        if (activeServerId && activeChannelId) {
-            fetchMessages(false); // Don't show loading for initial fetch
-        }
+        // Call the async function
+        handleChannelChange();
 
         // Clean up any aborted fetch when channel changes
         return () => {
@@ -182,86 +215,45 @@ export default function Chat() {
                 abortControllerRef.current = null;
             }
         };
-    }, [activeServerId, activeChannelId]);
+    }, [activeServerId, activeChannelId, getChannelMessages]);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
 
-    // Fetch messages periodically (every 5 seconds)
+    // Optimize profile loading for message authors
     useEffect(() => {
-        if (!activeServerId || !activeChannelId) return;
+        if (!activeServerId || !messages || messages.length === 0) return;
 
-        const intervalId = setInterval(() => {
-            fetchMessages(false); // Silent refresh
-        }, 5000);
+        // Extract unique author IDs from messages
+        const uniqueAuthorIds = Array.from(new Set(messages.map(m => m.author_id)));
 
-        return () => {
-            clearInterval(intervalId);
-            // Clear messages when unmounting this channel
-            if (previousChannelIdRef.current === activeChannelId) {
-                previousChannelIdRef.current = null;
-            }
-        };
-    }, [activeServerId, activeChannelId]);
+        // Skip authors we've already loaded (check against activeUserProfilesRef)
+        const authorsToLoad = uniqueAuthorIds.filter(
+            authorId => !activeUserProfilesRef.current.has(authorId)
+        );
 
-    // Function to preload all profiles from message list at once
-    const preloadAllProfiles = (messageList: Message[]) => {
-        if (!messageList || messageList.length === 0) return;
+        if (authorsToLoad.length === 0) return;
 
-        console.log(`[Chat] Preloading profiles for ${messageList.length} messages`);
+        // Mark these authors as being loaded
+        authorsToLoad.forEach(id => activeUserProfilesRef.current.add(id));
 
-        // Extract unique authors from messages
-        const uniqueAuthors = Array.from(new Set(messageList.map(msg => msg.author_id)));
-        console.log(`[Chat] Found ${uniqueAuthors.length} unique authors to load`);
+        // Use our ProfileManager to bulk load and warm cache
+        warmupProfileCache(authorsToLoad);
 
-        // First check which authors we already have in cache
-        const authorsToLoad = uniqueAuthors.filter(authorId => {
-            // Skip if already in cache and cache is fresh (less than 5 min old)
-            const cachedProfile = getUserProfileFromCache(authorId);
-            return !(cachedProfile &&
-                Date.now() - cachedProfile.timestamp < 5 * 60 * 1000);
-        });
+        console.log(`[Chat] Optimized profile loading for ${authorsToLoad.length} message authors`);
+    }, [messages, activeServerId]);
 
-        if (authorsToLoad.length === 0) {
-            console.log('[Chat] All profiles already in cache');
-            return;
-        }
-
-        console.log(`[Chat] Loading profiles for ${authorsToLoad.length} authors`);
-
-        // If we have authors to load, update loading state
-        if (authorsToLoad.length > 0) {
-            setIsLoadingProfiles(true);
-
-            let completedLoads = 0;
-
-            // Update the queueProfileLoad function to track completion
-            const queueProfileLoad = (authorId: string) => {
-                fetchUserProfileAndCache(authorId)
-                    .finally(() => {
-                        completedLoads++;
-                        // When all profiles are loaded, update the loading state
-                        if (completedLoads >= authorsToLoad.length) {
-                            setIsLoadingProfiles(false);
-                        }
-                    });
-            };
-
-            // Load profiles with slight delays to avoid rate limiting
-            authorsToLoad.forEach((authorId, index) => {
-                // Add increasing delay for each author to prevent server overload
-                // Wait 500ms between requests to avoid rate limiting
-                setTimeout(() => {
-                    queueProfileLoad(authorId);
-                }, index * 500); // 500ms between each request
-            });
-        }
-    };
-
+    // Fetch messages with rate limiting and smart caching
     const fetchMessages = async (showLoading = false) => {
         if (!activeServerId || !activeChannelId) return;
+
+        // Prevent multiple concurrent fetches
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
 
         try {
             // We're disabling loading indicators by default
@@ -289,8 +281,26 @@ export default function Chat() {
                         // Cache the sorted messages
                         cacheChannelMessages(activeChannelId, sortedMessages);
 
-                        // Load profiles for message authors - using a new preload function
-                        preloadAllProfiles(sortedMessages);
+                        // Load profiles for message authors in bulk using ProfileManager
+                        if (sortedMessages.length > 0) {
+                            const uniqueAuthors = Array.from(
+                                new Set(sortedMessages.map(msg => msg.author_id))
+                            );
+
+                            // Skip profiles we've already loaded
+                            const authorsToLoad = uniqueAuthors.filter(authorId =>
+                                !activeUserProfilesRef.current.has(authorId)
+                            );
+
+                            // Mark these as loaded
+                            authorsToLoad.forEach(id => activeUserProfilesRef.current.add(id));
+
+                            // Use the ProfileManager to warm up the cache
+                            if (authorsToLoad.length > 0) {
+                                warmupProfileCache(authorsToLoad);
+                                console.log(`[Chat] Queued profile loading for ${authorsToLoad.length} new message authors`);
+                            }
+                        }
                     }
                 } else {
                     console.warn("Unexpected message format:", result);
@@ -311,8 +321,49 @@ export default function Chat() {
             if (showLoading) {
                 setIsLoadingMessages(false);
             }
+            abortControllerRef.current = null;
         }
     };
+
+    // Smart polling with backoff
+    useEffect(() => {
+        if (!activeServerId || !activeChannelId) return;
+
+        let pollInterval = 5000; // Start with 5 seconds
+        let consecutiveErrors = 0;
+
+        const poll = async () => {
+            try {
+                await fetchMessages(false);
+                consecutiveErrors = 0;
+                pollInterval = 5000; // Reset to base interval after success
+            } catch (error) {
+                consecutiveErrors++;
+                // Exponential backoff with max of 30 seconds
+                pollInterval = Math.min(30000, pollInterval * (1 + 0.5 * consecutiveErrors));
+                console.warn(`Message polling error, backing off to ${pollInterval}ms`, error);
+            }
+        };
+
+        // Initial fetch
+        poll();
+
+        // Set up polling with dynamic interval
+        const intervalId = setInterval(poll, pollInterval);
+
+        return () => {
+            clearInterval(intervalId);
+            // Clear abort controller when unmounting
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+            // Clear messages when unmounting this channel
+            if (previousChannelIdRef.current === activeChannelId) {
+                previousChannelIdRef.current = null;
+            }
+        };
+    }, [activeServerId, activeChannelId]);
 
     const handleSendMessage = async (e: FormEvent) => {
         e.preventDefault();
@@ -426,7 +477,7 @@ export default function Chat() {
         });
     };
 
-    // Get display name for a user
+    // Get display name for a user with enhanced profile data
     const getDisplayName = (userId: string) => {
         // First try to get nickname from server members
         const members = getServerMembers(activeServerId || "");
@@ -437,7 +488,7 @@ export default function Chat() {
             }
         }
 
-        // Check profile cache from global state
+        // Check profile cache from global state for compatibility with rest of app
         const profileData = getUserProfileFromCache(userId);
 
         // Use primaryName if available
@@ -445,11 +496,16 @@ export default function Chat() {
             return profileData.primaryName;
         }
 
+        // Use username if available
+        if (profileData?.username) {
+            return profileData.username;
+        }
+
         // Fall back to wallet address
         return `${userId.substring(0, 6)}...${userId.substring(userId.length - 4)}`;
     };
 
-    // Get profile picture for a user
+    // Get profile picture for a user - use global state for compatibility
     const getProfilePicture = (userId: string) => {
         // Check profile cache from global state
         const profileData = getUserProfileFromCache(userId);

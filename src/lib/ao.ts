@@ -2,7 +2,7 @@ import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
 import { ArconnectSigner, ArweaveSigner, type JWKInterface } from "@dha-team/arbundles"
 import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
-import type { Tag } from "@/lib/types"
+import type { Tag, Member } from "@/lib/types"
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
@@ -306,8 +306,10 @@ export async function getServerInfo(id: string) {
 const memberRequestLimiter = {
     serverRequests: new Map<string, number>(),
     lastAttemptTimes: new Map<string, number>(),
+    pendingRequests: new Map<string, Promise<any>>(),
     MIN_REQUEST_INTERVAL: 60000, // 1 minute minimum between requests
     MAX_REQUESTS_PER_SERVER: 3,  // Maximum of 3 attempts per server per session
+
     isServerBlocked: function (serverId: string): boolean {
         const count = this.serverRequests.get(serverId) || 0;
         const lastAttempt = this.lastAttemptTimes.get(serverId) || 0;
@@ -316,97 +318,86 @@ const memberRequestLimiter = {
         return count >= this.MAX_REQUESTS_PER_SERVER ||
             (now - lastAttempt < this.MIN_REQUEST_INTERVAL);
     },
+
     recordAttempt: function (serverId: string) {
         const count = this.serverRequests.get(serverId) || 0;
         this.serverRequests.set(serverId, count + 1);
         this.lastAttemptTimes.set(serverId, Date.now());
         logger.info(`[memberRequestLimiter] Recorded attempt ${count + 1}/${this.MAX_REQUESTS_PER_SERVER} for server ${serverId}`);
     },
-    isInvalidMembersServer: function (serverId: string): boolean {
-        try {
-            const globalState = useGlobalState.getState();
-            return globalState.invalidMemberServers.has(serverId);
-        } catch (error) {
-            logger.warn('[memberRequestLimiter] Error checking invalid members server:', error);
-            return false;
+
+    // Get or create a promise for this server to deduplicate concurrent requests
+    getOrCreateRequest: function (serverId: string, createFn: () => Promise<any>) {
+        // If we already have a pending request for this server, return it
+        if (this.pendingRequests.has(serverId)) {
+            return this.pendingRequests.get(serverId)!;
         }
+
+        // Create a new promise
+        const promise = createFn();
+
+        // Store it in our map
+        this.pendingRequests.set(serverId, promise);
+
+        // Clean up after the promise resolves or rejects
+        promise.finally(() => {
+            this.pendingRequests.delete(serverId);
+        });
+
+        return promise;
     }
 };
 
 export async function getMembers(serverId: string) {
     logger.info(`[getMembers] Fetching members for server: ${serverId}`);
 
-    // Check if this server is already known to have invalid members
-    if (memberRequestLimiter.isInvalidMembersServer(serverId)) {
-        logger.info(`[getMembers] Server ${serverId} is known to have invalid members endpoint, aborting request`);
-        throw new Error("Server does not support member listing");
-    }
-
-    // Check if we've exceeded request limits
+    // Check if we've exceeded request limits for rate limiting only
     if (memberRequestLimiter.isServerBlocked(serverId)) {
         logger.info(`[getMembers] Server ${serverId} is blocked from further requests due to rate limiting`);
-
-        // Mark as invalid in the global state to prevent future attempts
-        try {
-            // Mark this server as having an invalid members endpoint
-            markServerInvalidMembers(serverId);
-        } catch (error) {
-            logger.warn('[getMembers] Error marking server invalid after rate limit:', error);
-        }
-
         throw new Error("Rate limit exceeded for member requests to this server");
     }
 
-    // Record this attempt
-    memberRequestLimiter.recordAttempt(serverId);
+    // Use the getOrCreateRequest function to deduplicate concurrent requests
+    return memberRequestLimiter.getOrCreateRequest(serverId, async () => {
+        // Record this attempt
+        memberRequestLimiter.recordAttempt(serverId);
 
-    try {
-        const res = await aofetch(`${serverId}/get-members`);
-        logger.info(`[getMembers] Response:`, res);
-        if (res.status == 200) {
-            return res.json;
-        } else {
-            // Mark the server as invalid to prevent further attempts
-            markServerInvalidMembers(serverId);
-            throw new Error(res.error || "Failed to get members");
-        }
-    } catch (error) {
-        logger.error(`[getMembers] Error fetching members for ${serverId}:`, error);
-
-        // Mark the server as invalid if we get a specific error
-        if (error instanceof Error) {
-            const errorMessage = error.message.toLowerCase();
-            if (
-                errorMessage.includes("not found") ||
-                errorMessage.includes("does not exist") ||
-                errorMessage.includes("cannot read") ||
-                errorMessage.includes("internal server error")
-            ) {
-                markServerInvalidMembers(serverId);
+        try {
+            // Check global state cache first
+            const cachedMembers = useGlobalState.getState().getServerMembers(serverId);
+            if (cachedMembers && cachedMembers.length > 0) {
+                logger.info(`[getMembers] Using cached members for ${serverId}`);
+                return { success: true, members: cachedMembers };
             }
+
+            const res = await aofetch(`${serverId}/get-members`);
+            logger.info(`[getMembers] Response:`, res);
+
+            if (res.status == 200) {
+                // Cache the successful result
+                try {
+                    const globalState = useGlobalState.getState();
+                    if (res.json && typeof res.json === 'object' && 'members' in res.json) {
+                        const now = Date.now();
+                        const membersResponse = res.json as { members: Member[] };
+                        globalState.serverMembers.set(serverId, {
+                            data: membersResponse.members,
+                            timestamp: now
+                        });
+                    }
+                } catch (error) {
+                    logger.warn('[getMembers] Error caching members:', error);
+                }
+
+                return res.json;
+            } else {
+                throw new Error(res.error || "Failed to get members");
+            }
+        } catch (error) {
+            logger.error(`[getMembers] Error fetching members for ${serverId}:`, error);
+            throw error;
         }
-
-        throw error;
-    }
-}
-
-// Helper function to mark a server as having invalid members endpoint
-function markServerInvalidMembers(serverId: string) {
-    try {
-        // Get the global state
-        const globalState = useGlobalState.getState();
-
-        // Create a new Set with the existing invalid servers plus the new one
-        const updatedInvalidMemberServers = new Set(globalState.invalidMemberServers);
-        updatedInvalidMemberServers.add(serverId);
-
-        // Update the global state directly
-        globalState.setInvalidMemberServers(updatedInvalidMemberServers);
-
-        logger.info(`[markServerInvalidMembers] Server ${serverId} marked as having invalid members endpoint`);
-    } catch (error) {
-        logger.warn('[markServerInvalidMembers] Error:', error);
-    }
+    });
 }
 
 export async function updateServer(id: string, name: string, icon: string) {
@@ -821,34 +812,52 @@ export async function getBulkProfiles(addresses: string[]) {
                 const globalState = useGlobalState.getState();
                 const now = Date.now();
 
-                // Process and cache each profile
-                const profileFetchPromises = profilesData.profiles.map(async (profile) => {
-                    if (!profile.id) return null;
+                // First cache the basic profile data immediately
+                profilesData.profiles.forEach(profile => {
+                    if (!profile.id) return;
 
-                    // Try to fetch primary name for each profile
+                    // Update the profiles cache with basic data first
+                    globalState.updateUserProfileCache(profile.id, {
+                        username: profile.username,
+                        pfp: profile.pfp,
+                        timestamp: now
+                    });
+                });
+
+                // Then fetch primary names in the background
+                profilesData.profiles.forEach(async (profile) => {
+                    if (!profile.id) return;
+
                     try {
-                        const primaryNameData = await ario.getPrimaryName({ address: profile.id });
-                        const primaryName = primaryNameData?.name;
+                        // Get the existing profile data before updating
+                        const existingProfile = globalState.getUserProfileFromCache(profile.id);
 
-                        // Update the profiles cache
-                        globalState.updateUserProfileCache(profile.id, {
-                            username: profile.username,
-                            pfp: profile.pfp,
-                            primaryName: primaryName,
-                            timestamp: now
-                        });
+                        // Only fetch primary name if we don't already have it cached
+                        if (!existingProfile?.primaryName) {
+                            const primaryNameData = await ario.getPrimaryName({ address: profile.id });
+                            const primaryName = primaryNameData?.name;
 
-                        // Also add the primary name to the returned profile data
-                        if (primaryName) {
-                            profile.primaryName = primaryName;
+                            if (primaryName) {
+                                // Update just the primary name without changing other data
+                                const updatedProfile = {
+                                    ...existingProfile,
+                                    primaryName,
+                                    timestamp: Date.now()
+                                };
+                                globalState.updateUserProfileCache(profile.id, updatedProfile);
+
+                                // Also add the primary name to the returned profile data
+                                profile.primaryName = primaryName;
+                            }
+                        } else {
+                            // If we already have primary name, add it to the returned profile data
+                            profile.primaryName = existingProfile.primaryName;
                         }
                     } catch (error) {
+                        // Just log the error but don't let it stop other processing
                         logger.warn(`[getBulkProfiles] Failed to fetch primary name for ${profile.id}:`, error);
                     }
                 });
-
-                // Wait for all primary name fetches to complete
-                await Promise.allSettled(profileFetchPromises);
 
                 logger.info(`[getBulkProfiles] Successfully cached ${profilesData.profiles.length} profiles`);
             } catch (error) {
@@ -934,57 +943,155 @@ export async function leaveServer(serverId: string): Promise<boolean> {
     }
 }
 
+// Notification request tracking and caching
+const notificationCache = {
+    // Cache for notification data by address
+    data: new Map<string, {
+        notifications: any,
+        timestamp: number
+    }>(),
+
+    // Active request tracking
+    pendingRequests: new Map<string, Promise<any>>(),
+
+    // Request rate limiting
+    lastRequestTime: new Map<string, number>(),
+
+    // Configuration
+    MIN_REQUEST_INTERVAL: 4000, // 4 seconds minimum between requests
+    CACHE_TTL: 10000, // 10 seconds TTL for cache
+
+    // Check if we should throttle requests for this address
+    shouldThrottle(address: string): boolean {
+        const lastRequest = this.lastRequestTime.get(address) || 0;
+        return (Date.now() - lastRequest) < this.MIN_REQUEST_INTERVAL;
+    },
+
+    // Get cached data if still valid
+    getCachedData(address: string): any | null {
+        const cached = this.data.get(address);
+        if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
+            logger.info(`[notificationCache] Using cached notifications for ${address}, age: ${Date.now() - cached.timestamp}ms`);
+            return cached.notifications;
+        }
+        return null;
+    },
+
+    // Store data in cache
+    setCachedData(address: string, data: any): void {
+        this.data.set(address, {
+            notifications: data,
+            timestamp: Date.now()
+        });
+        logger.info(`[notificationCache] Updated cache for ${address}`);
+    },
+
+    // Record request time
+    recordRequest(address: string): void {
+        this.lastRequestTime.set(address, Date.now());
+    },
+
+    // Get or create a promise for this request
+    getOrCreateRequest(address: string, createFn: () => Promise<any>): Promise<any> {
+        // If we already have a pending request, return it
+        if (this.pendingRequests.has(address)) {
+            logger.info(`[notificationCache] Reusing pending request for ${address}`);
+            return this.pendingRequests.get(address)!;
+        }
+
+        // Create a new promise
+        const promise = createFn().finally(() => {
+            // Remove from pending on completion
+            this.pendingRequests.delete(address);
+        });
+
+        // Store in pending requests
+        this.pendingRequests.set(address, promise);
+        return promise;
+    }
+};
+
 export async function getNotifications(address: string) {
     logger.info(`[getNotifications] Fetching notifications for address: ${address}`);
 
-    try {
-        const res = await aofetch(`${PROFILES}/get-notifications`, {
-            method: "GET",
-            body: {
-                id: address
-            }
-        });
-
-        logger.info(`[getNotifications] Response:`, res);
-
-        if (res.status == 200) {
-            const responseData = res.json as { notifications: any[] };
-
-            if (!responseData.notifications || responseData.notifications.length === 0) {
-                logger.info('[getNotifications] No new notifications');
-                return {
-                    messages: [],
-                    isEmpty: true
-                };
-            }
-
-            // Transform the notifications to match the expected format in the client
-            const messages = responseData.notifications.map(notification => ({
-                id: notification.message_id,
-                recipient: notification.user_id,
-                SID: notification.server_id,
-                CID: notification.channel_id.toString(),
-                MID: notification.message_id,
-                author: notification.author_name || notification.author_id,
-                content: notification.content || "",
-                channel: notification.channel_name,
-                server: notification.server_name,
-                timestamp: notification.timestamp.toString()
-            }));
-
-            logger.info(`[getNotifications] Found ${messages.length} notifications`);
-
-            return {
-                messages: messages,
-                isEmpty: messages.length === 0
-            };
-        } else {
-            throw new Error(res.error);
-        }
-    } catch (error) {
-        logger.error("[getNotifications] Error fetching notifications:", error);
-        throw error;
+    // Check cache first
+    const cachedData = notificationCache.getCachedData(address);
+    if (cachedData) {
+        return cachedData;
     }
+
+    // Check if we should throttle
+    if (notificationCache.shouldThrottle(address)) {
+        logger.info(`[getNotifications] Throttling request for ${address}, using cache or empty result`);
+        // If throttled, return cache even if expired, or empty result
+        return cachedData || {
+            messages: [],
+            isEmpty: true
+        };
+    }
+
+    // Record this request attempt
+    notificationCache.recordRequest(address);
+
+    // Use the request deduplication system
+    return notificationCache.getOrCreateRequest(address, async () => {
+        try {
+            const res = await aofetch(`${PROFILES}/get-notifications`, {
+                method: "GET",
+                body: {
+                    id: address
+                }
+            });
+
+            logger.info(`[getNotifications] Response status:`, res.status);
+
+            if (res.status == 200) {
+                const responseData = res.json as { notifications: any[] };
+
+                if (!responseData.notifications || responseData.notifications.length === 0) {
+                    logger.info('[getNotifications] No new notifications');
+                    const result = {
+                        messages: [],
+                        isEmpty: true
+                    };
+
+                    // Cache the empty result
+                    notificationCache.setCachedData(address, result);
+                    return result;
+                }
+
+                // Transform the notifications to match the expected format in the client
+                const messages = responseData.notifications.map(notification => ({
+                    id: notification.message_id,
+                    recipient: notification.user_id,
+                    SID: notification.server_id,
+                    CID: notification.channel_id.toString(),
+                    MID: notification.message_id,
+                    author: notification.author_name || notification.author_id,
+                    content: notification.content || "",
+                    channel: notification.channel_name,
+                    server: notification.server_name,
+                    timestamp: notification.timestamp.toString()
+                }));
+
+                logger.info(`[getNotifications] Found ${messages.length} notifications`);
+
+                const result = {
+                    messages: messages,
+                    isEmpty: messages.length === 0
+                };
+
+                // Cache the successful result
+                notificationCache.setCachedData(address, result);
+                return result;
+            } else {
+                throw new Error(res.error);
+            }
+        } catch (error) {
+            logger.error("[getNotifications] Error fetching notifications:", error);
+            throw error;
+        }
+    });
 }
 
 // Add a new function to mark notifications as read

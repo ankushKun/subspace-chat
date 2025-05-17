@@ -711,6 +711,7 @@ export default function DraggableChannelList() {
                                         key={category.id.toString()}
                                         draggableId={`category-${category.id}`}
                                         index={index}
+                                        isDragDisabled={!isServerOwner || isUpdating}
                                     >
                                         {(provided, snapshot) => (
                                             <div

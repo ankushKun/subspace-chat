@@ -5,7 +5,7 @@ import path from "path"
 import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
-import { visualizer } from "rollup-plugin-visualizer";
+// import { visualizer } from "rollup-plugin-visualizer";
 
 // More robust way to get package version
 let packageVersion = 'DEV-FALLBACK'; // Default fallback version
@@ -104,7 +104,7 @@ export default defineConfig({
         }
       ]
     }
-  }), visualizer({ open: true })], // Set visualizer to not open automatically to save memory
+  })], // Set visualizer to not open automatically to save memory
   base: "./",
   resolve: {
     alias: {

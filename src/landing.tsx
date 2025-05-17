@@ -4,7 +4,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { FaApple, FaDiscord, FaGoogle, FaPuzzlePiece, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
-import { useActiveAddress, useConnection, useProfileModal } from "arwalletkit-react"
+import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
 import { useNavigate } from "react-router-dom"
 import BackgroundStars from "@/components/background-stars";
 import { CornerDownLeftIcon, WalletCards, WalletCardsIcon } from "lucide-react";
@@ -178,7 +178,7 @@ export default function Landing() {
             className="scale-80 cursor-pointer shadow-foreground/40 shadow"
             checked={useWC}
             onCheckedChange={setUseWC}
-            onClick={() => setInterval(() => window.location.reload(), 200)}
+            onClick={() => setTimeout(() => window.location.reload(), 200)}
           />
         </div>
         <div className="text-xs text-muted-foreground/60 p-0 mt-4">

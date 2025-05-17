@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useConnection } from 'arwalletkit-react'
+import { useConnection } from '@arweave-wallet-kit/react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { ModeToggle } from '@/components/mode-toggle'

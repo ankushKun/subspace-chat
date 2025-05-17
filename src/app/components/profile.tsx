@@ -1,5 +1,5 @@
 import { Mic, Headphones, Settings, LogOut, User, Upload, X, Pencil, Save, Loader2 } from 'lucide-react'
-import { useActiveAddress, useConnection } from 'arwalletkit-react';
+import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import {

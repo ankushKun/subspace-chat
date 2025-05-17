@@ -2,13 +2,12 @@ import './index.css'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
-import { ArweaveWalletKit, useConnection } from "arwalletkit-react"
+import { ArweaveWalletKit, useConnection } from "@arweave-wallet-kit/react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
-import { EthereumStrategy } from "arwalletkit-wagmi-any-wallet"
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { WanderConnect } from '@wanderapp/connect'
 import { useGlobalState } from '@/hooks'
 import { useLocalStorage } from '@uidotdev/usehooks'
@@ -87,7 +86,14 @@ function Main() {
     return () => { wander.destroy() }
   }, [useWC])
 
+  // Initialize strategies
   const wc = useWC ? new BrowserWalletStrategy() : new WanderStrategy();
+
+  // Prepare strategies array
+  const strategies = [
+    wc,
+    new AoSyncStrategy(),
+  ];
 
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     {/* <Toaster /> */}
@@ -109,12 +115,7 @@ function Main() {
               "SIGNATURE",
             ],
             ensurePermissions: true,
-            strategies: [
-              wc,
-              new AoSyncStrategy(),
-              // @ts-ignore
-              new EthereumStrategy()
-            ]
+            strategies: strategies
           }}
           theme={{
             accent: { r: 160, g: 160, b: 220 },

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, UserIcon, Loader2, ShieldIcon, AlertCircle, RefreshCcw } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { Member } from "@/lib/types";
-import { useActiveAddress } from "arwalletkit-react";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";

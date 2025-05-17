@@ -5,7 +5,7 @@ import { Copy, CheckIcon, ArrowUpRight, Badge, MessagesSquare } from "lucide-rea
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
-import { useActiveAddress } from "arwalletkit-react";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
 
 interface UserProfilePopoverProps {
     userId: string;

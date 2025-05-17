@@ -29,7 +29,7 @@ import { createServer, getServerInfo, joinServer, getMembers } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
-import { useActiveAddress } from "arwalletkit-react";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "@uidotdev/usehooks";
 import { FileDropzone } from "@/components/ui/file-dropzone";

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getNotifications, markNotificationsAsRead } from "@/lib/ao";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
-import { useActiveAddress } from "arwalletkit-react";
+import { useActiveAddress } from "@arweave-wallet-kit/react";
 import { format } from "date-fns";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";

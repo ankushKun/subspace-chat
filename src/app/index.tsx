@@ -2,7 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGlobalState, useServerSync, useCachePersistence, useBackgroundPreload } from '@/hooks/global-state';
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { getNotifications, markNotificationsAsRead } from '@/lib/ao';
-import { useActiveAddress, useConnection } from 'arwalletkit-react';
+import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
 import { useMobile } from '@/hooks';
 import { sendNotification } from '@/lib/utils';
 import profileManager, { warmupProfileCache } from '@/lib/profile-manager';

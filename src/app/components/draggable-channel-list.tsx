@@ -6,7 +6,7 @@ import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
 import { updateChannel, updateCategory, createChannel, refreshCurrentServerData, markNotificationsAsRead } from '@/lib/ao';
 import { toast } from 'sonner';
-import { useActiveAddress } from 'arwalletkit-react';
+import { useActiveAddress } from '@arweave-wallet-kit/react';
 import {
     AlertDialog,
     AlertDialogAction,

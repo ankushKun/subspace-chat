@@ -7,25 +7,28 @@ html,body{
   overflow:hidden;
 }
 
-* {
-  -ms-overflow-style: thin;  /* Internet Explorer 10+ */
-  scrollbar-width: thin;  /* Firefox */
+/* width */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 0px;
 }
-*::-webkit-scrollbar {
-  width: 4px;  /* Width of scrollbar */
-  height: 4px; /* Height of horizontal scrollbar */
-}
-*::-webkit-scrollbar-track {
+
+/* Track */
+::-webkit-scrollbar-track {
   background: transparent;
 }
-*::-webkit-scrollbar-thumb {
-  background: var(--muted-foreground);
-  opacity: 0.5;
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: gray;
+  opacity: 0.4;
   border-radius: 4px;
 }
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
-  opacity: 0.8;
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: lightgray;
+  opacity: 0.6;
 }
 
 @theme inline {

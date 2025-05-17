@@ -102,6 +102,8 @@ export default function Chat() {
     const [messageInput, setMessageInput] = useState("");
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
     const previousChannelIdRef = useRef<number | null>(null);
     const activeUserProfilesRef = useRef<Set<string>>(new Set());
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -217,10 +219,35 @@ export default function Chat() {
         };
     }, [activeServerId, activeChannelId, getChannelMessages]);
 
-    // Auto-scroll to bottom when messages change
+    // Handle scroll events to determine if user is at bottom
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        const handleScroll = () => {
+            if (!chatContainerRef.current) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+            // Consider "at bottom" if within 100px of the bottom
+            const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+            setIsAtBottom(atBottom);
+        };
+
+        const chatContainer = chatContainerRef.current;
+        if (chatContainer) {
+            chatContainer.addEventListener('scroll', handleScroll);
+        }
+
+        return () => {
+            if (chatContainer) {
+                chatContainer.removeEventListener('scroll', handleScroll);
+            }
+        };
+    }, []);
+
+    // Auto-scroll to bottom when messages change, but only if user is at bottom already
+    useEffect(() => {
+        if (isAtBottom) {
+            scrollToBottom();
+        }
+    }, [messages, isAtBottom]);
 
     // Optimize profile loading for message authors
     useEffect(() => {
@@ -389,6 +416,11 @@ export default function Chat() {
             // Update UI immediately with optimistic message
             setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
             setMessageInput("");
+
+            // Always scroll to bottom when user sends a message
+            scrollToBottom();
+            // Also update isAtBottom state since we're at bottom now
+            setIsAtBottom(true);
 
             // Actually send the message
             await sendMessage(
@@ -836,7 +868,7 @@ export default function Chat() {
             </div>
 
             {/* Chat Content Area */}
-            <div className="flex-1 overflow-y-auto flex flex-col relative">
+            <div className="flex-1 overflow-y-auto flex flex-col relative" ref={chatContainerRef}>
                 {messages.length === 0 ? (
                     <div className="flex-1 flex flex-col justify-start">
                         {renderPlaceholderMessages()}

@@ -3,6 +3,8 @@ import { X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useConnection } from 'arwalletkit-react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { ModeToggle } from '@/components/mode-toggle'
 
 export default function Settings() {
     const navigate = useNavigate()
@@ -35,8 +37,11 @@ export default function Settings() {
                         <X className='h-4 w-4' />
                     </Button>
                 </div>
-                <div className='w-full flex-1 p-4'>
-                    Settings Coming soon...
+                <div className='w-full flex-1 p-4 flex flex-col gap-2'>
+                    <div className='flex items-center justify-between w-fit gap-2'>
+                        <ModeToggle className='border' />
+                        <Label>Theme</Label>
+                    </div>
                 </div>
             </div>
         </div>

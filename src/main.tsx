@@ -91,8 +91,10 @@ function Main() {
 
   // Prepare strategies array
   const strategies = [
-    wc,
+    // wc,
+    new WanderStrategy(),
     new AoSyncStrategy(),
+    new BrowserWalletStrategy()
   ];
 
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>

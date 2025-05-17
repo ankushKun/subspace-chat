@@ -134,24 +134,36 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
 
         // Show loading state
         setIsReconnecting(true);
-        toast.loading("Attempting to reconnect to server...");
+
+        // Show a toast that explains what's happening
+        toast.loading(
+            "Reconnecting to server...",
+            { description: "Attempting to restore connection with multiple backend services." }
+        );
 
         try {
-            // Use the new forceful reconnect function
+            // Use the forceful reconnect function
             await forceReconnectServer(id);
 
             // Show success message and dismiss loading toast
             toast.dismiss();
-            toast.success("Successfully reconnected to server!");
+            toast.success("Successfully reconnected to server!", {
+                description: "The server connection has been restored."
+            });
 
             // Force refresh server list
             refreshServerList();
+
+            // Navigate to the server after successful reconnection
+            setTimeout(() => {
+                navigate(`/app/${id}`);
+            }, 500);
         } catch (error) {
             // Show failure message with hard refresh advice
             toast.dismiss();
             toast.error("Failed to reconnect to server", {
-                description: "Try refreshing the app (Ctrl+F5 or Cmd+Shift+R) or remove the server",
-                duration: 5000
+                description: "If this keeps happening, try refreshing the app (Ctrl+F5 or Cmd+Shift+R) or remove the server",
+                duration: 7000
             });
         } finally {
             setIsReconnecting(false);

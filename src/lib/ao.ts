@@ -39,11 +39,34 @@ const CommonTags: Tag[] = [
     { name: 'Authority', value: 'fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY' },
 ];
 
+// Define multiple CU endpoints for fallback
+const CU_ENDPOINTS = [
+    "https://cu.ardrive.io",
+    "https://cu.arweave.dev",
+    "https://cu.arnode.asia"
+];
 
-const ao = connect({
+// Track the current endpoint index
+let currentEndpointIndex = 0;
+
+// Create AO connection with the primary endpoint
+let ao = connect({
     MODE: "legacy",
-    CU_URL: `https://cu.ardrive.io`,
-})
+    CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+});
+
+// Function to switch to the next endpoint when we encounter connection issues
+function switchToNextEndpoint() {
+    // Update the endpoint index
+    currentEndpointIndex = (currentEndpointIndex + 1) % CU_ENDPOINTS.length;
+    logger.info(`[switchToNextEndpoint] Switching to endpoint: ${CU_ENDPOINTS[currentEndpointIndex]}`);
+
+    // Recreate the connection with the new endpoint
+    ao = connect({
+        MODE: "legacy",
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+    });
+}
 
 // Helper function to refresh data after operations
 // This can be called by components using these functions
@@ -294,13 +317,42 @@ export async function getJoinedServers(address: string): Promise<string[]> {
 export async function getServerInfo(id: string) {
     logger.info(`[getServerInfo] Fetching server info for: ${id}`);
 
-    // Add retry logic for potentially temporary connection issues
-    const maxRetries = 3;
-    const retryDelay = 1000; // 1 second between retries
+    // Improved retry logic with more attempts and exponential backoff
+    const maxRetries = 5; // Increased from 3 to 5
+    const baseRetryDelay = 1000; // Start with 1 second
+
+    // Define network-related errors that should be retried
+    const retryableErrorPatterns = [
+        'network error', 'timeout', 'connection', 'socket',
+        'offline', 'failed to fetch', 'aborted', 'interrupted',
+        'etimedout', 'econnrefused', 'econnreset', 'dns',
+        'service unavailable', '429', '500', '502', '503', '504'
+    ];
+
+    let endpointSwitchAttempted = false;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const res = await aofetch(`${id}/`);
+            // Create a promise that will reject after a timeout
+            const fetchWithTimeout = async () => {
+                const timeoutPromise = new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error('Request timed out')), 10000);
+                });
+
+                // Race the fetch against the timeout
+                return Promise.race([
+                    aofetch(`${id}/`),
+                    timeoutPromise
+                ]);
+            };
+
+            // Type assertion for the response
+            const res = await fetchWithTimeout() as {
+                status: number;
+                error?: string;
+                json: any;
+            };
+
             logger.info(`[getServerInfo] Response on attempt ${attempt}:`, res);
 
             if (res.status == 200) {
@@ -311,30 +363,55 @@ export async function getServerInfo(id: string) {
                         globalState.temporaryInvalidServers.has(id)) {
                         globalState.temporaryInvalidServers.delete(id);
                     }
+                    if (globalState.invalidServerIds &&
+                        globalState.invalidServerIds.has(id)) {
+                        globalState.invalidServerIds.delete(id);
+                    }
                 } catch (err) {
                     // Ignore errors in this cleanup step
                 }
 
                 return res.json;
             } else {
-                // If we get a clear "not found" or "forbidden" type error, no need to retry
+                // Only fail immediately on clear "not found" or "forbidden" errors
                 if (res.status === 404 || res.status === 403) {
                     throw new Error(res.error || `Server returned ${res.status}`);
                 }
+
+                // For other status codes, retry
+                throw new Error(`Server returned status ${res.status}: ${res.error || 'Unknown error'}`);
             }
         } catch (error) {
-            // On the last attempt, or if we get certain error types, throw the error
             const errorStr = String(error).toLowerCase();
+
+            // Check if this is a fatal error that shouldn't be retried
             const isFatalError = errorStr.includes("not found") ||
                 errorStr.includes("does not exist") ||
                 errorStr.includes("forbidden");
 
-            if (attempt === maxRetries || isFatalError) {
+            // Check if this is a network error that should be retried
+            const isNetworkError = retryableErrorPatterns.some(pattern =>
+                errorStr.includes(pattern.toLowerCase())
+            );
+
+            // If we encounter a network error, try switching endpoints
+            if (isNetworkError && !endpointSwitchAttempted) {
+                logger.info(`[getServerInfo] Switching endpoints due to network error: ${errorStr}`);
+                switchToNextEndpoint();
+                endpointSwitchAttempted = true;
+                // Don't count this attempt against the retry limit since we're switching endpoints
+                attempt--;
+                continue;
+            }
+
+            // If it's the last attempt or a fatal error, throw
+            if (attempt === maxRetries || (isFatalError && !isNetworkError)) {
                 logger.error(`[getServerInfo] Failed after ${attempt} attempts for server ${id}:`, error);
                 throw error;
             }
 
-            // Otherwise log and retry
+            // Use exponential backoff for retry delay
+            const retryDelay = baseRetryDelay * Math.pow(1.5, attempt - 1);
             logger.warn(`[getServerInfo] Attempt ${attempt} failed for server ${id}, retrying in ${retryDelay}ms:`, error);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
@@ -996,30 +1073,75 @@ export async function forceReconnectServer(serverId: string): Promise<boolean> {
         // Get global state reference
         const globalState = useGlobalState.getState();
 
-        // Try to fetch server info to confirm it's working
-        const serverInfo = await getServerInfo(serverId);
-
-        // If we got here without an error, the server is responsive
-        logger.info(`[forceReconnectServer] Successfully reconnected to server: ${serverId}`);
-
-        // Explicitly clear server from invalid server tracking
+        // First, clear server from invalid server tracking preemptively
+        // This allows getServerInfo to try fresh connections
         if (globalState.temporaryInvalidServers && globalState.temporaryInvalidServers.has(serverId)) {
-            logger.info(`[forceReconnectServer] Removing server from temporaryInvalidServers: ${serverId}`);
+            logger.info(`[forceReconnectServer] Preemptively removing server from temporaryInvalidServers: ${serverId}`);
             globalState.temporaryInvalidServers.delete(serverId);
         }
 
         if (globalState.invalidServerIds && globalState.invalidServerIds.has(serverId)) {
-            logger.info(`[forceReconnectServer] Removing server from invalidServerIds: ${serverId}`);
+            logger.info(`[forceReconnectServer] Preemptively removing server from invalidServerIds: ${serverId}`);
+            globalState.invalidServerIds.delete(serverId);
+        }
+
+        // Try to fetch server info with stronger retry logic
+        let retryAttempt = 0;
+        const maxReconnectRetries = 3;
+        let serverInfo = null;
+        let lastError = null;
+
+        while (retryAttempt < maxReconnectRetries) {
+            try {
+                // Add a small delay between retries to reduce API load
+                if (retryAttempt > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1500 * retryAttempt));
+                }
+
+                logger.info(`[forceReconnectServer] Attempt ${retryAttempt + 1}/${maxReconnectRetries} to fetch server info for ${serverId}`);
+                serverInfo = await getServerInfo(serverId);
+
+                // If successful, break out of retry loop
+                if (serverInfo) {
+                    break;
+                }
+            } catch (error) {
+                lastError = error;
+                logger.warn(`[forceReconnectServer] Retry ${retryAttempt + 1} failed:`, error);
+                retryAttempt++;
+            }
+        }
+
+        // If we couldn't get server info after all retries, throw the last error
+        if (!serverInfo) {
+            throw lastError || new Error("Failed to fetch server info after multiple attempts");
+        }
+
+        // If we got here, the server is responsive
+        logger.info(`[forceReconnectServer] Successfully reconnected to server: ${serverId}`);
+
+        // Make absolutely sure server is not in any invalid lists
+        if (globalState.temporaryInvalidServers) {
+            globalState.temporaryInvalidServers.delete(serverId);
+        }
+        if (globalState.invalidServerIds) {
             globalState.invalidServerIds.delete(serverId);
         }
 
         // Reset server cache to force a refresh
         const oldCache = globalState.serverCache.get(serverId);
         if (oldCache) {
-            // Update timestamp to force refreshes
+            // Update timestamp to force refreshes but keep the data
             globalState.serverCache.set(serverId, {
                 ...oldCache,
+                data: serverInfo, // Update with fresh data
                 timestamp: Date.now() - 10000000 // Set timestamp to past to force refresh
+            });
+        } else {
+            // If no cache exists, create one
+            globalState.serverCache.set(serverId, {
+                data: serverInfo,
+                timestamp: Date.now()
             });
         }
 

@@ -6,7 +6,7 @@ import { ArweaveWalletKit, useConnection } from "arwalletkit-react"
 import AoSyncStrategy from "@vela-ventures/aosync-strategy";
 import WanderStrategy from "@arweave-wallet-kit/wander-strategy";
 import BrowserWalletStrategy from "@arweave-wallet-kit/browser-wallet-strategy";
-import { EthereumStrategy } from "arwalletkit-wagmi"
+import { EthereumStrategy } from "arwalletkit-wagmi-any-wallet"
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { WanderConnect } from '@wanderapp/connect'

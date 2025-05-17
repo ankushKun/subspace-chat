@@ -64,20 +64,76 @@ export default function Profile() {
     // Update cached display name whenever profile data changes
     useEffect(() => {
         if (profileData?.primaryName) {
+            console.log(`[Profile] Setting cached display name from profile data: ${profileData.primaryName}`);
             setCachedDisplayName(profileData.primaryName);
-        }
-    }, [profileData]);
+        } else if (profileData && activeAddress) {
+            // If we have profile data but no primary name, try to fetch it directly
+            console.log(`[Profile] Profile data available but no primary name, fetching directly`);
 
-    // Watch for address changes
+            // Use the imported ARIO library via getProfile in ao.ts 
+            import('@/lib/ao').then(({ getProfile }) => {
+                getProfile(activeAddress)
+                    .then(freshProfileData => {
+                        if (freshProfileData && freshProfileData.primaryName) {
+                            console.log(`[Profile] Found primary name: ${freshProfileData.primaryName}`);
+
+                            // Update our profile data with the primary name
+                            setProfileData(prev => ({
+                                ...prev,
+                                primaryName: freshProfileData.primaryName
+                            }));
+
+                            // Update cached display name
+                            setCachedDisplayName(freshProfileData.primaryName);
+
+                            // Also update global profile cache
+                            updateUserProfileCache(activeAddress, {
+                                username: profileData.profile?.username,
+                                pfp: profileData.profile?.pfp,
+                                primaryName: freshProfileData.primaryName,
+                                timestamp: Date.now()
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.warn(`[Profile] Error fetching primary name:`, error);
+                    });
+            });
+        }
+    }, [profileData, activeAddress, updateUserProfileCache]);
+
+    // Watch for address changes - forcefully refresh profile and cache when wallet changes
     useEffect(() => {
         // If address changed, reset and fetch new profile data
         if (activeAddress !== previousAddressRef.current) {
             console.log(`[Profile] Wallet address changed from ${previousAddressRef.current} to ${activeAddress}`);
-            // Reset profile data immediately
+
+            // Hard reset ALL profile-related state
             setProfileData(null);
             setNickname("");
             primaryNameCheckedRef.current = false;
             setCachedDisplayName(null);
+
+            // Force a DOM update to ensure the UI reflects the change immediately
+            setTimeout(() => {
+                console.log(`[Profile] Forcing immediate DOM update after wallet change`);
+            }, 0);
+
+            // Force global state refresh for new wallet
+            const globalState = useGlobalState.getState();
+
+            // Explicitly log that we're handling a wallet change
+            console.log(`[Profile] WALLET CHANGED - Hard resetting all profile state`);
+
+            // Clear existing profile data from global state if method exists
+            if (globalState.clearUserProfileCache) {
+                globalState.clearUserProfileCache();
+            } else {
+                console.log('[Profile] clearUserProfileCache method not available, skipping');
+            }
+
+            // Force reset the primaryNameCheckedRef to definitely unchecked
+            primaryNameCheckedRef.current = false;
 
             // Update the ref to current address
             previousAddressRef.current = activeAddress;
@@ -97,34 +153,39 @@ export default function Profile() {
             // This ensures we don't show stale data from the previous wallet
             if (activeAddress) {
                 setIsLoading(true);
-                fetchUserProfile(activeAddress, true)
+
+                // Perform a sequential force refresh:
+                // 1. Force bypassing the cache entirely
+                console.log(`[Profile] Forcing complete cache bypass for ${activeAddress}`);
+
+                // 2. Fetch completely fresh profile data
+                fetchUserProfileAndCache(activeAddress, true)
                     .then(result => {
-                        if (result && 'profile' in result) {
+                        if (result) {
                             console.log(`[Profile] Updated profile data for new wallet ${activeAddress}`);
                             setProfileData(result);
 
-                            // Ensure primary name is in the user profiles cache
+                            // Show toast for successful profile load
+                            toast.success(`Connected: ${result.primaryName || activeAddress.substring(0, 6) + '...'}`);
+
+                            // Ensure primary name is in the user profiles cache and component state
                             if (result.primaryName) {
-                                updateUserProfileCache(activeAddress, {
-                                    username: result.profile?.username,
-                                    pfp: result.profile?.pfp,
-                                    primaryName: result.primaryName,
-                                    timestamp: Date.now()
-                                });
-                                primaryNameCheckedRef.current = true;
                                 setCachedDisplayName(result.primaryName);
                             }
+
+                            primaryNameCheckedRef.current = true;
                         }
                     })
                     .catch(error => {
                         console.error(`[Profile] Error fetching profile for new wallet:`, error);
+                        toast.error("Failed to load profile for new wallet");
                     })
                     .finally(() => {
                         setIsLoading(false);
                     });
             }
         }
-    }, [activeAddress, fetchUserProfile, navigate, updateUserProfileCache]);
+    }, [activeAddress, fetchUserProfileAndCache, navigate]);
 
     // Load cached profile data when component mounts
     useEffect(() => {
@@ -166,6 +227,7 @@ export default function Profile() {
             // If we have profile data but no primary name, try to fetch it specifically
             if (!profileData.primaryName) {
                 console.log(`[Profile] No primary name found, fetching it specifically`);
+                // Always force a refresh when specifically checking for primary name
                 fetchUserProfileAndCache(activeAddress, true)
                     .then(result => {
                         if (result && result.primaryName) {
@@ -212,12 +274,14 @@ export default function Profile() {
         }
     }, [activeServerId, activeAddress, getServerMembers]);
 
-    // Fetch profile when dialog opens if no cached data
+    // Fetch fresh profile data whenever the profile dialog opens
     useEffect(() => {
-        if (profileOpen && activeAddress && !profileData) {
+        if (profileOpen && activeAddress) {
+            // Always fetch fresh profile data when dialog opens
+            console.log(`[Profile] Profile dialog opened, fetching fresh profile data`);
             fetchProfile();
         }
-    }, [profileOpen, activeAddress, profileData]);
+    }, [profileOpen, activeAddress]);
 
     // Reset edit mode when dialog closes
     useEffect(() => {
@@ -226,7 +290,7 @@ export default function Profile() {
         }
     }, [profileOpen]);
 
-    // Fetch user profile
+    // Fetch user profile with enhanced primary name handling
     const fetchProfile = async () => {
         if (!activeAddress) return;
 
@@ -234,29 +298,79 @@ export default function Profile() {
         primaryNameCheckedRef.current = false;
 
         try {
-            // Always force a fresh fetch when the profile dialog is opened
-            // This ensures we get the latest data for the current wallet
-            console.log(`[Profile] Forcing fresh profile data fetch for ${activeAddress}`);
-            const result = await fetchUserProfile(activeAddress, true);
+            // Always force a complete refresh including primary name check
+            console.log(`[Profile] Forcing complete profile refresh for ${activeAddress}`);
 
-            if (result && 'profile' in result) {
+            // First try the full profile fetch with cache
+            const result = await fetchUserProfileAndCache(activeAddress, true);
+
+            if (result) {
+                console.log(`[Profile] Profile data refreshed successfully:`,
+                    result.primaryName ? `Primary name: ${result.primaryName}` : 'No primary name');
+
                 setProfileData(result);
 
-                // Ensure primary name is also in the user profiles cache
+                // Always update cached display name when we get fresh data
                 if (result.primaryName) {
-                    updateUserProfileCache(activeAddress, {
-                        username: result.profile?.username,
-                        pfp: result.profile?.pfp,
-                        primaryName: result.primaryName,
-                        timestamp: Date.now()
-                    });
-                    primaryNameCheckedRef.current = true;
                     setCachedDisplayName(result.primaryName);
+                    primaryNameCheckedRef.current = true;
+                } else {
+                    // No primary name in initial result, try direct fetch
+                    console.log(`[Profile] No primary name in initial result, trying direct getProfile`);
+
+                    // Import and use getProfile directly for a second attempt
+                    try {
+                        // Using dynamic import to avoid circular dependencies
+                        const { getProfile } = await import('@/lib/ao');
+                        const directProfileResult = await getProfile(activeAddress);
+
+                        if (directProfileResult && directProfileResult.primaryName) {
+                            console.log(`[Profile] Found primary name via direct fetch: ${directProfileResult.primaryName}`);
+
+                            // Update our profile data with the primary name
+                            setProfileData(prev => ({
+                                ...prev,
+                                primaryName: directProfileResult.primaryName
+                            }));
+
+                            // Update cached display name
+                            setCachedDisplayName(directProfileResult.primaryName);
+
+                            // Also update global profile cache
+                            updateUserProfileCache(activeAddress, {
+                                username: result.profile?.username,
+                                pfp: result.profile?.pfp,
+                                primaryName: directProfileResult.primaryName,
+                                timestamp: Date.now()
+                            });
+
+                            primaryNameCheckedRef.current = true;
+                        } else {
+                            // Still no primary name found after thorough checking
+                            console.log(`[Profile] No primary name found after thorough checking for ${activeAddress}`);
+                            setCachedDisplayName(null);
+                            primaryNameCheckedRef.current = true;
+
+                            // Force UI update to display wallet address
+                            setProfileData(prev => ({
+                                ...prev,
+                                primaryName: null  // Explicitly set to null to force address display
+                            }));
+                        }
+                    } catch (nameError) {
+                        console.warn(`[Profile] Error in secondary primary name fetch:`, nameError);
+                        // Clear cached display name if fetch failed
+                        setCachedDisplayName(null);
+                        primaryNameCheckedRef.current = true;
+                    }
                 }
             }
         } catch (error) {
             console.error("Error fetching profile:", error);
             toast.error("Failed to load profile");
+            // Clear cached values on error
+            setCachedDisplayName(null);
+            primaryNameCheckedRef.current = true;
         } finally {
             setIsLoading(false);
         }
@@ -381,18 +495,47 @@ export default function Profile() {
 
     // Get display name prioritizing primaryName (AR name) or wallet address
     const getDisplayName = () => {
-        // First priority: use cached display name to prevent flickering
-        if (cachedDisplayName) {
+        // If profile data has been explicitly set to null or is being loaded,
+        // force showing the wallet address even if there's a cached display name
+        if ((profileData === null && isLoading) || !activeAddress) {
+            return activeAddress
+                ? `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`
+                : 'Not Connected';
+        }
+
+        // If we've explicitly checked and determined there is no primary name,
+        // force showing the wallet address even if there's a cached display name
+        if (primaryNameCheckedRef.current === true &&
+            profileData &&
+            !profileData.primaryName) {
+            return `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+        }
+
+        // First priority: use cached display name to prevent flickering,
+        // but only if we haven't explicitly determined there's no primary name
+        if (cachedDisplayName && (!primaryNameCheckedRef.current || profileData?.primaryName)) {
             return cachedDisplayName;
         }
 
         // Second priority: use current profile data if available
         if (profileData?.primaryName) {
+            // Also update cached display name if not set yet
+            if (!cachedDisplayName) {
+                setCachedDisplayName(profileData.primaryName);
+            }
             return profileData.primaryName;
         }
 
-        // Last resort: truncated wallet address
+        // Check global cache for primary name if we don't have it locally
         if (activeAddress) {
+            const cachedProfile = getUserProfileFromCache(activeAddress);
+            if (cachedProfile?.primaryName) {
+                // Update our local cache
+                setCachedDisplayName(cachedProfile.primaryName);
+                return cachedProfile.primaryName;
+            }
+
+            // Last resort: truncated wallet address
             return `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
         }
 

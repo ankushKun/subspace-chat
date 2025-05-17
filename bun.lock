@@ -32,6 +32,7 @@
         "ao-fetch": "^1.0.4",
         "arwalletkit-react": "^0.4.0",
         "arwalletkit-wagmi": "^0.1.0",
+        "arwalletkit-wagmi-any-wallet": "^0.0.3",
         "arweave": "^1.15.7",
         "arweave-wallet-kit": "^1.1.0",
         "class-variance-authority": "^0.7.1",
@@ -1034,6 +1035,8 @@
     "arwalletkit-styles": ["arwalletkit-styles@0.2.0", "", {}, "sha512-wPgruh0El0kS16SMpwZg7n3E4OE/8br26pxqa+2jJPfxoviNnBrM/8MqDzpHNneUSy2sHwQQ2c5KbYoG8xjgVQ=="],
 
     "arwalletkit-wagmi": ["arwalletkit-wagmi@0.1.0", "", { "dependencies": { "@ethersproject/bytes": "^5.8.0", "@metamask/eth-sig-util": "^8.2.0", "@wagmi/core": "^2.16.4", "arwalletkit-browser-wallet": "^0.2.0", "arwalletkit-core": "^0.2.0", "ethers": "^6.13.5", "viem": "^2.23.4", "wagmi": "^2.14.11" } }, "sha512-gXXvK/EuwNIqZvHYbwW2XzhvLR38CmrAwM0QA2Q+SaOwSrYPKQyz30DKqWrsJ/46t97YslyPisaxq27ycQw6OQ=="],
+
+    "arwalletkit-wagmi-any-wallet": ["arwalletkit-wagmi-any-wallet@0.0.3", "", { "dependencies": { "@ethersproject/bytes": "^5.8.0", "@metamask/eth-sig-util": "^8.2.0", "@wagmi/core": "^2.16.4", "ethers": "^6.13.5", "viem": "^2.23.4", "wagmi": "^2.14.11" } }, "sha512-m3yOsKHjkgQMW0TVzOu/CV6C/CVKHKzMyszGKowH1SAaha7scB3I5U3sCuqGvdfs08r9qM3y4uPlj40ykqlCdQ=="],
 
     "arweave": ["arweave@1.15.7", "", { "dependencies": { "arconnect": "^0.4.2", "asn1.js": "^5.4.1", "base64-js": "^1.5.1", "bignumber.js": "^9.0.2" } }, "sha512-F+Y4iWU1qea9IsKQ/YNmLsY4DHQVsaJBuhEbFxQn9cfGHOmtXE+bwo14oY8xqymsqSNf/e1PeIfLk7G7qN/hVA=="],
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getNotifications, markNotificationsAsRead } from "@/lib/ao";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
@@ -285,19 +285,6 @@ export default function NotificationsPanel() {
     // Count unread notifications (only from joined servers)
     const unreadCount = filteredNotifications.filter(n => !n.isRead).length;
 
-    // Group notifications by server (only from joined servers)
-    const notificationsByServer = filteredNotifications.reduce((acc, notification) => {
-        if (!acc[notification.SID]) {
-            acc[notification.SID] = {
-                serverName: notification.server,
-                notifications: []
-            };
-        }
-
-        acc[notification.SID].notifications.push(notification);
-        return acc;
-    }, {} as Record<string, { serverName: string; notifications: Notification[] }>);
-
     // Handle notification click - navigate and mark as read
     const handleNotificationClick = async (notification: Notification) => {
         try {
@@ -336,8 +323,24 @@ export default function NotificationsPanel() {
     // Format message content to simplify mentions
     const formatContent = (content: string): string => {
         if (!content) return "";
+
         // Replace @[name](address) with @name
-        return content.replace(/@\[(.*?)\]\((.*?)\)/g, '@$1');
+        let formatted = content.replace(/@\[(.*?)\]\((.*?)\)/g, '@$1');
+
+        // Shorten wallet addresses (match typical Arweave/crypto wallet address patterns)
+        formatted = formatted.replace(/\b([a-zA-Z0-9]{5})[a-zA-Z0-9]{30,}([a-zA-Z0-9]{5})\b/g, '$1...$2');
+
+        return formatted;
+    };
+
+    // Shorten wallet addresses
+    const shortenAddress = (address: string): string => {
+        if (!address) return "";
+        // Check if it looks like a wallet address (long alphanumeric string)
+        if (/^[a-zA-Z0-9_-]{30,}$/.test(address)) {
+            return `${address.substring(0, 5)}...${address.substring(address.length - 5)}`;
+        }
+        return address;
     };
 
     // Format timestamp to match the screenshot format
@@ -401,36 +404,55 @@ export default function NotificationsPanel() {
                                 No mentions to display
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                {Object.entries(notificationsByServer).map(([serverId, { serverName, notifications }]) => (
-                                    <div key={serverId} className="space-y-1">
-                                        <div className="text-sm font-semibold text-foreground px-2 pt-1">{serverName}</div>
-                                        {notifications
-                                            .sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp))
-                                            .map(notification => (
-                                                <div
-                                                    key={notification.id}
-                                                    className={`p-2 rounded-md ${notification.isRead
-                                                        ? 'bg-muted/30 text-muted-foreground'
-                                                        : 'bg-muted/60'} cursor-pointer transition-colors hover:bg-muted/80`}
-                                                    onClick={() => handleNotificationClick(notification)}
-                                                >
-                                                    <div className="flex justify-between items-start">
-                                                        <span className={`font-medium text-sm ${notification.isRead ? 'text-muted-foreground' : ''}`}>
-                                                            {notification.author}
-                                                        </span>
-                                                        <span className="text-xs text-muted-foreground ml-2">
-                                                            {formatTimestamp(notification.timestamp)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground">#{notification.channel}</div>
-                                                    <div className={`text-sm mt-1 break-words ${notification.isRead ? 'text-muted-foreground' : ''}`}>
-                                                        {formatContent(notification.content)}
-                                                    </div>
+                            <div className="space-y-3">
+                                {(() => {
+                                    // Sort notifications by timestamp (newest first)
+                                    const sortedNotifications = [...filteredNotifications].sort(
+                                        (a, b) => parseInt(b.timestamp) - parseInt(a.timestamp)
+                                    );
+
+                                    // Group notifications by server while preserving chronological order
+                                    const result: React.ReactNode[] = [];
+                                    let currentServer = '';
+
+                                    sortedNotifications.forEach((notification, index) => {
+                                        // Add server header when server changes
+                                        if (notification.server !== currentServer) {
+                                            currentServer = notification.server;
+                                            result.push(
+                                                <div key={`server-${notification.SID}-${index}`} className="text-sm font-semibold text-foreground px-2 pt-1 mt-2 first:mt-0">
+                                                    {notification.server}
                                                 </div>
-                                            ))}
-                                    </div>
-                                ))}
+                                            );
+                                        }
+
+                                        // Add notification
+                                        result.push(
+                                            <div
+                                                key={notification.id}
+                                                className={`p-2 rounded-md ${notification.isRead
+                                                    ? 'bg-muted/30 text-muted-foreground'
+                                                    : 'bg-muted/60'} cursor-pointer transition-colors hover:bg-muted/80`}
+                                                onClick={() => handleNotificationClick(notification)}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <span className={`font-medium text-sm ${notification.isRead ? 'text-muted-foreground' : ''}`}>
+                                                        {shortenAddress(notification.author)}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground ml-2">
+                                                        {formatTimestamp(notification.timestamp)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">#{notification.channel}</div>
+                                                <div className={`text-sm mt-1 break-words ${notification.isRead ? 'text-muted-foreground' : ''}`}>
+                                                    {formatContent(notification.content)}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+
+                                    return result;
+                                })()}
                             </div>
                         )}
                     </div>

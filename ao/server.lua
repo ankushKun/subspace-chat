@@ -72,6 +72,10 @@ r = db:exec([[
     );
 ]])
 
+-- create default category and text channel in that category
+SQLWrite("INSERT INTO categories (name) VALUES ('Text Channels')")
+SQLWrite("INSERT INTO channels (name, category_id) VALUES ('General', 1)")
+
 function isOwner(id)
     return id == Owner
 end

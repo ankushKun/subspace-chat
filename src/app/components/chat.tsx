@@ -896,8 +896,20 @@ export default function Chat() {
             {/* Chat Content Area */}
             <div className="flex-1 overflow-y-auto flex flex-col relative" ref={chatContainerRef}>
                 {messages.length === 0 ? (
-                    <div className="flex-1 flex flex-col justify-start">
-                        {renderPlaceholderMessages()}
+                    <div className="flex-1 flex flex-col justify-center items-center">
+                        {isLoadingMessages ? (
+                            renderPlaceholderMessages()
+                        ) : (
+                            <div className="text-center p-6">
+                                <div className="mb-4 text-muted-foreground text-7xl flex justify-center">
+                                    <HashIcon className="w-16 h-16 opacity-30" />
+                                </div>
+                                <h3 className="text-xl font-medium mb-2">Welcome to #{activeChannel?.name}</h3>
+                                <p className="text-muted-foreground mb-6">
+                                    This is the beginning of the channel. Be the first one to send a message!
+                                </p>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4 mt-5">
@@ -1072,6 +1084,7 @@ export default function Chat() {
                     disabled={isSending}
                     singleLine
                     forceSuggestionsAboveCursor
+                    autoFocus
                 >
                     <Mention
                         trigger="@"

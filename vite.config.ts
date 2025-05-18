@@ -33,6 +33,14 @@ export default defineConfig({
       maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
       // Cache app shell for offline use
       navigateFallback: 'index.html',
+      // Skip waiting to update service worker immediately
+      skipWaiting: true,
+      // Take control immediately
+      clientsClaim: true,
+      // Disable caching for network-first on root document for update checks
+      navigationPreload: true,
+      // More aggressive cache cleanup
+      cleanupOutdatedCaches: true,
       // Don't try to validate offline connectivity for these paths
       // navigateFallbackDenylist: [/^\/api\//],
       // Enable offline Google Analytics

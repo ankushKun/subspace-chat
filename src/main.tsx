@@ -15,6 +15,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OfflineDetector } from '@/components/offline-detector'
 import { registerServiceWorker } from '@/pwa-handler'
 import { setLogLevel, LogLevel } from './lib/logger'
+import { UpdatePrompt } from './components/update-prompt'
+import { UpdateLoader } from './components/update-loader'
 
 // Use React.lazy for code splitting
 const Landing = lazy(() => import('@/landing'))
@@ -30,9 +32,7 @@ const queryClient = new QueryClient()
 setLogLevel(import.meta.env.PROD ? LogLevel.ERROR : LogLevel.INFO)
 
 // Register service worker for PWA support
-if (import.meta.env.PROD) {
-  registerServiceWorker();
-}
+registerServiceWorker();
 
 // Loading component for use with React.lazy
 const LoadingFallback = () => (
@@ -101,6 +101,8 @@ function Main() {
     {/* <Toaster /> */}
     <QueryClientProvider client={queryClient}>
       <OfflineDetector>
+        <UpdatePrompt />
+        <UpdateLoader />
         <ArweaveWalletKit
           config={{
             appInfo: {

@@ -124,10 +124,18 @@ export default function ChannelList() {
 
         try {
             toast.loading("Creating category...");
-            // Let the backend place it at the end (default behavior)
-            await createCategory(activeServerId, categoryName.trim());
+            const result = await createCategory(activeServerId, categoryName.trim()) as Category;
             toast.dismiss();
             toast.success("Category created successfully");
+
+            // Update global state with new category
+            if (activeServer && result) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    categories: [...activeServer.categories, result]
+                };
+                setActiveServer(updatedServer);
+            }
 
             setCategoryName("");
             setCreateCategoryOpen(false);
@@ -152,9 +160,18 @@ export default function ChannelList() {
 
         try {
             toast.loading("Creating channel...");
-            await createChannel(activeServerId, channelName.trim());
+            const result = await createChannel(activeServerId, channelName.trim()) as Channel;
             toast.dismiss();
             toast.success("Channel created successfully");
+
+            // Update global state with new channel
+            if (activeServer && result) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    channels: [...activeServer.channels, result]
+                };
+                setActiveServer(updatedServer);
+            }
 
             setChannelName("");
             setCreateChannelOpen(false);
@@ -444,9 +461,20 @@ export default function ChannelList() {
 
         try {
             toast.loading("Updating category...");
-            await updateCategory(activeServerId, selectedCategory.id, editCategoryName.trim());
+            const result = await updateCategory(activeServerId, selectedCategory.id, editCategoryName.trim()) as Category;
             toast.dismiss();
             toast.success("Category updated successfully");
+
+            // Update global state with updated category
+            if (activeServer && result) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    categories: activeServer.categories.map(cat =>
+                        cat.id === selectedCategory.id ? result : cat
+                    )
+                };
+                setActiveServer(updatedServer);
+            }
 
             setEditCategoryName("");
             setEditCategoryOpen(false);
@@ -472,6 +500,15 @@ export default function ChannelList() {
             toast.dismiss();
             toast.success("Category deleted successfully");
 
+            // Update global state by removing the category
+            if (activeServer) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    categories: activeServer.categories.filter(cat => cat.id !== selectedCategory.id)
+                };
+                setActiveServer(updatedServer);
+            }
+
             setDeleteCategoryOpen(false);
             setSelectedCategory(null);
         } catch (error) {
@@ -495,9 +532,20 @@ export default function ChannelList() {
 
         try {
             toast.loading("Updating channel...");
-            await updateChannel(activeServerId, selectedChannel.id, editChannelName.trim());
+            const result = await updateChannel(activeServerId, selectedChannel.id, editChannelName.trim()) as Channel;
             toast.dismiss();
             toast.success("Channel updated successfully");
+
+            // Update global state with updated channel
+            if (activeServer && result) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    channels: activeServer.channels.map(ch =>
+                        ch.id === selectedChannel.id ? result : ch
+                    )
+                };
+                setActiveServer(updatedServer);
+            }
 
             setEditChannelName("");
             setEditChannelOpen(false);
@@ -522,6 +570,15 @@ export default function ChannelList() {
             await deleteChannel(activeServerId, selectedChannel.id);
             toast.dismiss();
             toast.success("Channel deleted successfully");
+
+            // Update global state by removing the channel
+            if (activeServer) {
+                const updatedServer: Server = {
+                    ...activeServer,
+                    channels: activeServer.channels.filter(ch => ch.id !== selectedChannel.id)
+                };
+                setActiveServer(updatedServer);
+            }
 
             setDeleteChannelOpen(false);
             setSelectedChannel(null);

@@ -1064,6 +1064,60 @@ export async function leaveServer(serverId: string): Promise<boolean> {
     }
 }
 
+/**
+ * Delegates an address to be used as an alias for the current user's address
+ * @param delegatedId The address to be delegated
+ */
+export async function delegate(delegatedId: string): Promise<boolean> {
+    try {
+        logger.info(`[delegate] Delegating address: ${delegatedId}`);
+        const res = await aofetch(`${PROFILES}/delegate`, {
+            method: "POST",
+            body: {
+                delegated_id: delegatedId
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        });
+        logger.info(`[delegate] Response:`, res);
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        logger.error("[delegate] Error delegating address:", error);
+        throw error;
+    }
+}
+
+/**
+ * Removes a delegation for an address
+ * @param delegatedId The delegated address to remove
+ */
+export async function undelegate(delegatedId: string): Promise<boolean> {
+    try {
+        logger.info(`[undelegate] Removing delegation for address: ${delegatedId}`);
+        const res = await aofetch(`${PROFILES}/undelegate`, {
+            method: "POST",
+            body: {
+                delegated_id: delegatedId
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        });
+        logger.info(`[undelegate] Response:`, res);
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        logger.error("[undelegate] Error removing delegation:", error);
+        throw error;
+    }
+}
+
 // Notification request tracking and caching
 const notificationCache = {
     // Cache for notification data by address

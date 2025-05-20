@@ -72,12 +72,38 @@ r = db:exec([[
     );
 ]])
 
+-- Record for original id and delegated id (addresses)
+-- whenever a request is received, if it is a delegated id, use the original id in place of the delegated id
+-- [delegated_id] = original_id
+Delegations = {}
+
+function TranslateDelegation(id)
+    assert(type(id) == "string", "❌[delegation error] id is not a string")
+    if Delegations[id] then
+        return Delegations[id]
+    end
+    return id
+end
+
 -- create default category and text channel in that category
-SQLWrite("INSERT INTO categories (name) VALUES ('Text Channels')")
-SQLWrite("INSERT INTO channels (name, category_id) VALUES ('General', 1)")
+local categories = SQLRead("SELECT COUNT(*) as count FROM categories")[1].count
+local channels = SQLRead("SELECT COUNT(*) as count FROM channels")[1].count
+
+if categories == 0 and channels == 0 then
+    SQLWrite("INSERT INTO categories (name) VALUES ('Text Channels')")
+    SQLWrite("INSERT INTO channels (name, category_id) VALUES ('General', 1)")
+end
 
 function isOwner(id)
     return id == Owner
+end
+
+function GetProfile(id)
+    local profile = SQLRead("SELECT * FROM profiles WHERE id = ?", id)
+    if #profile == 1 then
+        return profile[1].profile
+    end
+    return nil
 end
 
 app.get("/", function(req, res)
@@ -104,7 +130,9 @@ app.get("/get-members", function(req, res)
 end)
 
 app.post("/update-server", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local id = req.msg.From
+    id = TranslateDelegation(id)
+    assert(isOwner(id), "You are not the owner of this server")
     local name = req.body.name or nil
     local icon = req.body.icon or nil
 
@@ -122,7 +150,9 @@ app.post("/update-server", function(req, res)
 end)
 
 app.post("/create-category", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local id = req.msg.From
+    id = TranslateDelegation(id)
+    assert(isOwner(id), "You are not the owner of this server")
     local name = req.body.name
     local order = req.body.order_id or req.body.order or 0
 
@@ -176,7 +206,9 @@ app.post("/create-category", function(req, res)
 end)
 
 app.post("/update-category", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local from = req.msg.From
+    from = TranslateDelegation(from)
+    assert(isOwner(from), "You are not the owner of this server")
     local id = req.body.id
     local name = req.body.name
     local order = req.body.order_id or req.body.order
@@ -266,7 +298,9 @@ app.post("/update-category", function(req, res)
 end)
 
 app.post("/delete-category", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local from = req.msg.From
+    from = TranslateDelegation(from)
+    assert(isOwner(from), "You are not the owner of this server")
     local id = req.body.id
     local rows_updated = SQLWrite("DELETE FROM categories WHERE id = ?", id)
     if rows_updated == 1 then
@@ -286,7 +320,9 @@ end)
 ------------------------------------------------------------------------
 
 app.post("/create-channel", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local from = req.msg.From
+    from = TranslateDelegation(from)
+    assert(isOwner(from), "You are not the owner of this server")
     local name = req.body.name
     local category_id = req.body.category_id
     local order = req.body.order_id or req.body.order
@@ -383,7 +419,9 @@ app.post("/create-channel", function(req, res)
 end)
 
 app.post("/update-channel", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local from = req.msg.From
+    from = TranslateDelegation(from)
+    assert(isOwner(from), "You are not the owner of this server")
     local id = req.body.id
     local name = req.body.name
     local category_id = req.body.category_id
@@ -582,7 +620,9 @@ app.post("/update-channel", function(req, res)
 end)
 
 app.post("/delete-channel", function(req, res)
-    assert(isOwner(req.msg.From), "You are not the owner of this server")
+    local from = req.msg.From
+    from = TranslateDelegation(from)
+    assert(isOwner(from), "You are not the owner of this server")
     local id = req.body.id
     local rows_updated = SQLWrite("DELETE FROM channels WHERE id = ?", id)
     if rows_updated == 1 then
@@ -615,10 +655,28 @@ end)
 
 app.post("/send-message", function(req, res)
     local author_id = req.msg.From
+    author_id = TranslateDelegation(author_id)
     local timestamp = req.msg.Timestamp
     local msg_id = req.msg.Id
     local content = req.body.content
     local channel_id = req.body.channel_id
+
+    -- check if author is a member of the server
+    local profile = GetProfile(author_id)
+    if not profile then
+        ---------------------------------------------------------------------
+        -- -- Auto-register the member if they don't exist
+        -- SQLWrite("INSERT INTO members (id) VALUES (?)", author_id)
+        -- -- Re-fetch member data after insert
+        -- member = SQLRead("SELECT * FROM members WHERE id = ?", author_id)
+        ---------------------------------------------------------------------
+        res:status(403):json({
+            error = "You are not a member of this server",
+            success = false
+        })
+        return
+    end
+
     -- Extract mentions from content
     local mentions = {}
     for name, address in content:gmatch("@%[([^%]]+)%]%(([^%)]+)%)") do
@@ -635,14 +693,6 @@ app.post("/send-message", function(req, res)
         return
     end
 
-    -- check if author is a member of the server
-    local member = SQLRead("SELECT * FROM members WHERE id = ?", author_id)
-    if not member or #member == 0 then
-        -- Auto-register the member if they don't exist
-        SQLWrite("INSERT INTO members (id) VALUES (?)", author_id)
-        -- Re-fetch member data after insert
-        member = SQLRead("SELECT * FROM members WHERE id = ?", author_id)
-    end
 
     local rows_updated = SQLWrite(
         "INSERT INTO messages (content, channel_id, author_id, timestamp, msg_id) VALUES (?, ?, ?, ?, ?)",
@@ -684,6 +734,16 @@ app.post("/edit-message", function(req, res)
     local msg_id = req.body.msg_id
     local content = req.body.content
     local editor = req.msg.From
+    editor = TranslateDelegation(editor)
+
+    local profile = GetProfile(editor)
+    if not profile then
+        res:status(403):json({
+            error = "You are not a member of this server",
+            success = false
+        })
+        return
+    end
 
     local original_message = SQLRead("SELECT * FROM messages WHERE msg_id = ?", msg_id)
     if #original_message == 1 then
@@ -716,7 +776,17 @@ end)
 
 app.post("/update-nickname", function(req, res)
     local member_id = req.msg.From
+    member_id = TranslateDelegation(member_id)
     local nickname = req.body.nickname
+
+    local profile = GetProfile(member_id)
+    if not profile then
+        res:status(403):json({
+            error = "You are not a member of this server",
+            success = false
+        })
+        return
+    end
 
     -- Check if member exists
     local member = SQLRead("SELECT * FROM members WHERE id = ?", member_id)
@@ -746,7 +816,17 @@ end)
 app.post("/delete-message", function(req, res)
     local msg_id = req.body.msg_id
     local deleter = req.msg.From
+    deleter = TranslateDelegation(deleter)
     local force_delete = isOwner(deleter)
+
+    local profile = GetProfile(deleter)
+    if not force_delete and not profile then
+        res:status(403):json({
+            error = "You are not a member of this server",
+            success = false
+        })
+        return
+    end
 
     local original_message = SQLRead("SELECT * FROM messages WHERE msg_id = ?", msg_id)
     if #original_message == 1 then
@@ -782,6 +862,22 @@ end)
 Handlers.add("Add-Member", function(msg)
     assert(msg.From == PROFILES, "You are not authorized to add members to this server")
     local id = msg.Tags.User
+    local delegated_id = msg.Tags.delegated_id
+    local original_id = msg.Tags.original_id
+
+    -- Verify that the user is either the delegated_id or original_id
+    if delegated_id and original_id then
+        if id ~= delegated_id and id ~= original_id then
+            return ao.send({
+                Target = msg.From,
+                Action = "Error",
+                Data = "You are not authorized to add this member to this server",
+                Tags = { User = id }
+            })
+        end
+        Delegations[delegated_id] = original_id
+    end
+
     local rows_updated = SQLWrite("INSERT INTO members (id) VALUES (?)", id)
     if rows_updated == 1 then
         print("Added member " .. id)
@@ -813,6 +909,86 @@ Handlers.add("Remove-Member", function(msg)
             }
         })
     end
+end)
+
+Handlers.add("Add-Delegation", function(msg)
+    assert(msg.From == PROFILES, "You are not authorized to add delegations to this server")
+    local delegated_id = msg.Tags.delegated_id
+    local original_id = msg.Tags.original_id
+
+    -- Validate inputs
+    if not delegated_id or not original_id then
+        return ao.send({
+            Target = msg.From,
+            Action = "Error",
+            Data = "Invalid delegation data",
+            Tags = { delegated_id = delegated_id, original_id = original_id }
+        })
+    end
+
+    -- Check if delegated_id is already delegated
+    if Delegations[delegated_id] then
+        return ao.send({
+            Target = msg.From,
+            Action = "Error",
+            Data = "Address is already delegated",
+            Tags = { delegated_id = delegated_id, original_id = original_id }
+        })
+    end
+
+    -- Check if original_id is already a delegatee
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == original_id then
+            return ao.send({
+                Target = msg.From,
+                Action = "Error",
+                Data = "Cannot delegate as you are already delegated",
+                Tags = { delegated_id = delegated_id, original_id = original_id }
+            })
+        end
+    end
+
+    -- Check if delegated_id is already a delegator
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == delegated_id then
+            return ao.send({
+                Target = msg.From,
+                Action = "Error",
+                Data = "Cannot delegate to an address that is already a delegator",
+                Tags = { delegated_id = delegated_id, original_id = original_id }
+            })
+        end
+    end
+
+    Delegations[delegated_id] = original_id
+end)
+
+Handlers.add("Remove-Delegation", function(msg)
+    assert(msg.From == PROFILES, "You are not authorized to remove delegations from this server")
+    local delegated_id = msg.Tags.delegated_id
+    local original_id = msg.Tags.original_id
+
+    -- Validate inputs
+    if not delegated_id or not original_id then
+        return ao.send({
+            Target = msg.From,
+            Action = "Error",
+            Data = "Invalid delegation data",
+            Tags = { delegated_id = delegated_id, original_id = original_id }
+        })
+    end
+
+    -- Verify the delegation exists and matches
+    if not Delegations[delegated_id] or Delegations[delegated_id] ~= original_id then
+        return ao.send({
+            Target = msg.From,
+            Action = "Error",
+            Data = "Delegation not found or mismatch",
+            Tags = { delegated_id = delegated_id, original_id = original_id }
+        })
+    end
+
+    Delegations[delegated_id] = nil
 end)
 
 -- Helper function to resequence a category's channels

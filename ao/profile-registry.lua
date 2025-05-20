@@ -65,6 +65,18 @@ db:exec([[
     CREATE INDEX IF NOT EXISTS idx_notifications_server_channel ON notifications(user_id, server_id, channel_id);
 ]])
 
+-- Record for original id and delegated id (addresses)
+-- whenever a request is received, if it is a delegated id, use the original id in place of the delegated id
+-- [delegated_id] = original_id
+Delegations = {}
+
+function TranslateDelegation(id)
+    assert(type(id) == "string", "❌[delegation error] id is not a string")
+    if Delegations[id] then
+        return Delegations[id]
+    end
+    return id
+end
 
 function GetProfile(id)
     local profile = SQLRead("SELECT * FROM profiles WHERE id = ?", id)
@@ -115,6 +127,7 @@ end
 
 app.get("/profile", function(req, res)
     local id = req.body.id or req.msg.From
+    id = TranslateDelegation(id)
     local profile = GetProfile(id)
     if profile then
         res:json({
@@ -136,10 +149,111 @@ app.get("/profile", function(req, res)
     end
 end)
 
+app.post("/delegate", function(req, res)
+    local id = req.msg.From
+    local delegated_id = tostring(req.body.delegated_id)
+
+    -- Prevent self-delegation
+    if delegated_id == id then
+        return res:status(400):json({
+            success = false,
+            error = "Cannot delegate to self"
+        })
+    end
+
+    -- Check if delegated_id is already delegated
+    if Delegations[delegated_id] then
+        return res:status(400):json({
+            success = false,
+            error = "Address is already delegated"
+        })
+    end
+
+    -- Check if id is already a delegatee
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == id then
+            return res:status(400):json({
+                success = false,
+                error = "Cannot delegate as you are already delegated"
+            })
+        end
+    end
+
+    -- Check if id is already a delegator
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == delegated_id then
+            return res:status(400):json({
+                success = false,
+                error = "Cannot delegate to an address that is already a delegator"
+            })
+        end
+    end
+
+    Delegations[delegated_id] = id
+
+    local profile = GetProfile(id)
+    if not profile then
+        res:status(404):json({
+            success = false,
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local servers_joined = json.decode(profile.servers_joined or "{}") or {}
+    for _, server in ipairs(servers_joined) do
+        ao.send({
+            Target = server,
+            Action = "Add-Delegation",
+            Tags = { delegated_id = delegated_id, original_id = id }
+        })
+    end
+    res:json({
+        success = true
+    })
+end)
+
+app.post("/undelegate", function(req, res)
+    local id = req.msg.From
+    local converted_id = TranslateDelegation(id)
+
+    -- Find the delegation to remove
+    local delegation_to_remove = nil
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == converted_id then
+            delegation_to_remove = d_id
+            break
+        end
+    end
+
+    if not delegation_to_remove then
+        return res:status(404):json({
+            success = false,
+            error = "No delegation found"
+        })
+    end
+
+    -- Remove the delegation
+    Delegations[delegation_to_remove] = nil
+    local profile = GetProfile(converted_id)
+    local servers_joined = json.decode(profile.servers_joined or "{}") or {}
+    for _, server in ipairs(servers_joined) do
+        ao.send({
+            Target = server,
+            Action = "Remove-Delegation",
+            Tags = { delegated_id = delegation_to_remove, original_id = converted_id }
+        })
+    end
+    res:json({
+        success = true
+    })
+end)
+
 app.get("/bulk-profile", function(req, res)
     local ids = req.body.ids
     local profiles = {}
     for _, id in ipairs(ids) do
+        id = TranslateDelegation(id)
         local profile = GetProfile(id)
         if profile then
             table.insert(profiles, profile)
@@ -153,6 +267,7 @@ end)
 
 app.post("/update-profile", function(req, res)
     local id = req.msg.From
+    id = TranslateDelegation(id)
     local username = req.body.username
     local pfp = req.body.pfp
 
@@ -171,6 +286,7 @@ end)
 
 app.post("/join-server", function(req, res)
     local id = req.msg.From
+    id = TranslateDelegation(id)
     local server_id = req.body.server_id
 
     local profile = GetProfile(id)
@@ -204,10 +320,27 @@ app.post("/join-server", function(req, res)
     -- Update the servers list while preserving other profile data
     UpdateServers(id, servers_joined)
 
+    -- Prepare tags for Add-Member message
+    local tags = { User = id }
+
+    -- Find any delegations for this user
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == id then
+            -- This user is a delegator
+            tags.delegated_id = d_id
+            tags.original_id = id
+        elseif d_id == id then
+            -- This user is a delegatee
+            tags.delegated_id = id
+            tags.original_id = o_id
+        end
+    end
+
+    -- Send Add-Member message with delegation info
     ao.send({
         Target = server_id,
         Action = "Add-Member",
-        Tags = { User = id }
+        Tags = tags
     })
 
     res:json({
@@ -217,6 +350,7 @@ end)
 
 app.post("/leave-server", function(req, res)
     local id = req.msg.From
+    id = TranslateDelegation(id)
     local server_id = req.body.server_id
 
     local profile = GetProfile(id)
@@ -272,7 +406,7 @@ end)
 -- Get all unread notifications for a user
 app.get("/get-notifications", function(req, res)
     local id = req.body.id or req.msg.From
-
+    id = TranslateDelegation(id)
     -- Get all notifications for this user (since we're now deleting them instead of marking as read)
     local notifications = SQLRead([[
         SELECT * FROM notifications
@@ -289,6 +423,7 @@ end)
 -- Mark notifications as read for a specific server and channel
 app.post("/mark-read", function(req, res)
     local id = req.msg.From
+    id = TranslateDelegation(id)
     local server_id = req.body.server_id
     local channel_id = req.body.channel_id
 
@@ -319,6 +454,7 @@ Handlers.add("Add-Notification", function(msg)
     local channel_id = tonumber(msg.Tags.Channel_ID)
     local message_id = msg.Tags.Message_ID
     local author_id = msg.Tags.Author_ID
+    author_id = TranslateDelegation(author_id)
     local author_name = msg.Tags.Author_Name
     local content = msg.Tags.Content
     local channel_name = msg.Tags.Channel_Name

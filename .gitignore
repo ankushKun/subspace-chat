@@ -26,3 +26,8 @@ dist-ssr
 dist-id.txt
 dist-manifest.json
 dist-manifest.csv
+
+localhost-key.pem
+localhost.pem
+localhost-cert.pem
+localhost-ca.pem

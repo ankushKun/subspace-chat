@@ -5,6 +5,8 @@ import path from "path"
 import fs from "fs"
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa'
+import ssl from '@vitejs/plugin-basic-ssl'
+
 
 // More robust way to get package version
 let packageVersion = 'DEV-FALLBACK'; // Default fallback version
@@ -113,6 +115,19 @@ export default defineConfig({
     }
   })],
   base: "./",
+  server: {
+    host: '0.0.0.0',
+    https: {
+      // Generate localhost SSL certificates using mkcert:
+      // 1. Install mkcert: https://github.com/FiloSottile/mkcert#installation
+      // 2. Run: mkcert -install
+      // 3. Run: mkcert localhost
+      // This will generate localhost.pem and localhost-key.pem files
+      key: fs.readFileSync(path.resolve(__dirname, "./localhost-key.pem")),
+      cert: fs.readFileSync(path.resolve(__dirname, "./localhost.pem")),
+    }
+
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

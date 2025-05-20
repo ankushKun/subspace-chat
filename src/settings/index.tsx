@@ -8,6 +8,7 @@ import { SettingsContent } from '@/settings/components/settings-content'
 import { Button } from '@/components/ui/button'
 import type { Theme } from '@/components/theme-provider'
 import s from "@/assets/s.png"
+import ConnectedDevices from './connected-devices'
 
 type SettingsSection = 'appearance' | 'devices'
 
@@ -98,12 +99,7 @@ export default function Settings() {
                     </div>
                 )
             case 'devices':
-                return (
-                    <div className="space-y-4">
-                        <h2 className="text-lg font-medium">Connected Devices</h2>
-                        <p className="text-muted-foreground">Manage your connected devices here.</p>
-                    </div>
-                )
+                return <ConnectedDevices />
             default:
                 return null
         }

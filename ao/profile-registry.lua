@@ -68,7 +68,7 @@ db:exec([[
 -- Record for original id and delegated id (addresses)
 -- whenever a request is received, if it is a delegated id, use the original id in place of the delegated id
 -- [delegated_id] = original_id
-Delegations = {}
+Delegations = Delegations or {}
 
 function TranslateDelegation(id)
     assert(type(id) == "string", "❌[delegation error] id is not a string")
@@ -127,31 +127,34 @@ end
 
 app.get("/profile", function(req, res)
     local id = req.body.id or req.msg.From
-    id = TranslateDelegation(id)
-    local profile = GetProfile(id)
-    if profile then
-        res:json({
-            success = true,
-            profile = profile
-        })
-    else
+    local original_id = TranslateDelegation(id)
+    local profile = GetProfile(original_id)
+
+    if not profile then
         -- create profile if it doesn't exist
-        UpdateProfile(id, nil, DEFAULT_PFP)
-        profile = GetProfile(id)
-        res:json({
-            success = true,
-            profile = profile
-        })
-        -- res:status(404):json({
-        --     success = false,
-        --     error = "Profile not found"
-        -- })
+        UpdateProfile(original_id, nil, DEFAULT_PFP)
+        profile = GetProfile(original_id)
     end
+
+    local response = {
+        success = true,
+        profile = profile
+    }
+    -- If this is a delegated address, include the original_id
+    if id ~= original_id then
+        response.profile.original_id = original_id
+    end
+    res:json(response)
 end)
 
 app.post("/delegate", function(req, res)
     local id = req.msg.From
     local delegated_id = tostring(req.body.delegated_id)
+
+    print("Attempting delegation:")
+    print("From ID:", id)
+    print("To delegated_id:", delegated_id)
+    print("Current delegations:", json.encode(Delegations))
 
     -- Prevent self-delegation
     if delegated_id == id then
@@ -161,17 +164,20 @@ app.post("/delegate", function(req, res)
         })
     end
 
-    -- Check if delegated_id is already delegated
-    if Delegations[delegated_id] then
+    -- Check if delegated_id is already delegated by someone else
+    if Delegations[delegated_id] and Delegations[delegated_id] ~= id then
+        print("Delegation blocked: Address already delegated by someone else")
         return res:status(400):json({
             success = false,
-            error = "Address is already delegated"
+            error = "Address is already delegated by someone else"
         })
     end
 
-    -- Check if id is already a delegatee
+    -- Check if id is already a delegatee (someone has delegated to this address)
     for d_id, o_id in pairs(Delegations) do
-        if o_id == id then
+        if d_id == id then
+            print("Delegation blocked: ID is already a delegatee")
+            print("Found delegation:", d_id, "->", o_id)
             return res:status(400):json({
                 success = false,
                 error = "Cannot delegate as you are already delegated"
@@ -179,16 +185,15 @@ app.post("/delegate", function(req, res)
         end
     end
 
-    -- Check if id is already a delegator
+    -- Remove any existing delegation where this address is the original_id
     for d_id, o_id in pairs(Delegations) do
-        if o_id == delegated_id then
-            return res:status(400):json({
-                success = false,
-                error = "Cannot delegate to an address that is already a delegator"
-            })
+        if o_id == id then
+            print("Removing existing delegation:", d_id, "->", o_id)
+            Delegations[d_id] = nil
         end
     end
 
+    -- Create the new delegation
     Delegations[delegated_id] = id
 
     local profile = GetProfile(id)

@@ -6,7 +6,7 @@ db = db or sqlite3.open_memory()
 PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
-server_icon = server_icon or ""
+server_icon = server_icon or "W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
 
 -- easily read from the database
 function SQLRead(query, ...)
@@ -75,7 +75,7 @@ r = db:exec([[
 -- Record for original id and delegated id (addresses)
 -- whenever a request is received, if it is a delegated id, use the original id in place of the delegated id
 -- [delegated_id] = original_id
-Delegations = {}
+Delegations = Delegations or {}
 
 function TranslateDelegation(id)
     assert(type(id) == "string", "❌[delegation error] id is not a string")
@@ -926,19 +926,19 @@ Handlers.add("Add-Delegation", function(msg)
         })
     end
 
-    -- Check if delegated_id is already delegated
-    if Delegations[delegated_id] then
+    -- Check if delegated_id is already delegated by someone else
+    if Delegations[delegated_id] and Delegations[delegated_id] ~= original_id then
         return ao.send({
             Target = msg.From,
             Action = "Error",
-            Data = "Address is already delegated",
+            Data = "Address is already delegated by someone else",
             Tags = { delegated_id = delegated_id, original_id = original_id }
         })
     end
 
-    -- Check if original_id is already a delegatee
+    -- Check if original_id is already a delegatee (someone has delegated to this address)
     for d_id, o_id in pairs(Delegations) do
-        if o_id == original_id then
+        if d_id == original_id then
             return ao.send({
                 Target = msg.From,
                 Action = "Error",
@@ -948,18 +948,15 @@ Handlers.add("Add-Delegation", function(msg)
         end
     end
 
-    -- Check if delegated_id is already a delegator
+    -- Remove any existing delegation where original_id is the delegator
     for d_id, o_id in pairs(Delegations) do
-        if o_id == delegated_id then
-            return ao.send({
-                Target = msg.From,
-                Action = "Error",
-                Data = "Cannot delegate to an address that is already a delegator",
-                Tags = { delegated_id = delegated_id, original_id = original_id }
-            })
+        if o_id == original_id then
+            print("Removing existing delegation:", d_id, "->", o_id)
+            Delegations[d_id] = nil
         end
     end
 
+    -- Create the new delegation
     Delegations[delegated_id] = original_id
 end)
 

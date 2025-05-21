@@ -4,6 +4,8 @@ import type { JWKInterface } from 'arweave/web/lib/wallet'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet'
+import { delegate } from '@/lib/ao'
+import { toast } from 'sonner'
 
 export default function ConnectedDevices() {
     const [delegateJWK, setDelegateJWK] = useState<JWKInterface | null>(null)
@@ -14,6 +16,7 @@ export default function ConnectedDevices() {
     async function genQR() {
         const ar = Arweave.init({})
         const jwk = await ar.wallets.generate()
+        console.log(JSON.stringify(jwk))
         const delegate_address = await ar.wallets.jwkToAddress(jwk)
         delete jwk.kty
         delete jwk.e
@@ -39,6 +42,16 @@ export default function ConnectedDevices() {
         }, 500)
         return () => clearInterval(interval)
     }, [delegateJWK, jwkPart])
+
+    useEffect(() => {
+        if (!delegateAddress) return
+        delegate(delegateAddress).then((res) => {
+            console.log(res)
+        }).catch((err) => {
+            console.error(err)
+            toast.error("Delegation failed: " + err.message)
+        })
+    }, [delegateAddress])
 
 
     return (

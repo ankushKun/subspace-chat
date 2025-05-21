@@ -2,6 +2,7 @@ import { createLogger } from './logger';
 import { aofetch } from "ao-fetch";
 import { ARIO } from "@ar.io/sdk";
 import { useGlobalState } from "@/hooks/global-state";
+import { useWallet } from "@/hooks/use-wallet";
 
 // Initialize AR.IO client for primary name lookup
 const ario = ARIO.mainnet();
@@ -234,7 +235,7 @@ class ProfileManager {
 
             // Create base profile
             const profile: UserProfile = {
-                id: userId,
+                id: profileData.profile?.original_id || userId,
                 username: profileData.profile?.username,
                 pfp: profileData.profile?.pfp,
                 timestamp: Date.now()

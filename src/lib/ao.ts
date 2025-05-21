@@ -920,10 +920,11 @@ export async function getProfile(address?: string) {
         const profileData = res.json as Record<string, any>;
 
         // Always try to fetch primary name if address is provided
-        if (address) {
+        if (profileData.profile?.original_id || address) {
+            const originalAddress = profileData.profile?.original_id ?? address;
             try {
-                logger.info(`[getProfile] Fetching primary name for ${address}`);
-                const primaryNameData = await ario.getPrimaryName({ address });
+                logger.info(`[getProfile] Fetching primary name for ${originalAddress}`);
+                const primaryNameData = await ario.getPrimaryName({ address: originalAddress });
 
                 if (primaryNameData && primaryNameData.name) {
                     logger.info(`[getProfile] Found primary name: ${primaryNameData.name}`);
@@ -939,7 +940,7 @@ export async function getProfile(address?: string) {
                     // Synchronize with the global state immediately
                     try {
                         const globalState = useGlobalState.getState();
-                        globalState.updateUserProfileCache(address, {
+                        globalState.updateUserProfileCache(originalAddress, {
                             username: profileData.profile?.username,
                             pfp: profileData.profile?.pfp,
                             primaryName: primaryNameData.name,

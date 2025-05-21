@@ -18,6 +18,7 @@ interface State {
     wanderInstance: WanderConnect | null
     jwk?: JWKInterface
     setWanderInstance: (instance: WanderConnect | null) => void
+    updateAddress: (address: string) => void
     connect: (strategy: ConnectionStrategies) => Promise<State>;
     disconnect: () => Promise<void>;
 }
@@ -28,7 +29,12 @@ export const useWallet = create<State>((set, get) => ({
     connected: false,
     connectionStrategy: null,
     wanderInstance: null,
+    jwk: undefined,
     setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
+    updateAddress: (address: string) => set({
+        address,
+        shortAddress: address ? address.slice(0, 5) + "..." + address.slice(-5) : null
+    }),
     connect: async (strategy: ConnectionStrategies) => {
         switch (strategy) {
             case ConnectionStrategies.JWK: {
@@ -136,14 +142,9 @@ export const useWallet = create<State>((set, get) => ({
     },
     disconnect: async () => {
         const state = get();
-        if (state.wanderInstance) {
-            state.wanderInstance.destroy();
-        }
-        set({ wanderInstance: null, connectionStrategy: null });
         switch (state.connectionStrategy) {
             case ConnectionStrategies.JWK: {
-                // todo
-                console.log("TODO")
+                window.localStorage.removeItem("subspace-jwk");
                 break;
             }
             case ConnectionStrategies.ArWallet: {
@@ -153,8 +154,10 @@ export const useWallet = create<State>((set, get) => ({
                 break;
             }
             case ConnectionStrategies.WanderConnect: {
-                // todo
-
+                if (state.wanderInstance) {
+                    state.wanderInstance.destroy();
+                }
+                set({ wanderInstance: null, connectionStrategy: null });
                 break;
             }
         }

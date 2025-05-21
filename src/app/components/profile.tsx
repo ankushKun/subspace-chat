@@ -30,7 +30,7 @@ import { useGlobalState } from '@/hooks/global-state';
 import { FileDropzone } from '@/components/ui/file-dropzone';
 
 export default function Profile() {
-    const { address: activeAddress, disconnect } = useWallet();
+    const { address: activeAddress, disconnect, updateAddress } = useWallet();
     const isMobile = useMobile();
     const [profileOpen, setProfileOpen] = useState(false);
     const {
@@ -99,7 +99,12 @@ export default function Profile() {
                     });
             });
         }
-    }, [profileData, activeAddress, updateUserProfileCache]);
+
+        // If delegated, update wallet address to original_id
+        if (profileData?.profile?.original_id && profileData.profile.original_id !== activeAddress) {
+            updateAddress(profileData.profile.original_id);
+        }
+    }, [profileData, activeAddress, updateUserProfileCache, updateAddress]);
 
     // Watch for address changes - forcefully refresh profile and cache when wallet changes
     useEffect(() => {
@@ -165,7 +170,7 @@ export default function Profile() {
                             setProfileData(result);
 
                             // Show toast for successful profile load
-                            toast.success(`Connected: ${result.primaryName || activeAddress.substring(0, 6) + '...'}`);
+                            // toast.success(`Connected: ${result.primaryName || activeAddress.substring(0, 6) + '...'}`);
 
                             // Ensure primary name is in the user profiles cache and component state
                             if (result.primaryName) {

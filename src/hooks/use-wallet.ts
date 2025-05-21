@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import "arweave"
 import { WanderConnect } from "@wanderapp/connect";
+import Arweave from "arweave";
+import type { JWKInterface } from "arweave/web/lib/wallet";
 
 export enum ConnectionStrategies {
     ArWallet = "ar_wallet",
@@ -14,6 +16,7 @@ interface State {
     connected: boolean;
     connectionStrategy: ConnectionStrategies | null;
     wanderInstance: WanderConnect | null
+    jwk?: JWKInterface
     setWanderInstance: (instance: WanderConnect | null) => void
     connect: (strategy: ConnectionStrategies) => Promise<State>;
     disconnect: () => Promise<void>;
@@ -34,10 +37,30 @@ export const useWallet = create<State>((set, get) => ({
                     state.wanderInstance.destroy();
                     set({ wanderInstance: null, connectionStrategy: null });
                 }
-                // todo
-                console.log("TODO")
-                window.localStorage.setItem("subspace-conn-strategy", ConnectionStrategies.JWK);
-                break;
+                const jwk = JSON.parse(window.localStorage.getItem("subspace-jwk") || "{}");
+                const requiredKeys = ["kty", "e", "n", "d", "p", "q", "dp", "dq", "qi"];
+                const allKeysPresent = requiredKeys.every(key => jwk[key]);
+                if (!allKeysPresent) {
+                    throw new Error("Missing required keys");
+                }
+                const ar = new Arweave({});
+                const addr = await ar.wallets.getAddress(jwk);
+                if (addr) {
+                    console.log("connecting to", addr);
+                    const d = {
+                        address: addr,
+                        shortAddress: addr.slice(0, 5) + "..." + addr.slice(-5),
+                        connected: true,
+                        connectionStrategy: ConnectionStrategies.JWK,
+                        jwk: jwk
+                    }
+                    set(d)
+                    window.localStorage.setItem("subspace-conn-strategy", JSON.stringify(ConnectionStrategies.JWK));
+                    return d as State;
+                }
+                else {
+                    throw new Error("Failed to get address");
+                }
             };
             case ConnectionStrategies.ArWallet: {
                 const state = get();
@@ -64,7 +87,7 @@ export const useWallet = create<State>((set, get) => ({
                     connected: true,
                     connectionStrategy: ConnectionStrategies.ArWallet
                 });
-                window.localStorage.setItem("subspace-conn-strategy", ConnectionStrategies.ArWallet);
+                window.localStorage.setItem("subspace-conn-strategy", JSON.stringify(ConnectionStrategies.ArWallet));
                 return { address, shortAddress, connected: true, connectionStrategy: ConnectionStrategies.ArWallet } as State;
             };
             case ConnectionStrategies.WanderConnect: {
@@ -95,6 +118,7 @@ export const useWallet = create<State>((set, get) => ({
                                         connectionStrategy: ConnectionStrategies.WanderConnect
                                     }
                                     set(d);
+                                    window.localStorage.setItem("subspace-conn-strategy", JSON.stringify(ConnectionStrategies.WanderConnect));
                                     return Promise.resolve(d);
                                 } catch (e) {
                                     console.error("Error", e);
@@ -105,7 +129,6 @@ export const useWallet = create<State>((set, get) => ({
                     set({ wanderInstance: wander, connectionStrategy: ConnectionStrategies.WanderConnect });
                     wander.open();
                 }
-                window.localStorage.setItem("subspace-conn-strategy", ConnectionStrategies.WanderConnect);
                 break;
             }
         }
@@ -135,7 +158,7 @@ export const useWallet = create<State>((set, get) => ({
                 break;
             }
         }
-        window.localStorage.setItem("subspace-conn-strategy", "");
+        window.localStorage.setItem("subspace-conn-strategy", JSON.stringify(null));
         window.location.reload();
     }
 }));

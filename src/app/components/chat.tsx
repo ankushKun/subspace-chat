@@ -23,6 +23,7 @@ import { FaInbox } from "react-icons/fa6";
 import { BiSolidInbox } from "react-icons/bi";
 import NotificationsPanel from "./notifications-panel";
 import { getProfile, fetchBulkProfiles, warmupProfileCache } from "@/lib/profile-manager";
+import { useWallet } from "@/hooks/use-wallet"
 
 // Message type from server
 interface Message {
@@ -113,25 +114,11 @@ export default function Chat() {
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     // Current user address
-    const [currentAddress, setCurrentAddress] = useState<string>("");
+    const { address } = useWallet()
     // Add a state to track profile cache updates
     const [profileCacheVersion, setProfileCacheVersion] = useState(0);
     // Create a ref to track previous server ID for handling collapsing users panel
     const prevServerIdRef = useRef<string | null>(null);
-
-    // Load current user address
-    useEffect(() => {
-        const loadCurrentAddress = async () => {
-            try {
-                const address = await window.arweaveWallet.getActiveAddress();
-                setCurrentAddress(address);
-            } catch (error) {
-                console.error("Error loading wallet address:", error);
-            }
-        };
-
-        loadCurrentAddress();
-    }, []);
 
     // Watch for profile changes that should trigger re-rendering of messages
     useEffect(() => {
@@ -424,7 +411,7 @@ export default function Chat() {
                 id: Date.now(), // Temporary ID
                 content: messageInput.trim(),
                 channel_id: activeChannelId,
-                author_id: await window.arweaveWallet.getActiveAddress(),
+                author_id: address,
                 msg_id: `optimistic-${Date.now()}`, // Temporary message ID
                 timestamp: Math.floor(Date.now() / 1000),
                 edited: 0
@@ -810,7 +797,7 @@ export default function Chat() {
     // Check if user is the author of a message
     const isMessageAuthor = async (authorId: string) => {
         try {
-            const currentAddress = await window.arweaveWallet.getActiveAddress();
+            const currentAddress = address;
             return currentAddress === authorId;
         } catch (error) {
             console.error("Error checking message author:", error);
@@ -820,21 +807,21 @@ export default function Chat() {
 
     // Check if the current user is the server owner
     const isServerOwner = useMemo(() => {
-        if (!activeServer || !currentAddress) return false;
-        return activeServer.owner === currentAddress;
-    }, [activeServer, currentAddress]);
+        if (!activeServer || !address) return false;
+        return activeServer.owner === address;
+    }, [activeServer, address]);
 
     // Show delete button if user is either the message author or the server owner
     const canDeleteMessage = (messageAuthorId: string) => {
-        return messageAuthorId === currentAddress || isServerOwner;
+        return messageAuthorId === address || isServerOwner;
     };
 
     // Check if a message mentions the current user
-    const messageContainsCurrentUserMention = (content: string, currentAddress: string) => {
-        if (!content || !currentAddress) return false;
+    const messageContainsCurrentUserMention = (content: string) => {
+        if (!content || !address) return false;
 
         // Check for mentions in the format @[display](id) where id matches current address
-        const mentionRegex = new RegExp(`@\\[.*?\\]\\(${currentAddress}\\)`, 'g');
+        const mentionRegex = new RegExp(`@\\[.*?\\]\\(${address}\\)`, 'g');
         return mentionRegex.test(content);
     };
 
@@ -915,7 +902,7 @@ export default function Chat() {
                     <div className="space-y-4 mt-5">
                         {messages.map((message) => {
                             // Check if the message mentions the current user
-                            const isCurrentUserMentioned = messageContainsCurrentUserMention(message.content, currentAddress);
+                            const isCurrentUserMentioned = messageContainsCurrentUserMention(message.content);
 
                             return (
                                 <div
@@ -998,7 +985,7 @@ export default function Chat() {
 
                                                 {/* Message actions - direct buttons instead of dropdown */}
                                                 <div className="ml-auto relative z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                                    {message.author_id === currentAddress && (
+                                                    {message.author_id === address && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -1020,7 +1007,7 @@ export default function Chat() {
                                                             className="h-6 w-6 text-destructive hover:text-destructive"
                                                             onClick={() => handleDeleteMessage(message)}
                                                             disabled={isEditing || isDeleting}
-                                                            title={isServerOwner && message.author_id !== currentAddress ? "Delete as server owner" : "Delete message"}
+                                                            title={isServerOwner && message.author_id !== address ? "Delete as server owner" : "Delete message"}
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
                                                         </Button>

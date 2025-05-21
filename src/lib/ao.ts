@@ -1,14 +1,15 @@
 import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
-import { ArconnectSigner, ArweaveSigner, type JWKInterface } from "@dha-team/arbundles"
+import { createDataItemSigner as nodeCDIS } from "@permaweb/aoconnect/node"
+import { ArconnectSigner, ArweaveSigner, type JWKInterface, createData, DataItem } from "@dha-team/arbundles/web"
 import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
 import type { Tag, Member, Server } from "@/lib/types"
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
 import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
 import { toast } from "sonner";  // Use sonner for toast messages
-import type { JWKPublicInterface } from "arweave/web/lib/wallet";
 import { createLogger } from '@/lib/logger'
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";
 
 // Create a logger for this module
 const logger = createLogger('ao');
@@ -48,6 +49,49 @@ let ao = connect({
     CU_URL: CU_ENDPOINTS[currentEndpointIndex],
 });
 
+function getConnectionStrategy() {
+    const connectionStrategy = JSON.parse(localStorage.getItem("subspace-conn-strategy") || '""')
+    if (connectionStrategy == ConnectionStrategies.JWK) {
+        const jwk = JSON.parse(localStorage.getItem("subspace-jwk") || '{}')
+        return {
+            strategy: "jwk",
+            jwk: jwk
+        }
+    }
+    return { strategy: connectionStrategy }
+}
+
+function getAOSigner() {
+    const connectionStrategy = getConnectionStrategy()
+    if (connectionStrategy.strategy == ConnectionStrategies.JWK) {
+        const jwk = connectionStrategy.jwk
+        const newSigner = async (create, createDataItem = (buf) => new DataItem(buf)) => {
+            console.log("create", create)
+            console.log("createDataItem", createDataItem)
+
+            const { data, tags, target, anchor } = await create({ alg: 'rsa-v1_5-sha256', passthrough: true })
+
+            const signer = async ({ data, tags, target, anchor }) => {
+                console.log("data", data)
+                console.log("tags", tags)
+                console.log("target", target)
+                console.log("anchor", anchor)
+                const signer = new ArweaveSigner(jwk)
+                const dataItem = createData(data, signer, { tags, target, anchor })
+                return dataItem.sign(signer)
+                    .then(async () => ({
+                        id: await dataItem.id,
+                        raw: await dataItem.getRaw()
+                    }))
+            }
+
+            return signer({ data, tags, target, anchor })
+        }
+        return newSigner
+    }
+    return createDataItemSigner(window.arweaveWallet)
+}
+
 // Function to switch to the next endpoint when we encounter connection issues
 function switchToNextEndpoint() {
     // Update the endpoint index
@@ -85,23 +129,26 @@ export function to(file: File): Promise<Uint8Array> {
 }
 
 export async function createServer(name: string, icon: File) {
-    logger.info("Spawning server...", { name, icon: icon.name });
+    logger.info("Spawning server...", { name, icon: icon?.name || "none" });
 
+    let data: any;
+    let tags = [
+        ...CommonTags,
+        { name: "Name", value: name },
+    ];
     // Read the file as an ArrayBuffer properly
-    const iconUint8Array = await to(icon);
-
-    logger.info("Icon array buffer created", iconUint8Array.byteLength, icon.type);
+    if (icon) {
+        data = await to(icon);
+        logger.info("Icon array buffer created", data.byteLength, icon.type);
+        tags.push({ name: "Content-Type", value: icon.type })
+    }
 
     const serverId = await ao.spawn({
         scheduler: SCHEDULER,
         module: MODULE,
-        signer: createDataItemSigner(window.arweaveWallet),
-        tags: [
-            ...CommonTags,
-            { name: "Name", value: name },
-            { name: "Content-Type", value: icon.type }
-        ],
-        data: iconUint8Array
+        signer: getAOSigner(),
+        tags,
+        data
     })
 
     logger.info("Got server id", serverId);
@@ -117,6 +164,7 @@ export async function createServer(name: string, icon: File) {
     logger.info("Server initialized");
 
     logger.info("Updating server details...");
+    const signer = getAOSigner()
     const updateServerRes = await aofetch(`${serverId}/update-server`, {
         method: "POST",
         body: {
@@ -124,6 +172,7 @@ export async function createServer(name: string, icon: File) {
             icon: serverId
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: signer
     })
     logger.info("Update server response:", JSON.stringify(updateServerRes));
 
@@ -140,6 +189,7 @@ export async function createServer(name: string, icon: File) {
             server_id: serverId
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     })
     logger.info("Join server response:", JSON.stringify(joinServerRes));
     if (joinServerRes.status == 200) {
@@ -152,7 +202,7 @@ export async function createServer(name: string, icon: File) {
 }
 
 export async function runLua(code: string, process: string, tags?: Tag[]) {
-    logger.info("Running lua", code);
+    logger.info("Running lua", code.slice(0, 100), "...");
 
     if (tags) {
         tags = [...CommonTags, ...tags];
@@ -162,10 +212,13 @@ export async function runLua(code: string, process: string, tags?: Tag[]) {
 
     tags = [...tags, { name: "Action", value: "Eval" }];
 
+    // Get a fresh signer each time
+    const currentSigner = getAOSigner();
+
     const message = await ao.message({
         process,
         data: code,
-        signer: createDataItemSigner(window.arweaveWallet),
+        signer: currentSigner,
         tags,
     });
     // delay 100ms before getting result
@@ -247,10 +300,12 @@ async function uploadWithStandardArweave(file: File): Promise<string> {
         protocol: "https",
     });
 
+    const connectionStrategy = getConnectionStrategy()
+
     const fileData = await to(file);
     logger.info(`[uploadWithStandardArweave] File converted to Uint8Array:`, fileData.byteLength);
 
-    const tx = await ar.createTransaction({ data: fileData }, "use_wallet");
+    const tx = await ar.createTransaction({ data: fileData }, connectionStrategy.strategy == ConnectionStrategies.JWK ? connectionStrategy.jwk : "use_wallet");
     logger.info(`[uploadWithStandardArweave] Transaction created:`, tx.id);
 
     tx.addTag("Content-Type", file.type);
@@ -259,7 +314,7 @@ async function uploadWithStandardArweave(file: File): Promise<string> {
     tx.addTag("App-Version", window.APP_VERSION);
 
     logger.info(`[uploadWithStandardArweave] Signing transaction...`);
-    await ar.transactions.sign(tx, "use_wallet");
+    await ar.transactions.sign(tx, connectionStrategy.strategy == ConnectionStrategies.JWK ? connectionStrategy.jwk : "use_wallet");
     logger.info(`[uploadWithStandardArweave] Transaction signed, posting...`);
 
     const res = await ar.transactions.post(tx);
@@ -279,7 +334,7 @@ export async function getJoinedServers(address: string): Promise<string[]> {
         body: {
             id: address
         },
-        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex]
     })
     logger.info(`[getJoinedServers] Response:`, res);
 
@@ -513,6 +568,7 @@ export async function updateServer(id: string, name: string, icon: string) {
             icon
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[updateServer] Response:`, res);
     if (res.status == 200) {
@@ -547,6 +603,7 @@ export async function createCategory(serverId: string, name: string, order?: num
         method: "POST",
         body: body,
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[createCategory] Response:`, res);
     if (res.status == 200) {
@@ -580,6 +637,7 @@ export async function updateCategory(serverId: string, id: number, name: string,
         method: "POST",
         body: body,
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[updateCategory] Response:`, res);
     if (res.status == 200) {
@@ -603,6 +661,7 @@ export async function deleteCategory(serverId: string, id: number) {
             id
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[deleteCategory] Response:`, res);
     if (res.status == 200) {
@@ -640,6 +699,7 @@ export async function createChannel(serverId: string, name: string, categoryId?:
         method: "POST",
         body: body,
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[createChannel] Response:`, res);
     if (res.status == 200) {
@@ -686,6 +746,7 @@ export async function updateChannel(serverId: string, id: number, name?: string,
         method: "POST",
         body: body,
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[updateChannel] Response:`, res);
     if (res.status == 200) {
@@ -709,6 +770,7 @@ export async function deleteChannel(serverId: string, id: number) {
             id
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[deleteChannel] Response:`, res);
     if (res.status == 200) {
@@ -750,6 +812,7 @@ export async function sendMessage(serverId: string, channelId: number, content: 
             content
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[sendMessage] Response:`, res);
     if (res.status == 200) {
@@ -768,6 +831,7 @@ export async function editMessage(serverId: string, msgId: string, content: stri
             content
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[editMessage] Response:`, res);
     if (res.status == 200) {
@@ -785,6 +849,7 @@ export async function deleteMessage(serverId: string, msgId: string) {
             msg_id: msgId
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[deleteMessage] Response:`, res);
     if (res.status == 200) {
@@ -807,15 +872,16 @@ export async function updateNickname(serverId: string, nickname: string) {
                 nickname: safeNickname
             },
             CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            signer: getAOSigner()
         });
         logger.info(`[updateNickname] Response:`, res);
 
         if (res.status == 200) {
             // Directly update local cache for instant UI updates
             try {
-                const activeAddress = await window.arweaveWallet.getActiveAddress();
+                const { address } = useWallet();
                 const globalState = useGlobalState.getState();
-                globalState.updateMemberNickname(serverId, activeAddress, safeNickname);
+                globalState.updateMemberNickname(serverId, address, safeNickname);
             } catch (error) {
                 logger.warn('[updateNickname] Failed to update local cache:', error);
             }
@@ -845,7 +911,7 @@ export async function getProfile(address?: string) {
     const res = await aofetch(`${PROFILES}/profile`, {
         method: "GET",
         body: address ? { id: address } : undefined,
-        CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        CU_URL: CU_ENDPOINTS[currentEndpointIndex]
     });
     logger.info(`[getProfile] Response:`, res);
 
@@ -999,6 +1065,7 @@ export async function updateProfile(username?: string, pfp?: string) {
             pfp
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[updateProfile] Response:`, res);
     if (res.status == 200) {
@@ -1016,6 +1083,7 @@ export async function joinServer(serverId: string) {
             server_id: serverId
         },
         CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+        signer: getAOSigner()
     });
     logger.info(`[joinServer] Response:`, res);
     if (res.status == 200) {
@@ -1044,6 +1112,7 @@ export async function leaveServer(serverId: string): Promise<boolean> {
                 server_id: serverId
             },
             CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            signer: getAOSigner()
         });
         logger.info(`[leaveServer] Response:`, res);
 
@@ -1077,6 +1146,7 @@ export async function delegate(delegatedId: string): Promise<boolean> {
                 delegated_id: delegatedId
             },
             CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            signer: getAOSigner()
         });
         logger.info(`[delegate] Response:`, res);
 
@@ -1104,6 +1174,7 @@ export async function undelegate(delegatedId: string): Promise<boolean> {
                 delegated_id: delegatedId
             },
             CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            signer: getAOSigner()
         });
         logger.info(`[undelegate] Response:`, res);
 
@@ -1282,6 +1353,7 @@ export async function markNotificationsAsRead(serverId: string, channelId: numbe
                 channel_id: channelId
             },
             CU_URL: CU_ENDPOINTS[currentEndpointIndex],
+            signer: getAOSigner()
         });
 
         logger.info(`[markNotificationsAsRead] Response:`, res);

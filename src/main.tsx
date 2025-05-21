@@ -13,6 +13,7 @@ import { setLogLevel, LogLevel } from './lib/logger'
 import { UpdatePrompt } from './components/update-prompt'
 import { UpdateLoader } from './components/update-loader'
 import { useWallet, ConnectionStrategies } from '@/hooks/use-wallet'
+import { useLocalStorage } from '@uidotdev/usehooks'
 
 // Use React.lazy for code splitting
 const Landing = lazy(() => import('@/landing'))
@@ -38,7 +39,21 @@ const LoadingFallback = () => (
 );
 
 function Main() {
+  const [lastStrategy, setLastStrategy] = useLocalStorage<ConnectionStrategies | null>("subspace-conn-strategy", null);
   const { connect, wanderInstance, setWanderInstance, connected, connectionStrategy } = useWallet();
+
+  useEffect(() => {
+    console.log("connected", connected);
+    console.log("lastStrategy", lastStrategy);
+    if (!connected && lastStrategy) {
+      console.log("Connecting with last strategy", lastStrategy);
+      connect(lastStrategy).then((s) => {
+        if (connectionStrategy == ConnectionStrategies.WanderConnect) {
+          wanderInstance?.close();
+        }
+      });
+    }
+  }, [lastStrategy, connected]);
 
   return <ThemeProvider defaultTheme="dark" storageKey='subspace-ui-theme'>
     <QueryClientProvider client={queryClient}>

@@ -514,9 +514,9 @@ export default function ServerList() {
             return toast.error("Please enter a server name");
         }
 
-        if (!serverIcon) {
-            return toast.error("Please upload a server icon");
-        }
+        // if (!serverIcon) {
+        //     return toast.error("Please upload a server icon");
+        // }
 
         try {
             toast.loading("Creating server... Don't close this window!");
@@ -535,7 +535,7 @@ export default function ServerList() {
         } catch (error) {
             console.error("Error creating server:", error);
             toast.dismiss();
-            toast.error(error instanceof Error ? error.message : "Failed to create server");
+            toast.error(error.message);
         }
     }
 

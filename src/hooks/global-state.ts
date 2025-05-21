@@ -3,6 +3,7 @@ import type { Server, Member } from '@/lib/types'
 import { useEffect, useState, useRef } from 'react'
 import { getServerInfo, getMembers, getJoinedServers, getProfile } from '@/lib/ao'
 import { createLogger } from '@/lib/logger'
+import { useWallet } from './use-wallet'
 
 // Create a logger for this module
 const logger = createLogger('global-state')
@@ -1105,7 +1106,7 @@ export function useBackgroundPreload() {
         fetchUserProfileAndCache,
         fetchJoinedServers
     } = useGlobalState();
-    const activeAddress = useActiveWalletAddress();
+    const { address } = useWallet()
 
     // Track if initial load has happened
     const initialLoadCompleted = useRef(false);
@@ -1113,27 +1114,27 @@ export function useBackgroundPreload() {
     const MAX_RETRY_ATTEMPTS = 3;
 
     useEffect(() => {
-        if (activeAddress) {
+        if (address) {
             // Only log on first load or address change
             if (!initialLoadCompleted.current) {
-                logger.log(`[useBackgroundPreload] Initial load for address: ${activeAddress}`);
+                logger.log(`[useBackgroundPreload] Initial load for address: ${address}`);
                 initialLoadCompleted.current = true;
                 profileLoadAttempts.current = 0;
             } else {
-                logger.log(`[useBackgroundPreload] Address changed to: ${activeAddress}`);
+                logger.log(`[useBackgroundPreload] Address changed to: ${address}`);
                 profileLoadAttempts.current = 0;
             }
 
             // Critical data loading function with retries
             const loadCriticalData = async () => {
                 try {
-                    logger.log(`[useBackgroundPreload] Loading critical user data for ${activeAddress}`);
+                    logger.log(`[useBackgroundPreload] Loading critical user data for ${address}`);
 
                     // Step 1: Fetch user profile with retry logic
                     let profileData = null;
                     try {
-                        logger.log(`[useBackgroundPreload] Fetching user profile for ${activeAddress}`);
-                        profileData = await fetchUserProfile(activeAddress, true);
+                        logger.log(`[useBackgroundPreload] Fetching user profile for ${address}`);
+                        profileData = await fetchUserProfile(address, true);
                         if (profileData) {
                             logger.log(`[useBackgroundPreload] Successfully loaded user profile`);
                         } else {
@@ -1159,13 +1160,13 @@ export function useBackgroundPreload() {
                     // (This happens as part of fetchUserProfile, but we ensure it's there)
                     if (profileData && !profileData.primaryName) {
                         logger.log(`[useBackgroundPreload] Ensuring user primary name is fetched`);
-                        await fetchUserProfileAndCache(activeAddress, true);
+                        await fetchUserProfileAndCache(address, true);
                     }
 
                     // Step 3: Load joined servers list
                     try {
                         logger.log(`[useBackgroundPreload] Fetching user's joined servers`);
-                        const serverIds = await fetchJoinedServers(activeAddress, true);
+                        const serverIds = await fetchJoinedServers(address, true);
                         logger.log(`[useBackgroundPreload] Loaded ${serverIds.length} joined servers`);
                     } catch (err) {
                         logger.warn('[useBackgroundPreload] Failed to fetch joined servers:', err);
@@ -1175,7 +1176,7 @@ export function useBackgroundPreload() {
                     // This includes server info and members with lower priority
                     logger.log(`[useBackgroundPreload] Starting background server data prefetch`);
                     setTimeout(() => {
-                        prefetchAllServerData(activeAddress);
+                        prefetchAllServerData(address);
                     }, 500);
 
                 } catch (err) {
@@ -1186,30 +1187,8 @@ export function useBackgroundPreload() {
             // Execute critical data loading immediately
             loadCriticalData();
         }
-    }, [activeAddress, prefetchAllServerData, fetchUserProfile, fetchUserProfileAndCache, fetchJoinedServers]);
+    }, [address, prefetchAllServerData, fetchUserProfile, fetchUserProfileAndCache, fetchJoinedServers]);
 
     return null;
-}
-
-// Helper to get the active wallet address
-function useActiveWalletAddress() {
-    const [address, setAddress] = useState<string | null>(null);
-
-    useEffect(() => {
-        async function getAddress() {
-            try {
-                if (window.arweaveWallet) {
-                    const addr = await window.arweaveWallet.getActiveAddress();
-                    setAddress(addr);
-                }
-            } catch (error) {
-                logger.error("Error getting wallet address:", error);
-            }
-        }
-
-        getAddress();
-    }, []);
-
-    return address;
 }
 

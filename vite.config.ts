@@ -116,16 +116,20 @@ export default defineConfig({
   })],
   base: "./",
   server: {
-    host: '0.0.0.0',
-    https: {
-      // Generate localhost SSL certificates using mkcert:
-      // 1. Install mkcert: https://github.com/FiloSottile/mkcert#installation
-      // 2. Run: mkcert -install
-      // 3. Run: mkcert localhost
-      // This will generate localhost.pem and localhost-key.pem files
-      key: fs.readFileSync(path.resolve(__dirname, "./localhost-key.pem")),
-      cert: fs.readFileSync(path.resolve(__dirname, "./localhost.pem")),
-    }
+    // host: '0.0.0.0',
+    // https: {
+    //   // Generate localhost SSL certificates using mkcert:
+    //   // 1. Install mkcert: https://github.com/FiloSottile/mkcert#installation
+    //   // 2. Run: mkcert -install
+    //   // 3. Run: mkcert localhost
+    //   // This will generate localhost.pem and localhost-key.pem files
+    //   key: fs.readFileSync(path.resolve(__dirname, "./localhost-key.pem")),
+    //   cert: fs.readFileSync(path.resolve(__dirname, "./localhost.pem")),
+    // }
+
+    allowedHosts: [
+      "d8d0-2405-201-801a-4850-dd8a-239a-9c92-c082.ngrok-free.app",
+    ]
 
   },
   resolve: {

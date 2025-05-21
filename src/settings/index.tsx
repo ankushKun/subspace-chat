@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Moon, QrCode, Sun, X, Check, RefreshCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useConnection } from '@arweave-wallet-kit/react'
 import { useTheme } from '@/components/theme-provider'
 import { SettingsSidebar } from '@/settings/components/settings-sidebar'
 import { SettingsContent } from '@/settings/components/settings-content'
@@ -9,12 +8,13 @@ import { Button } from '@/components/ui/button'
 import type { Theme } from '@/components/theme-provider'
 import s from "@/assets/s.png"
 import ConnectedDevices from './connected-devices'
+import { useWallet } from '@/hooks/use-wallet'
 
 type SettingsSection = 'appearance' | 'devices'
 
 export default function Settings() {
     const navigate = useNavigate()
-    const { connected } = useConnection()
+    const { connected } = useWallet()
     const { theme, setTheme } = useTheme()
     const [activeSection, setActiveSection] = useState<SettingsSection>('appearance')
 

@@ -31,4 +31,8 @@ export function useMobile(breakpoint: number = 768) {
     return isMobile;
 }
 
+export function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 export default useMobile; 

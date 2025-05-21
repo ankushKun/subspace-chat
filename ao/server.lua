@@ -99,9 +99,9 @@ function isOwner(id)
 end
 
 function GetProfile(id)
-    local profile = SQLRead("SELECT * FROM profiles WHERE id = ?", id)
+    local profile = SQLRead("SELECT * FROM members WHERE id = ?", id)
     if #profile == 1 then
-        return profile[1].profile
+        return profile[1]
     end
     return nil
 end

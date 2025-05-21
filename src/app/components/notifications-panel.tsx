@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getNotifications, markNotificationsAsRead } from "@/lib/ao";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useWallet } from '@/hooks/use-wallet';
 import { format } from "date-fns";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export default function NotificationsPanel() {
         activeServerId,
         activeChannelId
     } = useGlobalState();
-    const address = useActiveAddress();
+    const { address } = useWallet();
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
 
     // Load joined servers list

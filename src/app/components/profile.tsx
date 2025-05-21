@@ -1,5 +1,5 @@
 import { Mic, Headphones, Settings, LogOut, User, Upload, X, Pencil, Save, Loader2 } from 'lucide-react'
-import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
+import { useWallet } from '@/hooks/use-wallet';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -30,8 +30,7 @@ import { useGlobalState } from '@/hooks/global-state';
 import { FileDropzone } from '@/components/ui/file-dropzone';
 
 export default function Profile() {
-    const activeAddress = useActiveAddress();
-    const { disconnect } = useConnection();
+    const { address: activeAddress, disconnect } = useWallet();
     const isMobile = useMobile();
     const [profileOpen, setProfileOpen] = useState(false);
     const {

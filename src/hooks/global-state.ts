@@ -2,8 +2,6 @@ import { create } from 'zustand'
 import type { Server, Member } from '@/lib/types'
 import { useEffect, useState, useRef } from 'react'
 import { getServerInfo, getMembers, getJoinedServers, getProfile } from '@/lib/ao'
-import { persist } from 'zustand/middleware'
-import type { WanderConnect } from '@wanderapp/connect'
 import { createLogger } from '@/lib/logger'
 
 // Create a logger for this module
@@ -262,9 +260,6 @@ export interface GlobalState {
 
     showUsers: boolean
     setShowUsers: (show: boolean) => void
-
-    wanderInstance: WanderConnect | null
-    setWanderInstance: (instance: WanderConnect | null) => void
 
     // User profile management
     userProfile: CachedUserProfile | null
@@ -822,9 +817,6 @@ export const useGlobalState = create<GlobalState>((set, get) => ({
     },
     showUsers: false,
     setShowUsers: (show: boolean) => set({ showUsers: show }),
-
-    wanderInstance: null,
-    setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
 
     // User profile state implementation
     userProfile: loadUserProfileCache(),

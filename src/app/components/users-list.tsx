@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, UserIcon, Loader2, ShieldIcon, AlertCircle, RefreshCcw } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { Member } from "@/lib/types";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useWallet } from '@/hooks/use-wallet';
 import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
 import { PopoverTrigger } from "@/components/ui/popover";
@@ -55,7 +55,7 @@ export default function UsersList() {
     const [isRetrying, setIsRetrying] = useState(false);
     const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
     const isMobile = useMobile();
-    const activeAddress = useActiveAddress();
+    const { address: activeAddress } = useWallet();
     const abortControllerRef = useRef<AbortController | null>(null);
     const hasLoadedProfilesRef = useRef(false);
     const processedMembersRef = useRef<string>('');

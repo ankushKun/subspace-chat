@@ -9,7 +9,7 @@ import type { Channel, Category } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
 import { updateChannel, updateCategory, createChannel, refreshCurrentServerData, markNotificationsAsRead } from '@/lib/ao';
 import { toast } from 'sonner';
-import { useActiveAddress } from '@arweave-wallet-kit/react';
+import { useWallet } from '@/hooks/use-wallet';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -43,7 +43,7 @@ export default function DraggableChannelList() {
     } = useGlobalState();
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
     const navigate = useNavigate();
-    const activeAddress = useActiveAddress();
+    const { address: activeAddress } = useWallet();
 
     // Refs to track operations and retries
     const isRefreshing = useRef(false);

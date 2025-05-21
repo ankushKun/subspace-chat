@@ -29,9 +29,8 @@ import { createServer, getServerInfo, joinServer, getMembers } from "@/lib/ao";
 import { Input } from "@/components/ui/input";
 import { useDropzone } from "react-dropzone";
 import * as Progress from "@radix-ui/react-progress";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet';
 import { useNavigate } from "react-router-dom";
-import { useLocalStorage } from "@uidotdev/usehooks";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 
 // Helper function to clean up server data from browser storage
@@ -306,7 +305,6 @@ if (typeof window !== 'undefined') {
 export default function ServerList() {
     const {
         activeServerId,
-        wanderInstance,
         fetchServerInfo,
         fetchJoinedServers,
         serverListCache
@@ -320,8 +318,7 @@ export default function ServerList() {
     const [joinedServers, setJoinedServers] = useState<string[]>([]);
     const [deferredPrompt, setDeferredPrompt] = useState<any>(deferredPromptEvent);
     const [isInstallable, setIsInstallable] = useState(!!deferredPromptEvent);
-    const [useWC, setUseWC] = useLocalStorage("useWC", true);
-    const address = useActiveAddress();
+    const { address, wanderInstance, connectionStrategy } = useWallet();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -576,8 +573,8 @@ export default function ServerList() {
 
             <div className="mt-auto" />
 
-            <Button
-                disabled={!useWC}
+            {connectionStrategy === ConnectionStrategies.WanderConnect && <Button
+                disabled={connectionStrategy !== ConnectionStrategies.WanderConnect}
                 variant='outline'
                 size='icon'
                 className='w-10 h-10 rounded-lg hover:bg-primary/10 transition-colors'
@@ -585,7 +582,7 @@ export default function ServerList() {
                 title="Open Wallet"
             >
                 <WalletCards className="h-5 w-5" />
-            </Button>
+            </Button>}
 
             {/* Install app button - only shown when installable */}
             {isInstallable && (

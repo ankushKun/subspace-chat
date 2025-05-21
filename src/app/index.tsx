@@ -2,7 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGlobalState, useServerSync, useCachePersistence, useBackgroundPreload } from '@/hooks/global-state';
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { getNotifications, markNotificationsAsRead } from '@/lib/ao';
-import { useActiveAddress, useConnection } from '@arweave-wallet-kit/react';
+import { useWallet } from '@/hooks/use-wallet';
 import { useMobile } from '@/hooks';
 import { sendNotification } from '@/lib/utils';
 import profileManager, { warmupProfileCache } from '@/lib/profile-manager';
@@ -46,7 +46,7 @@ const initializeRequestLimiting = () => {
 };
 
 export default function App() {
-    const { connected } = useConnection();
+    const { address, connected } = useWallet();
     const isMobile = useMobile();
     const navigate = useNavigate();
     const { serverId, channelId, userId } = useParams();
@@ -58,7 +58,6 @@ export default function App() {
         showUsers,
         setShowUsers
     } = useGlobalState();
-    const address = useActiveAddress();
     const initRef = useRef(false);
     const lastChannelRef = useRef<{ serverId: string | null, channelId: number | null }>({
         serverId: null,

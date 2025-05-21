@@ -4,33 +4,26 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { FaApple, FaDiscord, FaGoogle, FaPuzzlePiece, FaXTwitter } from "react-icons/fa6"
 import { BiWallet } from "react-icons/bi";
 import TextWLine from "@/components/text-w-line";
-import { useActiveAddress, useConnection, useProfileModal } from "@arweave-wallet-kit/react"
+import { useWallet, ConnectionStrategies } from '@/hooks/use-wallet';
 import { useNavigate } from "react-router-dom"
 import BackgroundStars from "@/components/background-stars";
 import { CornerDownLeftIcon, WalletCards, WalletCardsIcon } from "lucide-react";
 import { useGlobalState } from "@/hooks";
-import { useLocalStorage } from "@uidotdev/usehooks";
 import { Switch } from "@/components/ui/switch"
 import s from "@/assets/s.png"
 
 
 enum LoginStep {
   Landing = "landing",
-  Login = "login",
-  Register = "register",
+  Login = "login"
 }
 
 export default function Landing() {
   const [loginStep, setLoginStep] = useState<LoginStep>(LoginStep.Landing);
-  const { connect, connected, disconnect } = useConnection();
-  const { setOpen } = useProfileModal();
-  const address = useActiveAddress();
+  const { connect, connected, address, disconnect, wanderInstance } = useWallet();
   const navigate = useNavigate();
-  const { wanderInstance } = useGlobalState();
-  const [useWC, setUseWC] = useLocalStorage("useWC", false);
   const [sClickCount, setSClickCount] = useState(0);
   const [showClickCount, setShowClickCount] = useState(false);
-
 
   useEffect(() => {
     if (connected && address) {
@@ -64,14 +57,6 @@ export default function Landing() {
     }
     else
       setLoginStep(LoginStep.Login);
-  }
-
-  async function loginWithArweave() {
-    if (connected)
-      setOpen(true);
-    else {
-      connect()
-    }
   }
 
   useEffect(() => {
@@ -120,13 +105,6 @@ export default function Landing() {
           <img src={s} className="w-8 h-8 mb-2.5 mr-1 cursor-pointer" onClick={sClicked} draggable={false} />
         </div>
         <ModeToggle />
-        <Button
-          disabled={!useWC}
-          variant="outline" size="icon"
-          className=""
-          onClick={() => wanderInstance.open()}>
-          <WalletCardsIcon />
-        </Button>
       </div>
 
       <div className="rounded-lg w-full max-w-5xl mx-4 p-12 flex flex-col items-center justify-center" style={{ minHeight: '70vh' }}>
@@ -144,24 +122,18 @@ export default function Landing() {
         {loginStep === LoginStep.Login && (
           <div className="flex flex-col items-center justify-center gap-5">
             <div className="flex flex-col gap-4">
-              <Button variant="outline" className="items-center justify-center gap-2 text-lg p-6 !px-8" onClick={loginWithArweave}>
-                <div>CONNECT</div> <CornerDownLeftIcon />
+              {window.arweaveWallet && <Button variant="outline" onClick={() => connect(ConnectionStrategies.ArWallet)}
+                className="items-center justify-center gap-2 text-lg p-6 !px-8">
+                <div>WEB WALLET</div> <CornerDownLeftIcon />
+              </Button>}
+              <Button variant="outline" onClick={() => connect(ConnectionStrategies.WanderConnect)}
+                className="items-center justify-center gap-2 text-lg p-6 !px-8">
+                <div>WANDER CONNECT</div> <CornerDownLeftIcon />
               </Button>
-              {/* <TextWLine className="w-[269px] opacity-70" />
-              <div className="flex items-center justify-center gap-2">
-                <Button variant="outline" size="icon" disabled>
-                  <FaGoogle />
-                </Button>
-                <Button variant="outline" size="icon" disabled>
-                  <FaXTwitter />
-                </Button>
-                <Button variant="outline" size="icon" disabled>
-                  <FaDiscord />
-                </Button>
-                <Button variant="outline" size="icon" disabled>
-                  <FaApple />
-                </Button>
-              </div> */}
+              <Button variant="outline" onClick={() => connect(ConnectionStrategies.JWK)}
+                className="items-center justify-center gap-2 text-lg p-6 !px-8" >
+                <div>SCAN QR</div> <CornerDownLeftIcon />
+              </Button>
             </div>
             {/* <div className="flex items-center justify-center gap-2 text-muted-foreground">
               Dont have an account?
@@ -172,15 +144,6 @@ export default function Landing() {
             </div> */}
           </div>
         )}
-        <div className="text-sm text-muted-foreground absolute bottom-4 left-4 flex items-center gap-2">
-          Wander Connect {useWC ? "enabled" : "disabled"}
-          <Switch
-            className="scale-80 cursor-pointer shadow-foreground/40 shadow"
-            checked={useWC}
-            onCheckedChange={setUseWC}
-            onClick={() => setTimeout(() => window.location.reload(), 200)}
-          />
-        </div>
         <div className="text-xs text-muted-foreground/60 p-0 mt-4">
           {/* @ts-ignore */}
           v{__APP_VERSION__}

@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDropzone } from "react-dropzone";
 import { updateServer, uploadFileAndGetId, createCategory, createChannel, updateCategory, deleteCategory, updateChannel, deleteChannel, runLua, leaveServer } from "@/lib/ao";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useWallet } from '@/hooks/use-wallet';
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import DraggableChannelList from "./draggable-channel-list";
@@ -78,7 +78,7 @@ export default function ChannelList() {
     const [editCategoryName, setEditCategoryName] = useState("");
     const [editChannelName, setEditChannelName] = useState("");
 
-    const activeAddress = useActiveAddress();
+    const { address: activeAddress } = useWallet();
     const isMobile = useMobile();
     const navigate = useNavigate();
     // Form states

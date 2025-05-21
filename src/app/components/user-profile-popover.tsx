@@ -5,7 +5,7 @@ import { Copy, CheckIcon, ArrowUpRight, Badge, MessagesSquare } from "lucide-rea
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
-import { useActiveAddress } from "@arweave-wallet-kit/react";
+import { useWallet } from '@/hooks/use-wallet';
 
 interface UserProfilePopoverProps {
     userId: string;
@@ -30,7 +30,7 @@ export default function UserProfilePopover({
     const loadAttemptRef = useRef(0);
     const profileFetchedRef = useRef(false);
     const navigate = useNavigate();
-    const activeAddress = useActiveAddress();
+    const { address: activeAddress } = useWallet();
     const {
         getUserProfileFromCache,
         fetchUserProfileAndCache,

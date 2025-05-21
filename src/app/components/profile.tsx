@@ -23,14 +23,23 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getProfile, updateProfile, uploadFileAndGetId, updateNickname } from '@/lib/ao';
+import { getProfile, updateProfile, uploadFileAndGetId, updateNickname, checkDelegation } from '@/lib/ao';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { useGlobalState } from '@/hooks/global-state';
 import { FileDropzone } from '@/components/ui/file-dropzone';
+import { ConnectionStrategies } from '@/hooks/use-wallet';
+
+// Define the delegation info interface
+interface DelegationInfo {
+    success: boolean;
+    is_delegatee: boolean;
+    original_id: string;
+    delegated_id: string | null;
+}
 
 export default function Profile() {
-    const { address: activeAddress, disconnect, updateAddress } = useWallet();
+    const { address: activeAddress, disconnect, updateAddress, connectionStrategy } = useWallet();
     const isMobile = useMobile();
     const [profileOpen, setProfileOpen] = useState(false);
     const {
@@ -59,6 +68,37 @@ export default function Profile() {
 
     // Stabilize profile display when hovering by caching profile name
     const [cachedDisplayName, setCachedDisplayName] = useState<string | null>(null);
+
+    // Check delegation status for JWK connections
+    useEffect(() => {
+        // Only check delegation for JWK connections
+        if (connectionStrategy === ConnectionStrategies.JWK && activeAddress) {
+            const checkDelegationStatus = async () => {
+                try {
+                    const delegationInfo = await checkDelegation(activeAddress) as DelegationInfo;
+                    console.log("[Profile] Delegation info:", delegationInfo);
+
+                    // If using JWK connection but not delegated, log out
+                    if (!delegationInfo.success) {
+                        console.log("[Profile] JWK connection without valid delegation, logging out");
+                        toast.warning("Your device is no longer connected. Please log in again.");
+                        setTimeout(() => {
+                            disconnect();
+                            navigate('/');
+                        }, 10000);
+                    }
+                } catch (error) {
+                    console.error("[Profile] Failed to check delegation status:", error);
+                }
+            };
+
+            checkDelegationStatus();
+
+            // Re-check delegation status periodically
+            const interval = setInterval(checkDelegationStatus, 15000); // Check every 15 seconds
+            return () => clearInterval(interval);
+        }
+    }, [connectionStrategy, activeAddress, disconnect, navigate, profileData]);
 
     // Update cached display name whenever profile data changes
     useEffect(() => {

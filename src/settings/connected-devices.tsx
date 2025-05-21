@@ -217,7 +217,7 @@ export default function ConnectedDevices() {
                             disabled={!!delegateJWK || !!(delegationInfo?.delegated_id && address == delegationInfo.delegated_id)}
                             className="w-full sm:w-auto"
                         >
-                            Connect a different device
+                            {delegationInfo && delegationInfo.delegated_id ? "Connect a different device" : "Connect a device"}
                         </Button>
                         {delegationInfo && delegationInfo.delegated_id && <div className='text-xs text-muted-foreground/60'>This will disconnect the current mobile device.</div>}
                     </div>

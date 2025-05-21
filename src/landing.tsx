@@ -221,7 +221,7 @@ export default function Landing() {
                 className="items-center justify-center gap-2 text-lg p-6 !px-8" >
                 <div>SCAN QR</div> <QrCode className="!w-5 !h-5" />
               </Button>}
-              <button onClick={dev_jwk_login}>jwk</button>
+              {process.env.NODE_ENV === 'development' && <button onClick={dev_jwk_login}>jwk</button>}
             </div>
             {/* <div className="flex items-center justify-center gap-2 text-muted-foreground">
               Dont have an account?

@@ -1369,3 +1369,29 @@ export async function markNotificationsAsRead(serverId: string, channelId: numbe
         throw error;
     }
 }
+
+/**
+ * Checks the delegation status for an address
+ * @param address Optional address to check, defaults to current user's address
+ * @returns Object containing delegation information
+ */
+export async function checkDelegation(address?: string) {
+    try {
+        logger.info(`[checkDelegation] Checking delegation status for:`, address || "current user");
+        const res = await aofetch(`${PROFILES}/check-delegation`, {
+            method: "GET",
+            body: address ? { id: address } : undefined,
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex]
+        });
+        logger.info(`[checkDelegation] Response:`, res);
+
+        if (res.status == 200) {
+            return res.json;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        logger.error("[checkDelegation] Error checking delegation:", error);
+        throw error;
+    }
+}

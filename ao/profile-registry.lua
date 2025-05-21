@@ -224,10 +224,19 @@ app.post("/undelegate", function(req, res)
 
     -- Find the delegation to remove
     local delegation_to_remove = nil
-    for d_id, o_id in pairs(Delegations) do
-        if o_id == converted_id then
-            delegation_to_remove = d_id
-            break
+    local is_delegatee = false
+
+    -- Check if the requester is the delegatee
+    if Delegations[id] then
+        delegation_to_remove = id
+        is_delegatee = true
+    else
+        -- Check if the requester is the original delegator
+        for d_id, o_id in pairs(Delegations) do
+            if o_id == converted_id then
+                delegation_to_remove = d_id
+                break
+            end
         end
     end
 
@@ -246,11 +255,56 @@ app.post("/undelegate", function(req, res)
         ao.send({
             Target = server,
             Action = "Remove-Delegation",
-            Tags = { delegated_id = delegation_to_remove, original_id = converted_id }
+            Tags = {
+                delegated_id = delegation_to_remove,
+                original_id = is_delegatee and Delegations[delegation_to_remove] or converted_id
+            }
         })
     end
     res:json({
         success = true
+    })
+end)
+
+
+app.get("/check-delegation", function(req, res)
+    local id = req.body.id or req.msg.From
+    local converted_id = TranslateDelegation(id)
+
+    -- Check if this ID is a delegatee
+    if Delegations[id] then
+        return res:json({
+            success = true,
+            is_delegatee = true,
+            original_id = Delegations[id],
+            delegated_id = id
+        })
+    end
+
+    -- Check if this ID is a delegator
+    local delegated_id = nil
+    for d_id, o_id in pairs(Delegations) do
+        if o_id == converted_id then
+            delegated_id = d_id
+            break
+        end
+    end
+
+    if delegated_id then
+        return res:json({
+            success = true,
+            is_delegatee = false,
+            original_id = converted_id,
+            delegated_id = delegated_id
+        })
+    end
+
+    -- No delegation found
+    return res:json({
+        success = false,
+        is_delegatee = false,
+        original_id = converted_id,
+        delegated_id = nil
     })
 end)
 
@@ -484,6 +538,7 @@ Handlers.add("Add-Notification", function(msg)
     )
     print("Added notification for user: " .. user_id)
 end)
+
 
 app.listen()
 print(ao.id)

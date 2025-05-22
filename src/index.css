@@ -1,10 +1,21 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@font-face {
+  font-family: 'Twemoji Mozilla';
+  src: url('./fonts/twemoji.mozilla.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+1F300-1F9FF, U+2600-26FF, U+2700-27BF, U+FE00-FE0F, U+1F900-1F9FF, U+1F100-1F1FF, U+1F680-1F6FF, U+1F1E6-1F1FF;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 html,body{
   overflow:hidden;
+  /* use emoji font everywhere */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', 'Twemoji Mozilla', sans-serif;
 }
 
 /* width */

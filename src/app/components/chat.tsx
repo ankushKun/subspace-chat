@@ -892,7 +892,7 @@ export default function Chat() {
         <div className="h-full w-full flex flex-col">
             {/* Channel Header */}
             <div className="flex items-center gap-2 p-3 border-b border-border/30 h-14">
-                {isMobile && <Button variant="ghost" size="icon" className="!p-0 -ml-1" onClick={() => navigate(-1)}>
+                {isMobile && <Button variant="ghost" size="icon" className="!p-0 -ml-1" onClick={() => navigate(`/app/${activeServerId}`, { replace: true })}>
                     <ArrowLeft size={20} className="!h-5 !w-5 text-muted-foreground" />
                 </Button>}
                 <HashIcon className="h-5 w-5 text-muted-foreground" />

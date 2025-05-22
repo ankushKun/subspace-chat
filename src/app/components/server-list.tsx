@@ -129,7 +129,7 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
 
     async function clicked() {
         // First navigate to the server
-        navigate(`/app/${id}`);
+        navigate(`/app/${id}`, { replace: true });
         setHover(false);
 
         try {

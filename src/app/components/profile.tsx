@@ -190,7 +190,7 @@ export default function Profile() {
                 if (currentHash && currentHash !== '#/app') {
                     sessionStorage.setItem('last_app_route', currentHash);
                 }
-                navigate('/app');
+                // navigate('/app');
             }
 
             // If we have a new address, immediately fetch fresh profile data

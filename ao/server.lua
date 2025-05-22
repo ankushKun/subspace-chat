@@ -8,6 +8,8 @@ PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
 server_icon = server_icon or "W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
 
+version = "0.0.1"
+
 -- easily read from the database
 function SQLRead(query, ...)
     local m = {}
@@ -118,6 +120,22 @@ app.get("/", function(req, res)
         categories = categories,
         channels = channels,
         member_count = member_count
+    })
+end)
+
+app.get("/get-version", function(req, res)
+    res:json({
+        success = true,
+        version = version
+    })
+end)
+
+app.get("/single-member", function(req, res)
+    local id = req.query.id
+    local member = SQLRead("SELECT * FROM members WHERE id = ?", id)
+    res:json({
+        success = true,
+        member = member
     })
 end)
 

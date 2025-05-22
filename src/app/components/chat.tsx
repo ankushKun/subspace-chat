@@ -1,6 +1,6 @@
 import { useGlobalState } from "@/hooks/global-state";
 import { ArrowLeft, HashIcon, Send, Users, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
 import { getMessages, sendMessage, editMessage, deleteMessage, markNotificationsAsRead } from "@/lib/ao";
@@ -60,6 +60,10 @@ const mentionsInputStyle = {
     suggestions: {
         backgroundColor: 'transparent',
         list: {
+            maxHeight: '369px',
+            minWidth: '300px',
+            overflowY: 'scroll',
+            width: '100%',
             backgroundColor: 'var(--secondary)',
             padding: '4px 8px',
             borderRadius: '6px',
@@ -81,6 +85,10 @@ const mentionsInputStyle = {
     },
 };
 
+// Add cooldown tracking for force refreshes
+const forceRefreshCooldowns = new Map<string, number>();
+const FORCE_REFRESH_COOLDOWN = 30000; // 30 seconds between force refreshes
+
 export default function Chat() {
     const {
         activeServer,
@@ -94,7 +102,9 @@ export default function Chat() {
         // Still use the global state profile cache for compatibility
         userProfilesCache,
         getUserProfileFromCache,
-        getServerMembers
+        getServerMembers,
+        fetchServerMembers,
+        serverMembers
     } = useGlobalState();
     const isMobile = useMobile();
     const navigate = useNavigate();
@@ -120,9 +130,39 @@ export default function Chat() {
     // Create a ref to track previous server ID for handling collapsing users panel
     const prevServerIdRef = useRef<string | null>(null);
 
+    // Add function to ensure message author is in member list
+    const ensureAuthorInMemberList = useCallback(async (authorId: string) => {
+        if (!activeServerId) return;
+
+        // Get current members
+        const currentMembers = getServerMembers(activeServerId);
+        if (!currentMembers) {
+            // If we don't have members loaded, refresh the entire list
+            await fetchServerMembers(activeServerId, true);
+            return;
+        }
+
+        // Check if author is already in member list
+        const isAuthorMember = currentMembers.some(member => member.id === authorId);
+        if (!isAuthorMember) {
+            console.log(`[Chat] Author ${authorId} not in member list, refreshing members`);
+            // Do a background refresh to avoid disrupting the UI
+            fetchServerMembers(activeServerId, true)
+                .catch(error => console.warn('[Chat] Background member refresh failed:', error));
+        }
+    }, [activeServerId, getServerMembers, fetchServerMembers]);
+
     // Watch for profile changes that should trigger re-rendering of messages
     useEffect(() => {
         if (!messages || messages.length === 0) return;
+
+        // Get all unique author IDs from messages
+        const authorIds = Array.from(new Set(messages.map(m => m.author_id)));
+
+        // Check each author is in member list
+        authorIds.forEach(authorId => {
+            ensureAuthorInMemberList(authorId);
+        });
 
         // Check for profile updates every 5 seconds
         const profileUpdateTimer = setInterval(() => {
@@ -142,7 +182,7 @@ export default function Chat() {
         }, 5000);
 
         return () => clearInterval(profileUpdateTimer);
-    }, [messages, getUserProfileFromCache]);
+    }, [messages, getUserProfileFromCache, ensureAuthorInMemberList]);
 
     // Find the active channel from the server data
     const activeChannel = useMemo(() => {
@@ -866,13 +906,16 @@ export default function Chat() {
                             // Toggle users panel visibility
                             setShowUsers(!showUsers);
 
-                            // If we're opening the panel, refresh member data in the background
+                            // If we're opening the panel and it's been a while since last refresh,
+                            // do a background refresh
                             if (!showUsers && activeServerId) {
-                                console.log(`[Chat] Refreshing members data for ${activeServerId}`);
-                                // Use the global state's fetchServerMembers with forceRefresh=true to bypass cache
-                                const globalState = useGlobalState.getState();
-                                globalState.fetchServerMembers(activeServerId, true)
-                                    .catch(error => console.warn("Failed to refresh members:", error));
+                                const lastRefresh = forceRefreshCooldowns?.get(activeServerId);
+                                const now = Date.now();
+                                if (!lastRefresh || (now - lastRefresh) > FORCE_REFRESH_COOLDOWN) {
+                                    console.log(`[Chat] Background refreshing members for ${activeServerId}`);
+                                    fetchServerMembers(activeServerId, true)
+                                        .catch(error => console.warn('[Chat] Background member refresh failed:', error));
+                                }
                             }
                         }}>
                         <Users size={20} className="!h-5 !w-5" />
@@ -1064,6 +1107,7 @@ export default function Chat() {
                 <MentionsInput
                     value={messageInput}
                     onChange={handleMentionInputChange}
+                    // @ts-expect-error
                     style={mentionsInputStyle}
                     placeholder={`Message #${activeChannel.name}`}
                     a11ySuggestionsListLabel={"Suggested mentions"}

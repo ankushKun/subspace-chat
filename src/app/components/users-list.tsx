@@ -34,6 +34,22 @@ const globalRequestLimiter = {
     }
 };
 
+// Add a new cooldown tracker for force refreshes
+const forceRefreshCooldowns = new Map<string, number>();
+const FORCE_REFRESH_COOLDOWN = 30000; // 30 seconds between force refreshes
+
+// Helper to check if we can force refresh
+function canForceRefresh(serverId: string): boolean {
+    const lastRefresh = forceRefreshCooldowns.get(serverId);
+    const now = Date.now();
+    return !lastRefresh || (now - lastRefresh) > FORCE_REFRESH_COOLDOWN;
+}
+
+// Helper to record a force refresh
+function recordForceRefresh(serverId: string) {
+    forceRefreshCooldowns.set(serverId, Date.now());
+}
+
 // Define response type for getMembers
 interface MembersResponse {
     success: boolean;
@@ -134,15 +150,27 @@ export default function UsersList() {
 
         const loadMembers = async () => {
             try {
-                // Check if we need to load members
-                if (!members || members.length === 0) {
+                // Check if we have cached members first
+                const currentMembers = getServerMembers(activeServerId);
+                const now = Date.now();
+                const shouldForceRefresh = canForceRefresh(activeServerId);
+
+                if (!currentMembers || currentMembers.length === 0) {
+                    // No cached data, do a force refresh
                     await fetchServerMembers(activeServerId, true);
+                    recordForceRefresh(activeServerId);
+                } else if (shouldForceRefresh) {
+                    // We have cached data but it might be stale, refresh in background
+                    console.log(`[UsersList] Background refreshing members for ${activeServerId}`);
+                    fetchServerMembers(activeServerId, true)
+                        .then(() => recordForceRefresh(activeServerId))
+                        .catch(error => console.warn('[UsersList] Background refresh failed:', error));
                 }
 
                 // Load profiles for members if available
-                const currentMembers = getServerMembers(activeServerId);
-                if (currentMembers && currentMembers.length > 0) {
-                    await loadMembersProfiles(currentMembers);
+                const members = getServerMembers(activeServerId);
+                if (members && members.length > 0) {
+                    await loadMembersProfiles(members);
                     hasLoadedProfilesRef.current = true;
                 }
             } catch (error) {
@@ -152,7 +180,7 @@ export default function UsersList() {
         };
 
         loadMembers();
-    }, [activeServerId, showUsers, members, fetchServerMembers, getServerMembers, loadMembersProfiles]);
+    }, [activeServerId, showUsers, getServerMembers, fetchServerMembers, loadMembersProfiles]);
 
     // Get display name for a member with better profile data handling
     const getDisplayName = (member: Member) => {

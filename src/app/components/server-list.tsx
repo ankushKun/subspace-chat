@@ -140,46 +140,27 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
             fetchServerInfo(id, true);
 
             // Also refresh server members
-            console.log(`[ServerIcon] Force refreshing members for server: ${id}`);
+            console.log(`[ServerIcon] Background refreshing members for server: ${id}`);
 
             // Show a subtle loading indicator for members
             // Add to refreshing servers set
             globalState.refreshingServers.add(id);
 
             try {
-                // Fetch fresh member data
-                const { members } = await getMembers(id);
-
-                // Update the members cache with the fresh data
-                if (members && Array.isArray(members)) {
-                    const now = Date.now();
-                    globalState.serverMembers.set(id, {
-                        data: members,
-                        timestamp: now
-                    });
-                    console.log(`[ServerIcon] Updated members cache for ${id} with ${members.length} members`);
-
-                    // If this server is now the active server, update its data
-                    if (globalState.activeServerId === id && globalState.activeServer) {
-                        globalState.setActiveServer({
-                            ...globalState.activeServer,
-                            // Preserve other properties but update members count if the property exists
-                            ...(globalState.activeServer.member_count !== undefined ? { member_count: members.length } : {})
-                        });
-                    }
-                }
+                // Do a background refresh of member data
+                await globalState.fetchServerMembers(id, true);
+                console.log(`[ServerIcon] Successfully refreshed members for ${id}`);
             } catch (error) {
                 console.warn(`[ServerIcon] Failed to refresh members for ${id}:`, error);
                 // Non-critical error, don't show to user
             } finally {
-                // Remove loading indicator after a short delay
-                setTimeout(() => {
-                    // Remove from refreshing servers set
-                    globalState.refreshingServers.delete(id);
-                }, 500);
+                // Remove from refreshing set
+                const updatedRefreshing = new Set(globalState.refreshingServers);
+                updatedRefreshing.delete(id);
+                globalState.refreshingServers = updatedRefreshing;
             }
         } catch (error) {
-            console.error(`[ServerIcon] Error refreshing server data for ${id}:`, error);
+            console.error(`[ServerIcon] Error refreshing server data:`, error);
         }
     }
 

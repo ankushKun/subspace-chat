@@ -67,9 +67,8 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-72d7d1d6'], (function (workbox) { 'use strict';
+define(['./workbox-d9a5ed57'], (function (workbox) { 'use strict';
 
-  workbox.enable();
   self.skipWaiting();
   workbox.clientsClaim();
 
@@ -83,7 +82,7 @@ define(['./workbox-72d7d1d6'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.e3lm9eddrp8"
+    "revision": "0.1hepfls39vo"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -95,17 +94,6 @@ define(['./workbox-72d7d1d6'], (function (workbox) { 'use strict';
       maxEntries: 50,
       maxAgeSeconds: 2592000
     })]
-  }), 'GET');
-  workbox.registerRoute(/^https:\/\/arweave\.net\/.*/i, new workbox.CacheFirst({
-    "cacheName": "arweave-assets",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 100,
-      maxAgeSeconds: 2592000
-    })]
-  }), 'GET');
-  workbox.registerRoute(/^\/offline\.html$/, new workbox.StaleWhileRevalidate({
-    "cacheName": "offline-fallback",
-    plugins: []
   }), 'GET');
 
 }));

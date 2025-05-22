@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Copy, CheckIcon, ArrowUpRight, Badge, MessagesSquare } from "lucide-react";
+import { Copy, CheckIcon, ArrowUpRight, Badge, MessagesSquare, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useGlobalState } from "@/hooks/global-state";
 import { useWallet } from '@/hooks/use-wallet';
+import { getProfile, getSingleMember } from "@/lib/ao";
 
 interface UserProfilePopoverProps {
     userId: string;
@@ -13,6 +14,14 @@ interface UserProfilePopoverProps {
     side?: "top" | "right" | "bottom" | "left";
     align?: "start" | "center" | "end";
     sideOffset?: number;
+}
+
+interface ProfileData {
+    username?: string;
+    pfp?: string;
+    primaryName?: string;
+    nickname?: string;
+    timestamp: number;
 }
 
 export default function UserProfilePopover({
@@ -23,7 +32,8 @@ export default function UserProfilePopover({
     sideOffset = 8
 }: UserProfilePopoverProps) {
     const [isLoading, setIsLoading] = useState(false);
-    const [profileData, setProfileData] = useState<any>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [profileData, setProfileData] = useState<ProfileData | null>(null);
     const [open, setOpen] = useState(false);
     const [hasCopied, setHasCopied] = useState(false);
     const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -41,7 +51,7 @@ export default function UserProfilePopover({
     // Load profile data when popover opens
     useEffect(() => {
         // Use loading timeout to avoid flashing skeleton for fast loads
-        if (open && !profileData) {
+        if (open) {
             // Show loading state only after a small delay
             loadingTimeoutRef.current = setTimeout(() => {
                 if (!profileData && !profileFetchedRef.current) {
@@ -49,19 +59,21 @@ export default function UserProfilePopover({
                 }
             }, 100);
 
-            // Try to get from cache first
+            // Try to get from cache first for immediate display
             const cachedProfile = getUserProfileFromCache(userId);
             if (cachedProfile) {
                 console.log(`[UserProfilePopover] Using cached profile for ${userId}`);
                 setProfileData(cachedProfile);
                 setIsLoading(false);
-            } else {
-                // If not in cache, fetch it (with debouncing to avoid spam)
-                if (!profileFetchedRef.current) {
-                    profileFetchedRef.current = true;
-                    fetchUserProfile();
-                }
             }
+
+            // Always fetch fresh data when opened
+            console.log(`[UserProfilePopover] Fetching fresh profile data for ${userId}`);
+            refreshAllProfileData();
+            profileFetchedRef.current = true;
+        } else {
+            // Reset fetch flag when popover closes
+            profileFetchedRef.current = false;
         }
 
         // Cleanup on unmount or when popover closes
@@ -71,42 +83,71 @@ export default function UserProfilePopover({
                 loadingTimeoutRef.current = null;
             }
         };
-    }, [open, userId, profileData, getUserProfileFromCache]);
+    }, [open, userId, getUserProfileFromCache]);
 
-    // Fetch user profile
-    const fetchUserProfile = async () => {
+    // Refresh all profile data (global and server-specific)
+    const refreshAllProfileData = async () => {
         if (!userId) return;
 
+        setIsRefreshing(true);
+        loadAttemptRef.current += 1;
+        const currentAttempt = loadAttemptRef.current;
+
         try {
-            loadAttemptRef.current += 1;
-            const currentAttempt = loadAttemptRef.current;
+            // Start all fetches concurrently
+            const [globalProfilePromise, serverMemberPromise] = [
+                getProfile(userId),
+                activeServerId ? getSingleMember(activeServerId, userId) : Promise.resolve(null)
+            ];
 
-            console.log(`[UserProfilePopover] Fetching profile for ${userId}`);
-            const result = await fetchUserProfileAndCache(userId, true);
+            // Wait for both to complete
+            const [globalProfile, serverMember] = await Promise.all([
+                globalProfilePromise,
+                serverMemberPromise
+            ]);
 
-            // Ensure this is still the most recent request
+            // Only update if this is still the most recent request
             if (currentAttempt === loadAttemptRef.current) {
-                if (result) {
-                    setProfileData({
-                        username: result.profile?.username,
-                        pfp: result.profile?.pfp,
-                        primaryName: result.primaryName,
+                // Update global profile cache
+                if (globalProfile) {
+                    const profileUpdate: ProfileData = {
+                        username: globalProfile.profile?.username,
+                        pfp: globalProfile.profile?.pfp,
+                        primaryName: globalProfile.primaryName,
                         timestamp: Date.now()
-                    });
-                } else {
-                    // If we couldn't fetch profile, set default data
-                    setProfileData({
-                        username: null,
-                        pfp: null,
-                        primaryName: null,
-                        timestamp: Date.now()
-                    });
+                    };
+
+                    // If we have server-specific data, include it
+                    if (serverMember) {
+                        profileUpdate.nickname = serverMember.nickname;
+                    }
+
+                    setProfileData(profileUpdate);
+
+                    // Update the global cache
+                    await fetchUserProfileAndCache(userId, true);
+
+                    // Also update server members cache if we got new server member data
+                    if (serverMember && activeServerId) {
+                        const currentMembers = getServerMembers(activeServerId);
+                        if (currentMembers) {
+                            const updatedMembers = currentMembers.map(m =>
+                                m.id === userId ? { ...m, ...serverMember } : m
+                            );
+                            const globalState = useGlobalState.getState();
+                            globalState.serverMembers.set(activeServerId, {
+                                data: updatedMembers,
+                                timestamp: Date.now()
+                            });
+                        }
+                    }
                 }
             }
         } catch (error) {
-            console.error(`[UserProfilePopover] Error fetching profile for ${userId}:`, error);
+            console.error(`[UserProfilePopover] Error refreshing profile data for ${userId}:`, error);
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
     };
 
@@ -172,8 +213,16 @@ export default function UserProfilePopover({
                 side={side}
                 align={align}
                 sideOffset={sideOffset}
-                className="w-80 p-0 shadow-lg flex flex-col"
+                className="w-80 p-0 shadow-lg flex flex-col relative"
             >
+                {/* Loading indicator */}
+                {isRefreshing && (
+                    <div className="absolute top-2 right-2 text-xs text-muted-foreground flex items-center gap-1.5 bg-background/80 px-2 py-1 rounded-full border border-border/50">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span>Refreshing...</span>
+                    </div>
+                )}
+
                 {isLoading ? (
                     <div className="p-4 space-y-4">
                         <div className="flex items-center gap-3">

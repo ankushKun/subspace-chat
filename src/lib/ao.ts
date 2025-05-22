@@ -1395,3 +1395,67 @@ export async function checkDelegation(address?: string) {
         throw error;
     }
 }
+
+interface ServerVersionResponse {
+    success: boolean;
+    version: string;
+}
+
+interface SingleMemberResponse {
+    success: boolean;
+    member: Member | null;
+}
+
+/**
+ * Gets the version of a server
+ * @param serverId The server to get version for
+ */
+export async function getServerVersion(serverId: string): Promise<string> {
+    try {
+        logger.info(`[getServerVersion] Getting version for server: ${serverId}`);
+        const res = await aofetch(`${serverId}/get-version`, {
+            method: "GET",
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex]
+        });
+        logger.info(`[getServerVersion] Response:`, res);
+
+        if (res.status == 200) {
+            const response = res.json as ServerVersionResponse;
+            return response.version;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        logger.error("[getServerVersion] Error getting server version:", error);
+        throw error;
+    }
+}
+
+/**
+ * Gets a single member's data from a server
+ * @param serverId The server to get member from
+ * @param memberId The member's ID to fetch
+ */
+export async function getSingleMember(serverId: string, memberId: string): Promise<Member | null> {
+    try {
+        logger.info(`[getSingleMember] Getting member ${memberId} from server: ${serverId}`);
+        const res = await aofetch(`${serverId}/single-member`, {
+            method: "GET",
+            body: {
+                id: memberId
+            },
+            CU_URL: CU_ENDPOINTS[currentEndpointIndex]
+        });
+        logger.info(`[getSingleMember] Response:`, res);
+
+        if (res.status == 200) {
+            const response = res.json as SingleMemberResponse;
+            return response.member;
+        } else {
+            throw new Error(res.error);
+        }
+    } catch (error) {
+        logger.error(`[getSingleMember] Error getting member data:`, error);
+        return null;
+    }
+}

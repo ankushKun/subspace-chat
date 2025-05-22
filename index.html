@@ -74,6 +74,11 @@
   <script>
     // Analytics initialization - just copy this entire script tag to any project
     (function () {
+      // return if url is localhost
+      if (window.location.hostname === 'localhost') {
+        return console.info("Analytics disabled on localhost");
+      }
+
       // Configuration
       const ANALYTICS_CONFIG = {
         src: 'https://analytics_arlink.ar.io/browser.js',
@@ -84,6 +89,9 @@
 
       // Wait for DOM to be ready
       function init() {
+        if (window.location.hostname === 'localhost') {
+          return console.info("Analytics disabled on localhost");
+        }
         const script = document.createElement('script');
         script.type = 'module';
         script.src = ANALYTICS_CONFIG.src;

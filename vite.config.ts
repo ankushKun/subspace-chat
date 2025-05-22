@@ -26,27 +26,18 @@ export default defineConfig({
     registerType: 'autoUpdate',
     strategies: 'generateSW',
     injectRegister: 'auto',
-    includeAssets: ['/s.png', '/offline.html', '/stars.gif', '/audio/dum.wav', '/audio/laugh.wav', '/audio/notification.wav'],
+    includeAssets: ['/s.png', '/stars.gif', '/audio/dum.wav', '/audio/laugh.wav', '/audio/notification.wav'],
     devOptions: {
       enabled: true
     },
     workbox: {
-      globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico,json,woff,woff2,ttf,eot}'],
-      maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
+      globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico}'],
       // Cache app shell for offline use
       navigateFallback: 'index.html',
-      // Skip waiting to update service worker immediately
-      skipWaiting: true,
       // Take control immediately
       clientsClaim: true,
-      // Disable caching for network-first on root document for update checks
-      navigationPreload: true,
       // More aggressive cache cleanup
       cleanupOutdatedCaches: true,
-      // Don't try to validate offline connectivity for these paths
-      // navigateFallbackDenylist: [/^\/api\//],
-      // Enable offline Google Analytics
-      // offlineGoogleAnalytics: true,
       runtimeCaching: [
         {
           urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
@@ -57,25 +48,6 @@ export default defineConfig({
               maxEntries: 50,
               maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
             }
-          }
-        },
-        {
-          urlPattern: /^https:\/\/arweave\.net\/.*/i,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'arweave-assets',
-            expiration: {
-              maxEntries: 100,
-              maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-            }
-          }
-        },
-        // Add a caching strategy for the /offline.html fallback page
-        {
-          urlPattern: /^\/offline\.html$/,
-          handler: 'StaleWhileRevalidate',
-          options: {
-            cacheName: 'offline-fallback'
           }
         }
       ]

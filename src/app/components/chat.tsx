@@ -1183,9 +1183,41 @@ export default function Chat() {
                             return (
                                 <div
                                     key={message.msg_id}
-                                    className={`group px-4 py-1 pb-2 m-0 mb-1 hover:bg-foreground/5 ${isCurrentUserMentioned ? 'bg-yellow-400/10 border-l-2 border-yellow-400' : ''
+                                    className={`group relative px-4 py-1 pb-2 m-0 mb-1 hover:bg-foreground/5 ${isCurrentUserMentioned ? 'bg-yellow-400/10 border-l-2 border-yellow-400' : ''
                                         }`}
                                 >
+
+                                    {/* Message actions - direct buttons instead of dropdown */}
+                                    <div className="ml-auto absolute -top-3 right-2 !h-fit !w-fit z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                        {message.author_id === address && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => {
+                                                    setEditingMessage(message);
+                                                    setEditedContent(message.content);
+                                                }}
+                                                disabled={isEditing || isDeleting}
+                                                title="Edit message"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                        {canDeleteMessage(message.author_id) && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                                onClick={() => handleDeleteMessage(message)}
+                                                disabled={isEditing || isDeleting}
+                                                title={isServerOwner && message.author_id !== address ? "Delete as server owner" : "Delete message"}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+
                                     <div className="flex items-start gap-3">
                                         {/* Profile avatar - wrapped in the popover */}
                                         {/* @ts-ignore */}
@@ -1214,9 +1246,8 @@ export default function Chat() {
                                                 </div>
                                             </PopoverTrigger>
                                         </UserProfilePopover> : <div className="w-10"></div>}
-
                                         <div className="flex-1 min-w-0">
-                                            <div
+                                            {messages[index - 1]?.author_id !== message.author_id && <div
                                                 data-collapse={messages[index - 1]?.author_id === message.author_id}
                                                 className="flex items-center data-[collapse=true]:hidden h-6 gap-2">
                                                 {/* Username with popover */}
@@ -1263,37 +1294,8 @@ export default function Chat() {
                                                     </span>
                                                 )}
 
-                                                {/* Message actions - direct buttons instead of dropdown */}
-                                                <div className="ml-auto relative z-10 bottom-4 bg-accent/40 border border-accent/50 rounded-md backdrop-blur p-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                                    {message.author_id === address && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6"
-                                                            onClick={() => {
-                                                                setEditingMessage(message);
-                                                                setEditedContent(message.content);
-                                                            }}
-                                                            disabled={isEditing || isDeleting}
-                                                            title="Edit message"
-                                                        >
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
-                                                    {canDeleteMessage(message.author_id) && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 text-destructive hover:text-destructive"
-                                                            onClick={() => handleDeleteMessage(message)}
-                                                            disabled={isEditing || isDeleting}
-                                                            title={isServerOwner && message.author_id !== address ? "Delete as server owner" : "Delete message"}
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </div>
+
+                                            </div>}
 
                                             {/* Show edit input if editing this message */}
                                             {editingMessage?.msg_id === message.msg_id ? (

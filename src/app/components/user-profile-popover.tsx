@@ -215,14 +215,6 @@ export default function UserProfilePopover({
                 sideOffset={sideOffset}
                 className="w-80 p-0 shadow-lg flex flex-col relative"
             >
-                {/* Loading indicator */}
-                {isRefreshing && (
-                    <div className="absolute top-2 right-2 text-xs text-muted-foreground flex items-center gap-1.5 bg-background/80 px-2 py-1 rounded-full border border-border/50">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span>Refreshing...</span>
-                    </div>
-                )}
-
                 {isLoading ? (
                     <div className="p-4 space-y-4">
                         <div className="flex items-center gap-3">
@@ -235,7 +227,15 @@ export default function UserProfilePopover({
                         <Skeleton className="h-10 w-full mt-2" />
                     </div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
+
+                        {/* Loading indicator */}
+                        {isRefreshing && (
+                            <div className="absolute top-0.5 left-0 text-xs text-muted-foreground flex items-center gap-1.5 px-2 py-1 rounded-full">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                            </div>
+                        )}
+
                         {/* User info header */}
                         <div className="p-4 space-y-4">
                             <div className="flex gap-3">
@@ -314,7 +314,7 @@ export default function UserProfilePopover({
                             */}
                         </div>
 
-                        <div className="border-t border-border"></div>
+                        {/* <div className="border-t border-border"></div> */}
 
                         {/* Relationship section - placeholder for future use */}
                         {/*

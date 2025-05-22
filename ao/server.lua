@@ -728,7 +728,7 @@ app.post("/send-message", function(req, res)
                     Channel_ID = tostring(channel_id),
                     Message_ID = msg_id,
                     Author_ID = author_id,
-                    Author_Name = tostring(member[1].nickname or author_id),
+                    Author_Name = tostring(profile.nickname or author_id),
                     Content = content,
                     Channel_Name = channel[1].name,
                     Server_Name = server_name,

@@ -657,6 +657,59 @@ export default function Chat() {
         );
     };
 
+    // Function to get channels data for mentions
+    const getChannelsData = (query: string, callback: (data: any[]) => void) => {
+        if (!activeServer) {
+            callback([]);
+            return;
+        }
+
+        // Filter and format channels for the mentions component
+        const filteredChannels = activeServer.channels
+            .filter(channel => channel.name.toLowerCase().includes(query.toLowerCase()))
+            .map(channel => ({
+                id: channel.id.toString(),
+                display: channel.name,
+                category_id: channel.category_id
+            }));
+
+        callback(filteredChannels);
+    };
+
+    // Custom renderer for the channel suggestions
+    const renderChannelSuggestion = (
+        suggestion: { id: string; display: string; category_id: number | null },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        // Find category name if channel belongs to one
+        let categoryName = "";
+        if (suggestion.category_id !== null && activeServer) {
+            const category = activeServer.categories.find(c => c.id === suggestion.category_id);
+            if (category) {
+                categoryName = category.name;
+            }
+        }
+
+        return (
+            <div className={`flex items-center gap-3 py-1.5 px-2 ${focused ? 'bg-accent/20' : ''} hover:bg-accent/10 transition-colors`}>
+                <div className="w-8 h-8 rounded-md bg-muted flex-shrink-0 flex items-center justify-center">
+                    <HashIcon className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-medium text-foreground">{highlightedDisplay}</span>
+                    {categoryName && (
+                        <span className="text-xs text-muted-foreground">
+                            in {categoryName}
+                        </span>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // Generate placeholder messages for empty state or loading state
     const renderPlaceholderMessages = () => (
         <div className="space-y-4 p-4">
@@ -682,56 +735,73 @@ export default function Chat() {
 
     // Function to format mentions in message text
     const formatMessageWithMentions = (content: string) => {
-        // Check if the content contains mentions in the format @[display](id)
-        if (!content.includes('@[')) {
+        // Check if the content contains mentions in either format @[display](id) or #[display](id)
+        if (!content.includes('@[') && !content.includes('#[')) {
             return content;
         }
 
-        // Regular expression to match mentions in the format @[display](id)
-        const mentionRegex = /@\[(.*?)\]\((.*?)\)/g;
+        // Regular expressions to match both types of mentions
+        const userMentionRegex = /@\[(.*?)\]\((.*?)\)/g;
+        const channelMentionRegex = /#\[(.*?)\]\((.*?)\)/g;
 
-        // Split the content by mentions
-        const parts = content.split(mentionRegex);
-
-        // If no matches found, return the original content
-        if (parts.length === 1) {
-            return content;
-        }
-
-        // Build the result with formatted mentions
+        // Split the content by mentions and build the result
         const result: React.ReactNode[] = [];
-        let i = 0;
-
-        let match;
         let lastIndex = 0;
-        const regex = new RegExp(mentionRegex);
 
-        // Process each match
-        while ((match = regex.exec(content)) !== null) {
-            // Add text before the match
-            if (match.index > lastIndex) {
-                result.push(content.substring(lastIndex, match.index));
+        // Helper function to process matches
+        const processMatches = (regex: RegExp, prefix: string, renderFn: (display: string, id: string, key: number) => React.ReactNode) => {
+            let match;
+            while ((match = regex.exec(content)) !== null) {
+                // Add text before the match
+                if (match.index > lastIndex) {
+                    result.push(content.substring(lastIndex, match.index));
+                }
+
+                const displayName = match[1];
+                const id = match[2];
+                result.push(renderFn(displayName, id, result.length));
+
+                lastIndex = match.index + match[0].length;
             }
+        };
 
-            // Extract display name and user ID
-            const displayName = match[1];
-            const userId = match[2];
+        // Process user mentions
+        processMatches(userMentionRegex, '@', (display, id, key) => (
+            <UserProfilePopover key={`mention-${key}`} userId={id} side="top" align="center">
+                <PopoverTrigger asChild>
+                    <span className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white">
+                        @{display}
+                    </span>
+                </PopoverTrigger>
+            </UserProfilePopover>
+        ));
 
-            // Add the mention with the proper styling
-            result.push(
-                <UserProfilePopover key={`mention-${i++}`} userId={userId} side="top" align="center">
-                    <PopoverTrigger asChild>
-                        <span
-                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200"
-                        >
-                            @{displayName}
-                        </span>
-                    </PopoverTrigger>
-                </UserProfilePopover>
+        // Reset regex lastIndex
+        userMentionRegex.lastIndex = 0;
+
+        // Process channel mentions
+        processMatches(channelMentionRegex, '#', (display, id, key) => {
+            // Find the channel in the active server
+            const channel = activeServer?.channels.find(ch => ch.id.toString() === id);
+            const categoryName = channel?.category_id !== null && activeServer
+                ? activeServer.categories.find(c => c.id === channel?.category_id)?.name
+                : null;
+
+            return (
+                <span
+                    key={`channel-mention-${key}`}
+                    className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white"
+                    title={categoryName ? `#${display} in ${categoryName}` : `#${display}`}
+                    onClick={() => {
+                        if (channel) {
+                            navigate(`/app/${activeServerId}/${channel.id}`);
+                        }
+                    }}
+                >
+                    #{display}
+                </span>
             );
-
-            lastIndex = match.index + match[0].length;
-        }
+        });
 
         // Add any remaining text
         if (lastIndex < content.length) {
@@ -1124,6 +1194,15 @@ export default function Chat() {
                         markup="@[__display__](__id__)"
                         className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative -left-[1px] text-white bottom-[1px] p-0 m-0"
                         displayTransform={(id, display) => `@${display}`}
+                        appendSpaceOnAdd
+                    />
+                    <Mention
+                        trigger="#"
+                        data={getChannelsData}
+                        renderSuggestion={renderChannelSuggestion}
+                        markup="#[__display__](__id__)"
+                        className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 rounded relative -left-[1px] text-white bottom-[1px] p-0 m-0"
+                        displayTransform={(id, display) => `#${display}`}
                         appendSpaceOnAdd
                     />
                 </MentionsInput>

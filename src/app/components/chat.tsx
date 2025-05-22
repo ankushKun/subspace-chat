@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/global-state";
-import { ArrowLeft, HashIcon, Send, Users, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, HashIcon, Send, Users, Loader2, MoreVertical, Pencil, Trash2, Plus, Smile } from "lucide-react";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import type { FormEvent } from "react";
 import type { Channel } from "@/lib/types";
@@ -1174,6 +1174,24 @@ export default function Chat() {
 
             {/* Message Input */}
             <form onSubmit={handleSendMessage} className="rounded-md p-2 border-t flex rounded-t-none border-border/30 overflow-visible justify-between items-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    type="submit"
+                    className="flex items-center justify-center"
+                    onClick={() => toast.info("coming soon", { position: "bottom-left" })}
+                >
+                    <Smile className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    type="submit"
+                    className="flex items-center justify-center"
+                    onClick={() => toast.info("coming soon", { position: "bottom-left" })}
+                >
+                    <Plus className="h-4 w-4" />
+                </Button>
                 <MentionsInput
                     value={messageInput}
                     onChange={handleMentionInputChange}

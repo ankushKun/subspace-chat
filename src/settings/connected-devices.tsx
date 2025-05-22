@@ -131,33 +131,33 @@ export default function ConnectedDevices() {
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6 md:space-y-8">
             <div>
-                <p className="text-muted-foreground mb-2">
+                <p className="text-sm md:text-base text-muted-foreground mb-2">
                     Here are all the devices that are currently connected to your Subspace account.
                 </p>
-                <p className="text-muted-foreground">
+                <p className="text-sm md:text-base text-muted-foreground">
                     If you see a device you don't recognize, disconnect it immediately.
                 </p>
             </div>
 
             {/* Current Device Section */}
             <div>
-                <h2 className="text-xl font-semibold mb-4">Current Device</h2>
-                <div className="flex items-center justify-between p-4 rounded-md bg-secondary/30">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-secondary rounded-full">
+                <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Current Device</h2>
+                <div className="flex items-center justify-between p-3 md:p-4 rounded-md bg-secondary/30">
+                    <div className="flex items-center gap-2 md:gap-4">
+                        <div className="p-2 md:p-3 bg-secondary rounded-full">
                             {connectionStrategy === ConnectionStrategies.JWK ? (
-                                <Smartphone className="w-8 h-8 text-muted-foreground" />
+                                <Smartphone className="w-6 h-6 md:w-8 md:h-8 text-muted-foreground" />
                             ) : (
-                                <Laptop2 className="w-8 h-8 text-muted-foreground" />
+                                <Laptop2 className="w-6 h-6 md:w-8 md:h-8 text-muted-foreground" />
                             )}
                         </div>
                         <div>
-                            <div className="font-medium">
+                            <div className="font-medium text-sm md:text-base">
                                 {connectionStrategy === ConnectionStrategies.JWK ? "Mobile PWA" : "Subspace Desktop"}
                             </div>
-                            <div className="text-muted-foreground text-sm">
+                            <div className="text-xs md:text-sm text-muted-foreground">
                                 {address ? shortenAddress(address) : "Not connected"} • Active
                             </div>
                         </div>
@@ -167,11 +167,10 @@ export default function ConnectedDevices() {
                     {connectionStrategy == ConnectionStrategies.JWK && delegationInfo?.delegated_id && (
                         <Button
                             variant="outline"
-                            className='!bg-destructive/10 hover:!bg-destructive/20'
+                            className='!bg-destructive/10 hover:!bg-destructive/20 text-xs md:text-sm'
                             onClick={handleUndelegateCurrentDevice}
                             disabled={isRemoving}
                         >
-                            {/* <X className="w-5 h-5" /> */}
                             LOGOUT
                         </Button>
                     )}
@@ -181,26 +180,25 @@ export default function ConnectedDevices() {
             {/* Other Devices Section - Only show when not using JWK and a delegation exists */}
             {delegationInfo && delegationInfo.delegated_id && !delegateJWK && connectionStrategy !== ConnectionStrategies.JWK && (
                 <div>
-                    <h2 className="text-xl font-semibold mb-4">Connected Mobile Device</h2>
-                    <div className="flex items-center justify-between p-4 rounded-md bg-secondary/30">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-secondary rounded-full">
-                                <Smartphone className="w-8 h-8 text-muted-foreground" />
+                    <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Connected Mobile Device</h2>
+                    <div className="flex items-center justify-between p-3 md:p-4 rounded-md bg-secondary/30">
+                        <div className="flex items-center gap-2 md:gap-4">
+                            <div className="p-2 md:p-3 bg-secondary rounded-full">
+                                <Smartphone className="w-6 h-6 md:w-8 md:h-8 text-muted-foreground" />
                             </div>
                             <div>
-                                <div className="font-medium">Mobile PWA</div>
-                                <div className="text-muted-foreground text-sm">
+                                <div className="font-medium text-sm md:text-base">Mobile PWA</div>
+                                <div className="text-xs md:text-sm text-muted-foreground">
                                     {shortenAddress(delegationInfo.delegated_id)} • Connected recently
                                 </div>
                             </div>
                         </div>
                         <Button
                             variant="outline"
-                            className='!bg-destructive/10 hover:!bg-destructive/20'
+                            className='!bg-destructive/10 hover:!bg-destructive/20 text-xs md:text-sm'
                             onClick={() => handleRemoveDelegation(delegationInfo.delegated_id!)}
                             disabled={isRemoving}
                         >
-                            {/* <X className="w-5 h-5" /> */}
                             LOGOUT
                         </Button>
                     </div>
@@ -209,23 +207,27 @@ export default function ConnectedDevices() {
 
             {/* Connect new device button - Only show when not using JWK */}
             {connectionStrategy !== ConnectionStrategies.JWK && (
-                <div className="pt-4">
-                    <div className='flex gap-2 items-center justify-start'>
+                <div className="pt-2 md:pt-4">
+                    <div className='flex flex-col md:flex-row gap-2 items-start md:items-center justify-start'>
                         <Button
                             variant="outline"
                             onClick={genQR}
                             disabled={!!delegateJWK || !!(delegationInfo?.delegated_id && address == delegationInfo.delegated_id)}
-                            className="w-full sm:w-auto"
+                            className="w-full md:w-auto text-sm"
                         >
                             {delegationInfo && delegationInfo.delegated_id ? "Connect a different device" : "Connect a device"}
                         </Button>
-                        {delegationInfo && delegationInfo.delegated_id && <div className='text-xs text-muted-foreground/60'>This will disconnect the current mobile device.</div>}
+                        {delegationInfo && delegationInfo.delegated_id &&
+                            <div className='text-xs text-muted-foreground/60'>
+                                This will disconnect the current mobile device.
+                            </div>
+                        }
                     </div>
 
                     {delegateJWK && (
-                        <div className='mt-6 mx-auto flex flex-col gap-2 items-center justify-center rounded-lg'>
-                            <canvas id="qr-code" className='rounded-lg'></canvas>
-                            <div className='text-muted-foreground'>
+                        <div className='mt-4 md:mt-6 mx-auto flex flex-col gap-2 items-center justify-center rounded-lg'>
+                            <canvas id="qr-code" className='rounded-lg max-w-full'></canvas>
+                            <div className='text-sm text-muted-foreground'>
                                 Scan with the Subspace mobile app
                             </div>
                         </div>

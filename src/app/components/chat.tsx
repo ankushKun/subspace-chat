@@ -31,6 +31,15 @@ import NotificationsPanel from "./notifications-panel";
 import { getProfile, fetchBulkProfiles, warmupProfileCache } from "@/lib/profile-manager";
 import { useWallet } from "@/hooks/use-wallet"
 import { Portal } from "@radix-ui/react-portal";
+import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import {
+    AlertDialog,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Message type from server
 interface Message {
@@ -797,87 +806,161 @@ export default function Chat() {
         return emojiCount > 0 && emojiCount <= 5;
     };
 
-    // Format message with mentions
+    // Format message with mentions and markdown
     const formatMessageWithMentions = (content: string) => {
         // Check if it's an emoji-only message first
         if (isEmojiOnlyMessage(content)) {
             return <span className="text-4xl leading-normal">{content}</span>;
         }
 
-        // Check if the content contains mentions in either format @[display](id) or #[display](id)
-        if (!content.includes('@[') && !content.includes('#[')) {
-            return content;
-        }
+        // Process mentions first
+        const mentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
+        let processedContent = content;
 
-        // Regular expressions to match both types of mentions
+        // Extract and store mentions
         const userMentionRegex = /@\[(.*?)\]\((.*?)\)/g;
         const channelMentionRegex = /#\[(.*?)\]\((.*?)\)/g;
 
-        // Split the content by mentions and build the result
-        const result: React.ReactNode[] = [];
-        let lastIndex = 0;
-
-        // Helper function to process matches
-        const processMatches = (regex: RegExp, prefix: string, renderFn: (display: string, id: string, key: number) => React.ReactNode) => {
-            let match;
-            while ((match = regex.exec(content)) !== null) {
-                // Add text before the match
-                if (match.index > lastIndex) {
-                    result.push(content.substring(lastIndex, match.index));
-                }
-
-                const displayName = match[1];
-                const id = match[2];
-                result.push(renderFn(displayName, id, result.length));
-
-                lastIndex = match.index + match[0].length;
-            }
-        };
-
-        // Process user mentions
-        processMatches(userMentionRegex, '@', (display, id, key) => (
-            <UserProfilePopover key={`mention-${key}`} userId={id} side="top" align="center">
-                <PopoverTrigger asChild>
-                    <span className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white">
-                        @{display}
-                    </span>
-                </PopoverTrigger>
-            </UserProfilePopover>
-        ));
-
-        // Reset regex lastIndex
-        userMentionRegex.lastIndex = 0;
-
-        // Process channel mentions
-        processMatches(channelMentionRegex, '#', (display, id, key) => {
-            // Find the channel in the active server
-            const channel = activeServer?.channels.find(ch => ch.id.toString() === id);
-            const categoryName = channel?.category_id !== null && activeServer
-                ? activeServer.categories.find(c => c.id === channel?.category_id)?.name
-                : null;
-
-            return (
-                <span
-                    key={`channel-mention-${key}`}
-                    className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white"
-                    title={categoryName ? `#${display} in ${categoryName}` : `#${display}`}
-                    onClick={() => {
-                        if (channel) {
-                            navigate(`/app/${activeServerId}/${channel.id}`);
-                        }
-                    }}
-                >
-                    #{display}
-                </span>
-            );
+        // Replace mentions with special markdown links that we can style
+        processedContent = processedContent.replace(userMentionRegex, (match, display, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'user', display, id });
+            return `[${display}](#__user_mention_${index}__)`;
         });
 
-        // Add any remaining text
-        if (lastIndex < content.length) {
-            result.push(content.substring(lastIndex));
-        }
+        processedContent = processedContent.replace(channelMentionRegex, (match, display, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'channel', display, id });
+            return `[${display}](#__channel_mention_${index}__)`;
+        });
 
-        return result;
+        // Custom components for markdown rendering
+        const components = {
+            // Handle links specially to detect our mention placeholders
+            a: (props: { href?: string; children: React.ReactNode }) => {
+                const { href, children } = props;
+
+                // User mention
+                if (href?.startsWith('#__user_mention_')) {
+                    const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
+                    const mention = mentions[index];
+                    if (!mention) return <>{children}</>;
+
+                    return (
+                        <UserProfilePopover key={`mention-${index}`} userId={mention.id} side="top" align="center">
+                            <PopoverTrigger asChild>
+                                <span className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white">
+                                    @{mention.display}
+                                </span>
+                            </PopoverTrigger>
+                        </UserProfilePopover>
+                    );
+                }
+
+                // Channel mention
+                if (href?.startsWith('#__channel_mention_')) {
+                    const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
+                    const mention = mentions[index];
+                    if (!mention) return <>{children}</>;
+
+                    const channel = activeServer?.channels.find(ch => ch.id.toString() === mention.id);
+                    const categoryName = channel?.category_id !== null && activeServer
+                        ? activeServer.categories.find(c => c.id === channel?.category_id)?.name
+                        : null;
+
+                    return (
+                        <span
+                            key={`channel-mention-${index}`}
+                            className="bg-indigo-400/40 dark:bg-indigo-600/40 hover:bg-indigo-400/60 dark:hover:bg-indigo-600/60 px-1 py-0.5 rounded cursor-pointer transition-colors duration-200 text-white"
+                            title={categoryName ? `#${mention.display} in ${categoryName}` : `#${mention.display}`}
+                            onClick={() => {
+                                if (channel) {
+                                    navigate(`/app/${activeServerId}/${channel.id}`);
+                                }
+                            }}
+                        >
+                            #{mention.display}
+                        </span>
+                    );
+                }
+
+                // Default to a normal link with confirmation
+                return (
+                    <a
+                        href={href}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            toast.warning("Open external link?", {
+                                richColors: true,
+                                position: "top-center",
+                                description: href,
+                                action: {
+                                    label: "Open",
+                                    onClick: () => window.open(href, "_blank", "noopener,noreferrer")
+                                },
+                                cancel: {
+                                    label: "Cancel",
+                                    onClick: () => { /* Do nothing */ }
+                                },
+                                duration: 10000 // 10 seconds to give time to read
+                            });
+                        }}
+                        className="text-blue-500 hover:underline"
+                    >
+                        {children}
+                    </a>
+                );
+            },
+            // Style other markdown elements
+            p: ({ children }: { children: React.ReactNode }) => <p className="my-0">{children}</p>,
+            h1: ({ children }: { children: React.ReactNode }) => <h1 className="text-4xl font-bold my-2">{children}</h1>,
+            h2: ({ children }: { children: React.ReactNode }) => <h2 className="text-3xl font-bold my-2">{children}</h2>,
+            h3: ({ children }: { children: React.ReactNode }) => <h3 className="text-2xl font-bold my-1">{children}</h3>,
+            ul: ({ children }: { children: React.ReactNode }) => <ul className="list-disc ml-4 my-1">{children}</ul>,
+            ol: ({ children }: { children: React.ReactNode }) => <ol className="list-decimal ml-4 my-1">{children}</ol>,
+            li: ({ children }: { children: React.ReactNode }) => <li className="my-0.5">{children}</li>,
+            code: ({ children }: { children: React.ReactNode }) => <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+            pre: ({ children }: { children: React.ReactNode }) => <pre className="bg-muted p-2 rounded my-2 overflow-x-auto">{children}</pre>,
+            blockquote: ({ children }: { children: React.ReactNode }) => <blockquote className="border-l-2 border-muted-foreground pl-4 my-2 italic">{children}</blockquote>,
+            img: ({ src, alt }: { src?: string; alt?: string }) => {
+                const [showPreview, setShowPreview] = useState(false);
+                return (
+                    <AlertDialog open={showPreview} onOpenChange={setShowPreview}>
+                        <AlertDialogTrigger asChild>
+                            <img
+                                draggable={false}
+                                src={src}
+                                alt={alt}
+                                className="max-w-min max-h-40 rounded my-2 hover:opacity-90 transition-opacity cursor-zoom-in"
+                            />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="min-w-[100vw] max-w-[100vw] backdrop-blur-xs min-h-[100vh] bg-transparent max-h-[100vh] p-0 border-border/30 overflow-hidden">
+                            <AlertDialogCancel className="flex flex-col items-center justify-center w-auto h-auto bg-transparent">
+                                <img
+                                    src={src}
+                                    alt={alt}
+                                    className="max-w-[90vw] max-h-[90vh] block rounded-md"
+                                    style={{ objectFit: "contain" }}
+                                />
+                                {alt && <p className="text-sm text-muted-foreground text-center">{alt}</p>}
+                            </AlertDialogCancel>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                );
+            },
+            hr: () => <hr className="my-4 border-muted" />,
+            table: ({ children }: { children: React.ReactNode }) => <div className="overflow-x-auto my-2"><table className="min-w-full divide-y divide-border">{children}</table></div>,
+            th: ({ children }: { children: React.ReactNode }) => <th className="px-3 py-2 text-left text-sm font-semibold bg-muted">{children}</th>,
+            td: ({ children }: { children: React.ReactNode }) => <td className="px-3 py-2 text-sm">{children}</td>,
+        };
+
+        return (
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-headings:mb-2 prose-headings:mt-4 first:prose-headings:mt-0">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                    {processedContent}
+                </ReactMarkdown>
+            </div>
+        );
     };
 
     // Handle edit message

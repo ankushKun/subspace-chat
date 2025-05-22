@@ -10,20 +10,27 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserProfilePopover from "./user-profile-popover";
-import { PopoverTrigger } from "@/components/ui/popover";
+import { PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { MentionsInput, Mention } from 'react-mentions';
+import EmojiPicker, { EmojiStyle, SkinTonePickerLocation, SuggestionMode } from 'emoji-picker-react';
+import type { EmojiClickData } from 'emoji-picker-react';
+import { Theme as EmojiTheme } from 'emoji-picker-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Popover,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { FaInbox } from "react-icons/fa6";
 import { BiSolidInbox } from "react-icons/bi";
 import NotificationsPanel from "./notifications-panel";
 import { getProfile, fetchBulkProfiles, warmupProfileCache } from "@/lib/profile-manager";
 import { useWallet } from "@/hooks/use-wallet"
+import { Portal } from "@radix-ui/react-portal";
 
 // Message type from server
 interface Message {
@@ -129,6 +136,8 @@ export default function Chat() {
     const [profileCacheVersion, setProfileCacheVersion] = useState(0);
     // Create a ref to track previous server ID for handling collapsing users panel
     const prevServerIdRef = useRef<string | null>(null);
+    // Add new state for emoji picker
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     // Add function to ensure message author is in member list
     const ensureAuthorInMemberList = useCallback(async (authorId: string) => {
@@ -597,31 +606,61 @@ export default function Chat() {
 
         // Get server members
         const members = getServerMembers(activeServerId);
-        if (!members || members.length === 0) {
+        if (!members) {
             callback([]);
             return;
         }
 
-        // Filter and format members for the mentions component
-        const filteredMembers = members
+        // Get unique message authors
+        const messageAuthors = Array.from(new Set(messages.map(m => m.author_id)));
+
+        // Create a Set to track unique IDs we've processed
+        const processedIds = new Set<string>();
+
+        // Process server members first
+        const suggestions = members
             .filter(member => {
                 const displayName = getDisplayName(member.id);
+                processedIds.add(member.id);
                 return displayName.toLowerCase().includes(query.toLowerCase());
             })
             .map(member => {
                 const displayName = getDisplayName(member.id);
                 return {
                     id: member.id,
-                    display: displayName
+                    display: displayName,
+                    source: 'member'
                 };
             });
 
-        callback(filteredMembers);
+        // Add message authors that aren't in the members list
+        const additionalAuthors = messageAuthors
+            .filter(authorId => {
+                if (processedIds.has(authorId)) return false;
+                const displayName = getDisplayName(authorId);
+                return displayName.toLowerCase().includes(query.toLowerCase());
+            })
+            .map(authorId => {
+                const displayName = getDisplayName(authorId);
+                return {
+                    id: authorId,
+                    display: displayName,
+                    source: 'author'
+                };
+            });
+
+        // Combine and sort the results
+        const combinedResults = [...suggestions, ...additionalAuthors].sort((a, b) => {
+            // Sort by display name
+            return a.display.localeCompare(b.display);
+        });
+
+        callback(combinedResults);
     };
 
     // Custom renderer for the mention suggestions
     const renderMemberSuggestion = (
-        suggestion: { id: string; display: string },
+        suggestion: { id: string; display: string; source: string },
         search: string,
         highlightedDisplay: React.ReactNode,
         index: number,
@@ -649,9 +688,16 @@ export default function Chat() {
                 </div>
                 <div className="flex flex-col">
                     <span className="font-medium text-foreground">{highlightedDisplay}</span>
-                    <span className="text-xs text-muted-foreground">
-                        {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 4)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                            {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 4)}
+                        </span>
+                        {suggestion.source === 'author' && (
+                            <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
+                                Recent
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -733,8 +779,31 @@ export default function Chat() {
         </div>
     );
 
-    // Function to format mentions in message text
+    // Function to check if a message contains only emojis and count them
+    const isEmojiOnlyMessage = (content: string) => {
+        // Regex to match emoji characters
+        const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+
+        // Remove all emoji characters
+        const withoutEmoji = content.replace(emojiRegex, '').trim();
+
+        // If there's any text left after removing emojis, it's not emoji-only
+        if (withoutEmoji.length > 0) return false;
+
+        // Count emojis
+        const emojiCount = (content.match(emojiRegex) || []).length;
+
+        // Return true if it's only emojis and count is 5 or less
+        return emojiCount > 0 && emojiCount <= 5;
+    };
+
+    // Format message with mentions
     const formatMessageWithMentions = (content: string) => {
+        // Check if it's an emoji-only message first
+        if (isEmojiOnlyMessage(content)) {
+            return <span className="text-4xl leading-normal">{content}</span>;
+        }
+
         // Check if the content contains mentions in either format @[display](id) or #[display](id)
         if (!content.includes('@[') && !content.includes('#[')) {
             return content;
@@ -935,6 +1004,17 @@ export default function Chat() {
         return mentionRegex.test(content);
     };
 
+    // Add emoji click handler
+    const onEmojiClick = (emojiData: EmojiClickData, event: MouseEvent) => {
+        const emoji = emojiData.emoji;
+        setMessageInput((prev) => {
+            const cursorPosition = (document.activeElement as HTMLTextAreaElement)?.selectionStart || prev.length;
+            const newMessageInput = prev.slice(0, cursorPosition) + emoji + prev.slice(cursorPosition);
+            // setShowEmojiPicker(false);
+            return newMessageInput;
+        });
+    };
+
     // Loading or no server selected - show placeholder
     if (!activeServer) {
         return (
@@ -1013,19 +1093,20 @@ export default function Chat() {
                     </div>
                 ) : (
                     <div className="space-y-4 mt-5">
-                        {messages.map((message) => {
+                        {messages.map((message, index) => {
                             // Check if the message mentions the current user
                             const isCurrentUserMentioned = messageContainsCurrentUserMention(message.content);
 
                             return (
                                 <div
                                     key={message.msg_id}
-                                    className={`group px-4 py-1 pb-3 m-0 mb-1 hover:bg-foreground/5 ${isCurrentUserMentioned ? 'bg-yellow-400/10 border-l-2 border-yellow-400' : ''
+                                    className={`group px-4 py-1 pb-2 m-0 mb-1 hover:bg-foreground/5 ${isCurrentUserMentioned ? 'bg-yellow-400/10 border-l-2 border-yellow-400' : ''
                                         }`}
                                 >
                                     <div className="flex items-start gap-3">
                                         {/* Profile avatar - wrapped in the popover */}
-                                        <UserProfilePopover
+                                        {/* @ts-ignore */}
+                                        {messages[index - 1]?.author_id !== message.author_id ? <UserProfilePopover
                                             userId={message.author_id}
                                             side="right"
                                             align="start"
@@ -1049,12 +1130,15 @@ export default function Chat() {
                                                     )}
                                                 </div>
                                             </PopoverTrigger>
-                                        </UserProfilePopover>
+                                        </UserProfilePopover> : <div className="w-10"></div>}
 
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center h-6 gap-2">
+                                            <div
+                                                data-collapse={messages[index - 1]?.author_id === message.author_id}
+                                                className="flex items-center data-[collapse=true]:hidden h-6 gap-2">
                                                 {/* Username with popover */}
-                                                <UserProfilePopover
+                                                {/* @ts-ignore */}
+                                                {messages[index - 1]?.author_id !== message.author_id && <UserProfilePopover
                                                     userId={message.author_id}
                                                     side="bottom"
                                                     align="start"
@@ -1073,9 +1157,9 @@ export default function Chat() {
                                                             );
                                                         })()}
                                                     </PopoverTrigger>
-                                                </UserProfilePopover>
+                                                </UserProfilePopover>}
 
-                                                <span
+                                                {message.author_id !== messages[index - 1]?.author_id && <span
                                                     className="text-xs text-muted-foreground whitespace-nowrap"
                                                     title={message.edited
                                                         ? `${formatFullDate(message.timestamp)} (edited)`
@@ -1087,10 +1171,10 @@ export default function Chat() {
                                                             (edited)
                                                         </span> :
                                                         null}
-                                                </span>
+                                                </span>}
 
                                                 {/* Add wallet address as tooltip/subtitle if we're showing a username or primary name */}
-                                                {(getUserProfileFromCache(message.author_id)?.username || getUserProfileFromCache(message.author_id)?.primaryName) && (
+                                                {message.author_id !== messages[index - 1]?.author_id && ((getUserProfileFromCache(message.author_id)?.username || getUserProfileFromCache(message.author_id)?.primaryName)) && (
                                                     <span className="text-xs text-muted-foreground hidden group-hover:inline">
                                                         {message.author_id.substring(0, 6)}...{message.author_id.substring(message.author_id.length - 4)}
                                                     </span>
@@ -1177,21 +1261,33 @@ export default function Chat() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    type="submit"
-                    className="flex items-center justify-center"
-                    onClick={() => toast.info("coming soon", { position: "bottom-left" })}
+                    type="button"
+                    data-state={showEmojiPicker ? "active" : "inactive"}
+                    className="flex items-center justify-center data-[state=active]:bg-muted data-[state=inactive]:text-muted-foreground"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 >
                     <Smile className="h-4 w-4" />
                 </Button>
                 <Button
                     variant="ghost"
                     size="icon"
-                    type="submit"
+                    type="button"
                     className="flex items-center justify-center"
                     onClick={() => toast.info("coming soon", { position: "bottom-left" })}
                 >
                     <Plus className="h-4 w-4" />
                 </Button>
+                <EmojiPicker
+                    open={showEmojiPicker}
+                    onEmojiClick={onEmojiClick}
+                    autoFocusSearch={false}
+                    className="!absolute bottom-18 -translate-x-[2px]"
+                    theme={document.documentElement.classList.contains('dark') ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                    searchPlaceholder="Search emoji..."
+                    skinTonePickerLocation={SkinTonePickerLocation.PREVIEW}
+                    emojiStyle={EmojiStyle.TWITTER}
+                    suggestedEmojisMode={SuggestionMode.FREQUENT}
+                />
                 <MentionsInput
                     value={messageInput}
                     onChange={handleMentionInputChange}
@@ -1201,7 +1297,7 @@ export default function Chat() {
                     a11ySuggestionsListLabel={"Suggested mentions"}
                     className="w-full py-2 bg-muted/50 rounded-md overflow-visible px-2 block max-w-[calc(100%-2.3rem)]"
                     disabled={isSending}
-                    singleLine
+                    singleLine={true}
                     forceSuggestionsAboveCursor
                     autoFocus
                 >

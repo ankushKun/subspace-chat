@@ -34,6 +34,7 @@ export default defineConfig({
       globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico}'],
       // Cache app shell for offline use
       navigateFallback: 'index.html',
+      maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB
       // Take control immediately
       clientsClaim: true,
       // More aggressive cache cleanup

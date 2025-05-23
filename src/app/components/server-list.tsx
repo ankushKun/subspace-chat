@@ -594,13 +594,12 @@ export default function ServerList() {
             >
                 <WalletCards className="h-5 w-5" />
             </Button>}
-
             {/* Install app button */}
-            {isInstallable || deferredPrompt && (
+            {isInstallable && (
                 <Button
                     variant='outline'
                     size='icon'
-                    className='w-10 h-10 rounded-lg hover:bg-primary/10 transition-colors'
+                    className='w-10 h-10 rounded-lg bg-green-100/80 border-green-300/70 hover:bg-green-200/80 text-green-700 dark:bg-green-950/30 dark:border-green-800/40 dark:hover:bg-green-900/40 dark:text-green-400 transition-colors'
                     onClick={handleInstallClick}
                     title="Install App"
                 >

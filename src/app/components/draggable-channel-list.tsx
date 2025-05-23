@@ -255,7 +255,7 @@ export default function DraggableChannelList() {
         // Update global state
         setActiveChannelId(channel.id);
         // Navigate to the channel
-        navigate(`/app/${activeServerId}/${channel.id}`, { replace: true });
+        navigate(`/app/${activeServerId}/${channel.id}`, { replace: false });
 
         // If channel has unread messages, mark them as read
         if (hasUnread && activeServerId) {

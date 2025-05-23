@@ -922,32 +922,33 @@ export default function Chat() {
             code: ({ children }: { children: React.ReactNode }) => <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
             pre: ({ children }: { children: React.ReactNode }) => <pre className="bg-muted p-2 rounded my-2 overflow-x-auto">{children}</pre>,
             blockquote: ({ children }: { children: React.ReactNode }) => <blockquote className="border-l-2 border-muted-foreground pl-4 my-2 italic">{children}</blockquote>,
-            img: ({ src, alt }: { src?: string; alt?: string }) => {
-                const [showPreview, setShowPreview] = useState(false);
-                return (
-                    <AlertDialog open={showPreview} onOpenChange={setShowPreview}>
-                        <AlertDialogTrigger asChild>
-                            <img
-                                draggable={false}
-                                src={src}
-                                alt={alt}
-                                className="max-w-min max-h-40 rounded my-2 hover:opacity-90 transition-opacity cursor-zoom-in"
-                            />
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="min-w-[100vw] max-w-[100vw] backdrop-blur-xs min-h-[100vh] bg-transparent max-h-[100vh] p-0 border-border/30 overflow-hidden">
-                            <AlertDialogCancel className="flex flex-col items-center justify-center w-auto h-auto bg-transparent">
-                                <img
-                                    src={src}
-                                    alt={alt}
-                                    className="max-w-[90vw] max-h-[90vh] block rounded-md"
-                                    style={{ objectFit: "contain" }}
-                                />
-                                {alt && <p className="text-sm text-muted-foreground text-center">{alt}</p>}
-                            </AlertDialogCancel>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                );
-            },
+            img: ({ src, alt }: { src?: string; alt?: string }) => <p>{alt}</p>,
+            // img: ({ src, alt }: { src?: string; alt?: string }) => {
+            //     const [showPreview, setShowPreview] = useState(false);
+            //     return (
+            //         <AlertDialog open={showPreview} onOpenChange={setShowPreview}>
+            //             <AlertDialogTrigger asChild>
+            //                 <img
+            //                     draggable={false}
+            //                     src={src}
+            //                     alt={alt}
+            //                     className="max-w-min max-h-40 rounded my-2 hover:opacity-90 transition-opacity cursor-zoom-in"
+            //                 />
+            //             </AlertDialogTrigger>
+            //             <AlertDialogContent className="min-w-[100vw] max-w-[100vw] backdrop-blur-xs min-h-[100vh] bg-transparent max-h-[100vh] p-0 border-border/30 overflow-hidden">
+            //                 <AlertDialogCancel className="flex flex-col items-center justify-center w-auto h-auto bg-transparent">
+            //                     <img
+            //                         src={src}
+            //                         alt={alt}
+            //                         className="max-w-[90vw] max-h-[90vh] block rounded-md"
+            //                         style={{ objectFit: "contain" }}
+            //                     />
+            //                     {alt && <p className="text-sm text-muted-foreground text-center">{alt}</p>}
+            //                 </AlertDialogCancel>
+            //             </AlertDialogContent>
+            //         </AlertDialog>
+            //     );
+            // },
             hr: () => <hr className="my-4 border-muted" />,
             table: ({ children }: { children: React.ReactNode }) => <div className="overflow-x-auto my-2"><table className="min-w-full divide-y divide-border">{children}</table></div>,
             th: ({ children }: { children: React.ReactNode }) => <th className="px-3 py-2 text-left text-sm font-semibold bg-muted">{children}</th>,

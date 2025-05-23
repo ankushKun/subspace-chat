@@ -37,9 +37,22 @@ export default defineConfig({
       maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB
       // Take control immediately
       clientsClaim: true,
+      skipWaiting: true,
       // More aggressive cache cleanup
       cleanupOutdatedCaches: true,
+      // Network first strategy for HTML and JS files
       runtimeCaching: [
+        {
+          urlPattern: /\.(?:html|js|jsx|ts|tsx)$/,
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'app-shell',
+            expiration: {
+              maxEntries: 10,
+              maxAgeSeconds: 60 * 5 // 5 minutes
+            }
+          }
+        },
         {
           urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
           handler: 'CacheFirst',
@@ -47,7 +60,7 @@ export default defineConfig({
             cacheName: 'images-cache',
             expiration: {
               maxEntries: 50,
-              maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+              maxAgeSeconds: 60 * 60 * 24 // 1 day
             }
           }
         }

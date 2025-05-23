@@ -271,14 +271,24 @@ const ServerIcon = ({ id, refreshServerList }: { id: string, refreshServerList: 
     )
 }
 
-// Global variable to capture the install prompt event before component mounts
+// Global variable to capture the install prompt event
 let deferredPromptEvent: any = null;
 
 // Add global event listener to capture beforeinstallprompt
 if (typeof window !== 'undefined') {
+    // Remove any existing listeners first
+    window.removeEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPromptEvent = e;
+    });
+
+    // Add the event listener
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPromptEvent = e;
+        // Also update any existing ServerList components
+        const event = new CustomEvent('pwaInstallable', { detail: e });
+        window.dispatchEvent(event);
         console.log('beforeinstallprompt event captured globally');
     });
 }
@@ -314,6 +324,21 @@ export default function ServerList() {
             console.log('beforeinstallprompt event detected in component');
         };
 
+        // Listen for custom pwaInstallable event
+        const handlePWAInstallable = (e: CustomEvent) => {
+            setDeferredPrompt(e.detail);
+            setIsInstallable(true);
+            console.log('pwaInstallable event received');
+        };
+
+        // Check if app is already installed
+        const checkInstalled = () => {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                (window.navigator as any).standalone === true;
+            setIsInstallable(!isStandalone);
+            console.log('App standalone status:', isStandalone);
+        };
+
         // Check for globally captured event first
         if (deferredPromptEvent) {
             setDeferredPrompt(deferredPromptEvent);
@@ -322,14 +347,19 @@ export default function ServerList() {
         }
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        // Check if app is already installed
-        if (window.matchMedia('(display-mode: standalone)').matches) {
+        window.addEventListener('pwaInstallable', handlePWAInstallable as EventListener);
+        window.addEventListener('appinstalled', () => {
             setIsInstallable(false);
-        }
+            console.log('App was installed');
+        });
 
+        // Check initial installation status
+        checkInstalled();
+
+        // Cleanup
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('pwaInstallable', handlePWAInstallable as EventListener);
         };
     }, []);
 
@@ -565,8 +595,8 @@ export default function ServerList() {
                 <WalletCards className="h-5 w-5" />
             </Button>}
 
-            {/* Install app button - only shown when installable */}
-            {isInstallable && (
+            {/* Install app button */}
+            {isInstallable || deferredPrompt && (
                 <Button
                     variant='outline'
                     size='icon'

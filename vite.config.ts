@@ -32,16 +32,29 @@ export default defineConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,jpg,jpeg,svg,ico}'],
-      // Always use network, no caching
+      // Always use network, but keep minimal cache for PWA installation
       navigateFallback: 'index.html',
       maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB
       // Take control immediately
       clientsClaim: true,
       skipWaiting: true,
       cleanupOutdatedCaches: true,
-      // Force NetworkOnly strategy for all assets
+      // Minimal caching strategy for PWA installation requirements
       runtimeCaching: [
         {
+          // Cache only PWA essential files (manifest, icons)
+          urlPattern: /\/(manifest\.webmanifest|s\.png|stars\.gif)$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'pwa-essential',
+            expiration: {
+              maxEntries: 10,
+              maxAgeSeconds: 60 * 60 * 24 // 24 hours
+            }
+          }
+        },
+        {
+          // All other assets load from network
           urlPattern: /.*/,
           handler: 'NetworkOnly'
         }

@@ -86,7 +86,7 @@ export default function App() {
       ) : (
         <LoginPrompt />
       )}
-      <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />
+      {activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
     </div>
   )
 }

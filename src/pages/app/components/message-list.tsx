@@ -453,7 +453,7 @@ const MessageInput = ({
             {/* Main input container */}
             <div className="p-4">
                 <div className={cn(
-                    "relative bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
+                    "relative flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
                     "hover:border-border focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/10",
                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 focus-within:before:opacity-100 before:transition-opacity before:duration-300 before:rounded-lg",
                     replyingTo && "rounded-t-none border-t-0"
@@ -481,7 +481,7 @@ const MessageInput = ({
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-end gap-3 p-3 relative z-10">
+                    <div className="flex items-center grow gap-3 p-3 relative z-10">
                         {/* Left actions */}
                         <div className="flex items-center gap-1">
                             <Button
@@ -520,24 +520,6 @@ const MessageInput = ({
                                 className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
                                 disabled={disabled}
                             >
-                                <Gift className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button>
-
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
-                                disabled={disabled}
-                            >
-                                <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button>
-
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
-                                disabled={disabled}
-                            >
                                 <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                             </Button>
 
@@ -557,29 +539,8 @@ const MessageInput = ({
                                     <Send className="w-4 h-4" />
                                 </Button>
                             )}
-
-                            {/* Voice message button - show when no text */}
-                            {!message.trim() && attachments.length === 0 && (
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors ml-2"
-                                    disabled={disabled}
-                                >
-                                    <Mic className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                </Button>
-                            )}
                         </div>
                     </div>
-
-                    {/* Typing indicator */}
-                    {isTyping && (
-                        <div className="px-3 pb-2">
-                            <div className="text-xs text-muted-foreground/60">
-                                Press Enter to send, Shift+Enter for new line
-                            </div>
-                        </div>
-                    )}
 
                     {/* Hidden file input */}
                     <input
@@ -775,9 +736,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                 onCancelReply={handleCancelReply}
                 disabled={!activeServerId || !hasActiveChannel}
             />
-
-            {/* Ambient glow at bottom */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-12 bg-primary/2 rounded-full blur-2xl" />
         </div>
     )
 }

@@ -486,9 +486,15 @@ const MessageInput = ({
     }
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            handleSend()
+        if (e.key === 'Enter') {
+            if (e.shiftKey) {
+                // Allow Shift+Enter for new lines
+                return
+            } else {
+                // Enter without Shift sends the message
+                e.preventDefault()
+                handleSend()
+            }
         }
     }
 
@@ -570,13 +576,13 @@ const MessageInput = ({
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-center grow gap-3 p-3 relative z-10">
+                    <div className="flex items-start grow gap-3 p-3 relative z-10">
                         {/* Left actions */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 pt-1">
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounde transition-colors"
+                                className="h-8 w-8 p-0 hover:bg-muted rounded transition-colors"
                                 onClick={handleFileUpload}
                                 disabled={disabled}
                             >
@@ -585,7 +591,7 @@ const MessageInput = ({
                         </div>
 
                         {/* Text input */}
-                        <div className="flex-1 relative">
+                        <div className="flex-1 relative min-h-[20px] z-0">
                             <MentionsInput
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
@@ -595,7 +601,7 @@ const MessageInput = ({
                                 singleLine={false}
                                 forceSuggestionsAboveCursor
                                 a11ySuggestionsListLabel="Suggested mentions"
-                                className="w-full border p-0 m-0 relative"
+                                className="w-full border-0 p-0 m-0 relative mentions-input"
                                 style={{
                                     control: {
                                         backgroundColor: 'transparent',
@@ -604,36 +610,59 @@ const MessageInput = ({
                                         border: 'none',
                                         outline: 'none',
                                         minHeight: '20px',
-                                        maxHeight: '200px',
-                                        padding: '0px 0',
+                                        maxHeight: '210px',
+                                        padding: '0',
                                         lineHeight: '1.5',
+                                        overflow: 'hidden',
+                                        position: 'relative',
                                     },
                                     '&multiLine': {
-                                        padding: '0px 0',
                                         control: {
                                             fontFamily: 'inherit',
                                             minHeight: '20px',
+                                            maxHeight: '210px',
                                             border: 'none',
                                             outline: 'none',
+                                            overflow: 'hidden',
+                                            position: 'relative',
                                         },
                                         highlighter: {
-                                            padding: '0px 0px',
+                                            padding: '0',
                                             border: 'none',
                                             minHeight: '20px',
-                                            margin: '0px 0px',
-                                            // zIndex: 1000,
+                                            maxHeight: '210px',
+                                            margin: '0',
+                                            overflow: 'auto',
+                                            zIndex: 10,
+                                            opacity: 0.65,
+                                            whiteSpace: 'pre-wrap',
+                                            wordWrap: 'break-word',
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            pointerEvents: 'none',
                                         },
                                         input: {
-                                            padding: '0px 0',
+                                            padding: '0',
                                             border: 'none',
                                             outline: 'none',
                                             backgroundColor: 'transparent',
-                                            color: 'inherit',
-                                            // fontSize: '14px',
+                                            color: 'hsl(var(--foreground))',
+                                            fontSize: '14px',
                                             fontFamily: 'inherit',
                                             lineHeight: '1.5',
                                             minHeight: '20px',
+                                            maxHeight: '210px',
                                             resize: 'none',
+                                            overflow: 'auto',
+                                            whiteSpace: 'pre-wrap',
+                                            wordWrap: 'break-word',
+                                            scrollbarWidth: 'thin',
+                                            scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent',
+                                            position: 'relative',
+                                            zIndex: 3,
                                         },
                                     },
                                     '&singleLine': {
@@ -644,12 +673,13 @@ const MessageInput = ({
                                             outline: 'none',
                                         },
                                         highlighter: {
-                                            padding: '0px 0',
+                                            padding: '0',
                                             border: 'none',
                                             minHeight: '20px',
+                                            zIndex: 1,
                                         },
                                         input: {
-                                            padding: '0px 0',
+                                            padding: '0',
                                             border: 'none',
                                             outline: 'none',
                                             backgroundColor: 'transparent',
@@ -662,11 +692,12 @@ const MessageInput = ({
                                         },
                                     },
                                     suggestions: {
+                                        zIndex: 99,
                                         backgroundColor: "transparent",
                                         width: '100%',
                                         list: {
                                             backgroundColor: 'var(--background)',
-                                            border: '1px solid hsl(var(--border))',
+                                            border: '1px solid var(--border)',
                                             borderRadius: '16px',
                                             fontSize: '14px',
                                             boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.05)',
@@ -674,7 +705,6 @@ const MessageInput = ({
                                             minWidth: '320px',
                                             overflowY: 'auto',
                                             overflowX: 'hidden',
-                                            zIndex: 1000,
                                             padding: '8px',
                                             backdropFilter: 'blur(12px)',
                                             scrollbarWidth: 'thin',
@@ -699,14 +729,14 @@ const MessageInput = ({
                                     markup="<@__id__>"
                                     displayTransform={(id, display) => `@${display.length == 43 ? shortenAddress(display) : display}`}
                                     appendSpaceOnAdd
-                                    className="border relative"
+                                    className="mention-highlight z-10"
                                     style={{
                                         backgroundColor: 'var(--primary)',
                                         color: 'var(--primary-foreground)',
-                                        padding: '1px 4px',
-                                        // borderRadius: '3px',
-                                        // fontWeight: '500',
-                                        // fontSize: '14px',
+                                        padding: '1px 0px',
+                                        borderRadius: '3px',
+                                        fontWeight: '500',
+                                        fontSize: '14px',
                                     }}
                                     renderSuggestion={renderMemberSuggestion}
                                 />
@@ -714,7 +744,7 @@ const MessageInput = ({
                         </div>
 
                         {/* Right actions */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 pt-1">
                             <Button
                                 size="sm"
                                 variant="ghost"

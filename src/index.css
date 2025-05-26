@@ -264,3 +264,68 @@
 #wanderConnectButtonHost {
   display: none;
 }
+
+/* Custom styles for mentions input */
+.mentions-input {
+  position: relative;
+}
+
+.mentions-input textarea {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+.mentions-input textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mentions-input textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mentions-input textarea::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+.mentions-input textarea::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Mention highlight styling */
+.mention-highlight {
+  display: inline;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensure proper text wrapping in mentions */
+.mentions-input .mentions__control {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.mentions-input .mentions__highlighter {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.mentions-input .mentions__input {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Smooth scrolling for mentions suggestions */
+.mentions__suggestions__list {
+  scroll-behavior: smooth;
+}
+
+/* Focus states for better accessibility */
+.mentions-input:focus-within {
+  outline: none;
+}
+
+.mentions-input textarea:focus {
+  outline: none;
+  box-shadow: none;
+}

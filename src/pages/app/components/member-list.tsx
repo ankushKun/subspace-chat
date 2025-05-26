@@ -9,29 +9,18 @@ import type { ServerMember } from "@/types/subspace"
 
 const MemberAvatar = ({
     userId,
-    size = "sm",
-    showOnlineStatus = false
+    size = "sm"
 }: {
     userId: string;
     size?: "xs" | "sm" | "md";
-    showOnlineStatus?: boolean;
 }) => {
     const { profiles } = useProfile()
     const profile = profiles[userId]
-
-    // Mock online status - replace with real online status when implemented
-    const isOnline = false;
 
     const sizeClasses = {
         xs: "w-6 h-6",
         sm: "w-8 h-8",
         md: "w-10 h-10"
-    }
-
-    const onlineIndicatorSizes = {
-        xs: "w-2 h-2",
-        sm: "w-2.5 h-2.5",
-        md: "w-3 h-3"
     }
 
     return (
@@ -52,13 +41,6 @@ const MemberAvatar = ({
                     </span>
                 )}
             </div>
-            {/* Online indicator */}
-            {showOnlineStatus && isOnline && (
-                <div className={cn(
-                    "absolute -bottom-0.5 -right-0.5 bg-green-500 rounded-full border-2 border-background",
-                    onlineIndicatorSizes[size]
-                )} />
-            )}
         </div>
     )
 }
@@ -77,7 +59,6 @@ const MemberItem = ({
     const [isHovered, setIsHovered] = useState(false)
 
     const displayName = member.nickname || profile?.username || member.userId
-    const isOnline = Math.random() > 0.3 // Mock online status
 
     return (
         <div className="relative group">
@@ -101,10 +82,7 @@ const MemberItem = ({
                     {/* Member info */}
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className={cn(
-                                "font-medium truncate transition-colors",
-                                isOnline ? "text-foreground" : "text-muted-foreground/70"
-                            )}>
+                            <span className="font-medium truncate transition-colors text-foreground">
                                 {displayName}
                             </span>
 
@@ -112,11 +90,6 @@ const MemberItem = ({
                             {isOwner && (
                                 <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />
                             )}
-                        </div>
-
-                        {/* Status or activity */}
-                        <div className="text-xs text-muted-foreground/60 truncate">
-                            {isOnline ? "Online" : "Offline"}
                         </div>
                     </div>
 
@@ -359,26 +332,6 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
                         )}
                     </>
                 )}
-            </div>
-
-            {/* Quick actions */}
-            <div className="p-4 border-t border-border/30 mt-auto space-y-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-                >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Invite People
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-                >
-                    <Settings className="w-4 h-4 mr-2" />
-                    Server Settings
-                </Button>
             </div>
 
             {/* Ambient glow at bottom */}

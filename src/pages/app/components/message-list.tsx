@@ -133,8 +133,6 @@ const MessageAvatar = ({ authorId, size = "md" }: { authorId: string; size?: "sm
                     {(profile?.username || authorId).charAt(0).toUpperCase()}
                 </div>
             )}
-            {/* Online indicator */}
-            {/* <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" /> */}
         </div>
     )
 }

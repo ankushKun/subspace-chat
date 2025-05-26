@@ -7,6 +7,7 @@ import { useEffect } from "react"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
+import DMList from "./components/dm-list"
 
 export default function App() {
 
@@ -75,7 +76,11 @@ export default function App() {
   return (
     <div className="flex flex-row items-start justify-start h-svh">
       <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
-      <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
+      {activeServerId ? (
+        <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
+      ) : (
+        <DMList className="w-[350px] min-w-[350px] max-w-[350px]" />
+      )}
       {connected && address ? (
         <MessageList className="grow h-svh" />
       ) : (

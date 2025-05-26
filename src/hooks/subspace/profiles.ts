@@ -1,0 +1,33 @@
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { type Profile } from "@/types/subspace";
+
+
+interface ProfileState {
+    loadingProfile: boolean;
+    profiles: Record<string, Profile>; // ProfileId -> Profile
+
+    actions: ProfileActions;
+}
+
+interface ProfileActions {
+    setLoadingProfile: (loading: boolean) => void;
+    setProfiles: (profiles: Record<string, Profile>) => void;
+}
+
+export const useProfile = create<ProfileState>()(persist((set, get) => ({
+    loadingProfile: false,
+    profiles: {},
+    actions: {
+        setLoadingProfile: (loading: boolean) => set({ loadingProfile: loading }),
+        setProfiles: (profiles: Record<string, Profile>) => set({ profiles })
+    }
+}), {
+    name: "subspace-profile-state",
+    storage: createJSONStorage(() => localStorage),
+    partialize: (state) => ({
+        profiles: state.profiles
+    })
+}))
+
+

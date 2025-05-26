@@ -1,0 +1,187 @@
+import { Logger } from "@/lib/utils";
+import { aofetch } from "ao-fetch";
+import { Constants } from "../constants";
+
+import type { ConnectionManager } from ".";
+import type { Profile, SubspaceNotification, DelegationDetails } from "@/types/subspace";
+
+
+export class User {
+
+    constructor(private connectionManager: ConnectionManager) { }
+
+    async getProfile({ userId }: { userId: string }): Promise<Profile | null> {
+        const path = `${Constants.Profiles}/profile`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: { userId },
+            AO: this.connectionManager.getAo()
+        })
+
+        if (res.status == 200) {
+            const primaryName = await this.getPrimaryName({ userId })
+            const profile = res.json as Profile;
+            profile.primaryName = primaryName;
+            return profile;
+        } else {
+            Logger.error("getProfile", res);
+            return null;
+        }
+    }
+
+    async getPrimaryName({ userId }: { userId: string }) {
+        const res = await this.connectionManager.ario.getPrimaryName({ address: userId })
+        if (res && res.name) {
+            return res.name
+        }
+        return null;
+    }
+
+    async updateProfile({ username, pfp }: { username?: string, pfp?: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/update-profile`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { username, pfp },
+            AO: this.connectionManager.getAo(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateProfile },
+            ]
+        });
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("updateProfile", res);
+            return false;
+        }
+    }
+
+    async getNotifications({ userId }: { userId: string }): Promise<SubspaceNotification[] | null> {
+        const path = `${Constants.Profiles}/get-notifications`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: { userId },
+            AO: this.connectionManager.getAo()
+        })
+
+        if (res.status == 200) {
+            return res.json as SubspaceNotification[];
+        } else {
+            Logger.error("getNotifications", res);
+            return null;
+        }
+    }
+
+    async getBulkProfiles({ userIds }: { userIds: string[] }): Promise<Profile[] | null> {
+        const path = `${Constants.Profiles}/bulk-profile`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: { userIds: JSON.stringify(userIds) },
+            AO: this.connectionManager.getAo()
+        })
+
+        if (res.status == 200) {
+            return res.json as Profile[];
+        } else {
+            Logger.error("getBulkProfiles", res);
+            return null;
+        }
+    }
+
+    async delegateUser({ userId }: { userId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/delegate`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { userId },
+            AO: this.connectionManager.getAo(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DelegateUser },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("delegateUser", res);
+            return false;
+        }
+    }
+
+    async undelegateUser(): Promise<boolean> {
+        const path = `${Constants.Profiles}/undelegate`
+        const res = await aofetch(path, {
+            method: "POST",
+            AO: this.connectionManager.getAo(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UndelegateUser },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("undelegateUser", res);
+            return false;
+        }
+
+    }
+    async getDelegationDetails({ userId }: { userId?: string }): Promise<DelegationDetails | null> {
+        const path = `${Constants.Profiles}/check-delegation`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: { userId },
+            AO: this.connectionManager.getAo()
+        })
+
+        if (res.status == 200) {
+            return res.json as DelegationDetails;
+        } else {
+            Logger.error("getDelegationDetails", res);
+            return null;
+        }
+    }
+
+    async joinServer({ serverId }: { serverId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/join-server`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { serverId },
+            AO: this.connectionManager.getAo(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.JoinServer },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("joinServer", res);
+            return false;
+        }
+
+    }
+
+    async leaveServer({ serverId }: { serverId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/leave-server`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { serverId },
+            AO: this.connectionManager.getAo(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.LeaveServer },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("leaveServer", res);
+            return false;
+        }
+    }
+}

@@ -4,7 +4,7 @@ import useSubspace, { useProfile } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
-import { Home, Plus, Sparkles } from "lucide-react"
+import { Download, Home, Plus, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
@@ -144,6 +144,115 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
     )
 }
 
+const AddServerButton = () => {
+    const [isHovered, setIsHovered] = useState(false)
+
+    return (
+        <div className="relative group mb-3">
+            {/* Hover indicator pill */}
+            <div
+                className={cn(
+                    "absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 rounded-r-full transition-all duration-300 ease-out",
+                    isHovered
+                        ? "h-6 bg-gradient-to-b from-green-500/80 to-green-400/60 shadow-md shadow-green-500/30"
+                        : "h-0"
+                )}
+            />
+
+            <div className="flex justify-center relative">
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                        "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
+                        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
+                        "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-green-500 hover:to-green-400 hover:shadow-md hover:shadow-green-500/20",
+                        "border-2 border-dashed border-muted-foreground/30 hover:border-green-400/50"
+                    )}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <Plus className={cn(
+                        "w-5 h-5 transition-all duration-300",
+                        "text-muted-foreground group-hover:text-white group-hover:scale-110 group-hover:rotate-90"
+                    )} />
+
+                    {/* Shimmer effect on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                </Button>
+
+                {/* Tooltip positioned relative to button */}
+                <div className={cn(
+                    "absolute left-full ml-4 top-1/2 -translate-y-1/2 transition-all duration-200 pointer-events-none z-[100]",
+                    isHovered ? "opacity-100 visible translate-x-0" : "opacity-0 invisible -translate-x-2"
+                )}>
+                    <div className="bg-popover text-popover-foreground text-sm px-3 py-2 rounded-lg shadow-xl border border-border whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                            <Plus className="w-3 h-3 text-green-500" />
+                            <span className="font-medium">Add Server</span>
+                        </div>
+                        <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-transparent border-l-popover" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+const InstallPWAButton = () => {
+    const [isHovered, setIsHovered] = useState(false)
+
+    return (
+        <div className="relative group mb-3">
+            {/* Hover indicator pill */}
+            <div
+                className={cn(
+                    "absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 rounded-r-full transition-all duration-300 ease-out",
+                    isHovered
+                        ? "h-6 bg-gradient-to-b from-primary/80 to-primary/60 shadow-md shadow-primary/30"
+                        : "h-0"
+                )}
+            />
+
+            <div className="flex justify-center relative">
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                        "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
+                        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
+                        "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-primary hover:to-primary/80 hover:shadow-md hover:shadow-primary/20"
+                    )}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <Download className={cn(
+                        "w-5 h-5 transition-all duration-300",
+                        "text-muted-foreground group-hover:text-primary-foreground group-hover:scale-110 group-hover:-translate-y-0.5"
+                    )} />
+
+                    {/* Shimmer effect on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                </Button>
+
+                {/* Tooltip positioned relative to button */}
+                <div className={cn(
+                    "absolute left-full ml-4 top-1/2 -translate-y-1/2 transition-all duration-200 pointer-events-none z-[100]",
+                    isHovered ? "opacity-100 visible translate-x-0" : "opacity-0 invisible -translate-x-2"
+                )}>
+                    <div className="bg-popover text-popover-foreground text-sm px-3 py-2 rounded-lg shadow-xl border border-border whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                            <Download className="w-3 h-3 text-primary" />
+                            <span className="font-medium">Install App</span>
+                        </div>
+                        <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-transparent border-l-popover" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { address } = useWallet()
     const { servers, actions, activeServerId, serversJoined } = useServer()
@@ -201,8 +310,13 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                 }
             </div>
 
+            <div className="grow" />
+
+            <InstallPWAButton />
+            <AddServerButton />
+
             {/* Ambient glow at bottom */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-12 bg-primary/3 rounded-full blur-xl" />
+            <div className="absolute bottom-4 left-1 /2 -translate-x-1/2 w-12 h-12 bg-primary/3 rounded-full blur-xl" />
         </div>
     )
 }

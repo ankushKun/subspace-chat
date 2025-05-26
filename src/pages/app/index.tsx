@@ -152,7 +152,7 @@ function LoginPrompt() {
         {/* Text content */}
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">
-            Connect to See Your Channels
+            Connect to See Your Servers
           </h2>
           <p className="text-muted-foreground leading-relaxed">
             Connect your wallet to access your servers and start chatting with your communities.

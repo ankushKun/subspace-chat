@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
@@ -37,55 +37,24 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
 
             {/* Right side - Action buttons */}
             <div className="flex items-center gap-1 flex-shrink-0">
-                <Button
+                {/* <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setIsNotificationMuted(!isNotificationMuted)}
-                >
-                    {isNotificationMuted ? (
-                        <BellOff className="w-4 h-4" />
-                    ) : (
-                        <Bell className="w-4 h-4" />
-                    )}
-                </Button>
-
-                <Button
-                    size="sm"
-                    variant="ghost"
+                    disabled
                     className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <Pin className="w-4 h-4" />
-                </Button>
-
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                    <AtSign className="w-4 h-4" />
-                </Button>
-
-                {memberCount && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                    >
-                        <Users className="w-4 h-4" />
-                        <span className="text-xs font-medium">{memberCount}</span>
-                    </Button>
-                )}
+                </Button> */}
 
                 <div className="w-px h-6 bg-border/50 mx-1" />
 
-                <Button
+                {/* <Button
                     size="sm"
                     variant="ghost"
                     className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <Search className="w-4 h-4" />
-                </Button>
+                </Button> */}
 
                 <Button
                     size="sm"
@@ -98,9 +67,9 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
                 <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                    className="h-8 px-2 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
-                    <HelpCircle className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                 </Button>
             </div>
         </div>
@@ -137,25 +106,48 @@ const MessageAvatar = ({ authorId, size = "md" }: { authorId: string; size?: "sm
     )
 }
 
-const MessageTimestamp = ({ timestamp, edited }: { timestamp: number; edited?: number }) => {
+const MessageTimestamp = ({ timestamp }: { timestamp: number }) => {
     const formatTime = (ts: number) => {
-        const date = new Date(ts * 1000)
+        const date = new Date(ts)
         const now = new Date()
-        const isToday = date.toDateString() === now.toDateString()
 
-        if (isToday) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        // Get start of today and yesterday for comparison
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+        if (messageDate.getTime() === today.getTime()) {
+            // Same day - show relative time
+            const diffMs = now.getTime() - date.getTime()
+            const diffMinutes = Math.floor(diffMs / (1000 * 60))
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+            if (diffMinutes < 1) {
+                return 'just now'
+            } else if (diffMinutes < 60) {
+                return `${diffMinutes}m ago`
+            } else if (diffHours < 24) {
+                return `${diffHours}h ago`
+            } else {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+        } else if (messageDate.getTime() === yesterday.getTime()) {
+            // Yesterday
+            return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
         } else {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+            // Older - show short date and time
+            return date.toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
         }
     }
 
     return (
         <span className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors">
             {formatTime(timestamp)}
-            {edited && edited > 0 && (
-                <span className="ml-1 text-xs text-muted-foreground/40">(edited)</span>
-            )}
         </span>
     )
 }
@@ -242,7 +234,7 @@ const MessageItem = ({
     return (
         <div
             className={cn(
-                "group relative px-4 py-1 hover:bg-muted/20 transition-colors duration-150",
+                "group relative px-4 py-1 hover:bg-accent/30 transition-colors duration-150",
                 isGrouped ? "py-0.5" : "py-2"
             )}
             onMouseEnter={() => setIsHovered(true)}
@@ -254,7 +246,7 @@ const MessageItem = ({
                     {showAvatar ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
-                        <MessageTimestamp timestamp={message.timestamp} edited={message.edited} />
+                        <MessageTimestamp timestamp={message.timestamp} />
                     )}
                 </div>
 
@@ -262,10 +254,10 @@ const MessageItem = ({
                 <div className="flex-1 min-w-0">
                     {showAvatar && (
                         <div className="flex items-baseline gap-2 mb-1">
-                            <span className="font-semibold text-foreground hover:underline cursor-pointer">
-                                {profile?.username || message.authorId}
+                            <span className="text-foreground hover:underline cursor-pointer">
+                                {profile?.username || shortenAddress(message.authorId)}
                             </span>
-                            <MessageTimestamp timestamp={message.timestamp} edited={message.edited} />
+                            <MessageTimestamp timestamp={message.timestamp} />
                         </div>
                     )}
 
@@ -295,7 +287,7 @@ const MessageGroup = ({ messages, onReply, onEdit, onDelete }: {
     if (messages.length === 0) return null
 
     return (
-        <div className="mb-4">
+        <div className="mb-0.5">
             {messages.map((message, index) => (
                 <MessageItem
                     key={message.messageId}
@@ -426,13 +418,13 @@ const MessageInput = ({
         <div className="relative">
             {/* Reply indicator */}
             {replyingTo && (
-                <div className="mx-4 mb-2 p-3 bg-muted/30 rounded-t-lg border border-border/50 border-b-0">
+                <div className="mx-4 p-3 -mb-4 bg-muted/30 rounded-t-lg border border-border/50 border-b-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                             <Reply className="w-4 h-4 text-muted-foreground" />
                             <span className="text-muted-foreground">Replying to</span>
                             <span className="font-semibold text-foreground">
-                                {profiles[replyingTo.authorId]?.username || replyingTo.authorId}
+                                {profiles[replyingTo.authorId]?.username || shortenAddress(replyingTo.authorId)}
                             </span>
                         </div>
                         <Button
@@ -445,7 +437,7 @@ const MessageInput = ({
                         </Button>
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground truncate">
-                        {replyingTo.content}
+                        {replyingTo.content.slice(0, 47)}...
                     </div>
                 </div>
             )}
@@ -456,7 +448,7 @@ const MessageInput = ({
                     "relative flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
                     "hover:border-border focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/10",
                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 focus-within:before:opacity-100 before:transition-opacity before:duration-300 before:rounded-lg",
-                    replyingTo && "rounded-t-none border-t-0"
+                    replyingTo && "rounded-t-none border-t-0 before:rounded-t-none"
                 )}>
                     {/* Attachment previews */}
                     {attachments.length > 0 && (
@@ -487,7 +479,7 @@ const MessageInput = ({
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
+                                className="h-8 w-8 p-0 hover:bg-muted rounde transition-colors"
                                 onClick={handleFileUpload}
                                 disabled={disabled}
                             >
@@ -714,7 +706,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                 {messageGroups.length === 0 ? (
                     <EmptyChannelState channelName={currentChannel?.name} />
                 ) : (
-                    <div className="py-4">
+                    <div className="pt-6">
                         {messageGroups.map((group, index) => (
                             <MessageGroup
                                 key={`${group[0].authorId}-${group[0].timestamp}-${index}`}

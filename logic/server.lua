@@ -835,8 +835,8 @@ app.post("/send-message", function(req, res)
     end
 
     local rows_updated = SQLWrite(
-        "INSERT INTO messages (content, channelId, authorId, timestamp, messageTxId, attachments) VALUES (?, ?, ?, ?, ?, ?)",
-        content, channelId, authorId, timestamp, messageTxId, json.encode(attachments))
+        "INSERT INTO messages (content, channelId, authorId, timestamp, messageTxId, attachments, replyTo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        content, channelId, authorId, timestamp, messageTxId, json.encode(attachments), replyTo)
     if rows_updated == 1 then
         -- Send notifications to mentioned users through the profile registry
         for name, address in pairs(mentions) do

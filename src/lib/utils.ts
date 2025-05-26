@@ -9,6 +9,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function shortenAddress(address: string) {
+  return address.slice(0, 5) + "..." + address.slice(-5)
+}
+
 export class Logger {
   static info(identifier: string, res: AoFetchResponse) {
     console.info(`[${identifier}]`, JSON.stringify(res.text ?? res.json))

@@ -375,40 +375,44 @@ const MessageInput = ({
         if (!query.trim()) {
             const firstMembers = members.slice(0, 10).map(member => ({
                 id: member.userId,
-                display: member.nickname || shortenAddress(member.userId)
+                display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
             }))
+            console.log(firstMembers)
             callback(firstMembers)
             return
+        } else {
+
+            const filteredMembers = members
+                .filter(member => {
+                    const displayName = member.nickname || member.userId
+                    const lowerQuery = query.toLowerCase()
+                    return displayName.toLowerCase().includes(lowerQuery) ||
+                        member.userId.toLowerCase().includes(lowerQuery)
+                })
+                .sort((a, b) => {
+                    // Prioritize exact matches and prefix matches
+                    const aDisplay = (a.nickname || a.userId).toLowerCase()
+                    const bDisplay = (b.nickname || b.userId).toLowerCase()
+                    const lowerQuery = query.toLowerCase()
+
+                    const aStartsWith = aDisplay.startsWith(lowerQuery)
+                    const bStartsWith = bDisplay.startsWith(lowerQuery)
+
+                    if (aStartsWith && !bStartsWith) return -1
+                    if (!aStartsWith && bStartsWith) return 1
+
+                    return aDisplay.localeCompare(bDisplay)
+                })
+                .slice(0, 10) // Limit to 10 results
+                .map(member => ({
+                    id: member.userId,
+                    display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
+                }))
+
+            console.log(filteredMembers)
+
+            callback(filteredMembers)
         }
-
-        const filteredMembers = members
-            .filter(member => {
-                const displayName = member.nickname || shortenAddress(member.userId)
-                const lowerQuery = query.toLowerCase()
-                return displayName.toLowerCase().includes(lowerQuery) ||
-                    member.userId.toLowerCase().includes(lowerQuery)
-            })
-            .sort((a, b) => {
-                // Prioritize exact matches and prefix matches
-                const aDisplay = (a.nickname || a.userId).toLowerCase()
-                const bDisplay = (b.nickname || b.userId).toLowerCase()
-                const lowerQuery = query.toLowerCase()
-
-                const aStartsWith = aDisplay.startsWith(lowerQuery)
-                const bStartsWith = bDisplay.startsWith(lowerQuery)
-
-                if (aStartsWith && !bStartsWith) return -1
-                if (!aStartsWith && bStartsWith) return 1
-
-                return aDisplay.localeCompare(bDisplay)
-            })
-            .slice(0, 8) // Limit to 8 results
-            .map(member => ({
-                id: member.userId,
-                display: member.nickname || member.userId
-            }))
-
-        callback(filteredMembers)
     }
 
     // Enhanced custom renderer for mention suggestions
@@ -421,6 +425,7 @@ const MessageInput = ({
     ) => {
         const { profiles } = useProfile()
         const profile = profiles[suggestion.id]
+        console.log(suggestion)
 
         // Handle empty state
         if (suggestion.id === '__no_results__') {
@@ -451,7 +456,7 @@ const MessageInput = ({
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
                     <div className="font-medium text-foreground text-sm leading-tight">
-                        {highlightedDisplay}
+                        {suggestion.display}
                     </div>
                     <div className="text-xs text-muted-foreground/70 leading-tight mt-0.5 font-mono">
                         {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 6)}
@@ -576,7 +581,7 @@ const MessageInput = ({
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-start grow gap-3 p-3 relative z-10">
+                    <div className="flex items-center grow gap-3 p-3 relative z-10">
                         {/* Left actions */}
                         <div className="flex items-center gap-1 pt-1">
                             <Button
@@ -591,7 +596,7 @@ const MessageInput = ({
                         </div>
 
                         {/* Text input */}
-                        <div className="flex-1 relative min-h-[20px] z-0">
+                        <div className="flex relative min-h-[20px] z-0 grow">
                             <MentionsInput
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
@@ -599,9 +604,10 @@ const MessageInput = ({
                                 placeholder={`Message #${currentChannel.name}`}
                                 disabled={disabled}
                                 singleLine={false}
+                                rows={message.split("\n").length > 10 ? 10 : message.split("\n").length}
                                 forceSuggestionsAboveCursor
                                 a11ySuggestionsListLabel="Suggested mentions"
-                                className="w-full border-0 p-0 m-0 relative mentions-input"
+                                className="grow p-0 m-0 relative mentions-input"
                                 style={{
                                     control: {
                                         backgroundColor: 'transparent',
@@ -610,7 +616,7 @@ const MessageInput = ({
                                         border: 'none',
                                         outline: 'none',
                                         minHeight: '20px',
-                                        maxHeight: '210px',
+                                        maxHeight: '150px',
                                         padding: '0',
                                         lineHeight: '1.5',
                                         overflow: 'hidden',
@@ -620,7 +626,7 @@ const MessageInput = ({
                                         control: {
                                             fontFamily: 'inherit',
                                             minHeight: '20px',
-                                            maxHeight: '210px',
+                                            maxHeight: '150px',
                                             border: 'none',
                                             outline: 'none',
                                             overflow: 'hidden',
@@ -630,7 +636,7 @@ const MessageInput = ({
                                             padding: '0',
                                             border: 'none',
                                             minHeight: '20px',
-                                            maxHeight: '210px',
+                                            maxHeight: '150px',
                                             margin: '0',
                                             overflow: 'auto',
                                             zIndex: 10,
@@ -649,18 +655,18 @@ const MessageInput = ({
                                             border: 'none',
                                             outline: 'none',
                                             backgroundColor: 'transparent',
-                                            color: 'hsl(var(--foreground))',
+                                            color: 'var(--foreground)',
                                             fontSize: '14px',
                                             fontFamily: 'inherit',
                                             lineHeight: '1.5',
                                             minHeight: '20px',
-                                            maxHeight: '210px',
+                                            maxHeight: '150px',
                                             resize: 'none',
                                             overflow: 'auto',
                                             whiteSpace: 'pre-wrap',
                                             wordWrap: 'break-word',
-                                            scrollbarWidth: 'thin',
-                                            scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent',
+                                            scrollbarWidth: 'none',
+                                            scrollbarColor: 'transparent',
                                             position: 'relative',
                                             zIndex: 3,
                                         },
@@ -727,7 +733,12 @@ const MessageInput = ({
                                     data={getMembersData}
                                     trigger="@"
                                     markup="<@__id__>"
-                                    displayTransform={(id, display) => `@${display.length == 43 ? shortenAddress(display) : display}`}
+                                    displayTransform={(id) => {
+                                        // Look up the display name for this ID
+                                        const member = servers[activeServerId]?.members?.find(m => m.userId === id)
+                                        const displayName = member?.nickname || profiles[id]?.primaryName || shortenAddress(id)
+                                        return `@${displayName}`
+                                    }}
                                     appendSpaceOnAdd
                                     className="mention-highlight z-10"
                                     style={{

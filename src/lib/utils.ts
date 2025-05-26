@@ -50,7 +50,8 @@ export async function uploadFileAR(file: File, jwk?: JWKInterface) {
   const res = await ar.transactions.post(tx);
 
   if (res.status == 200) {
-    return res.data.id;
+    console.log("Uploaded file to AR:", res)
+    return tx.id;
   } else {
     Logger.error("uploadFileAR", { json: res });
   }

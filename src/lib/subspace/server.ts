@@ -32,7 +32,7 @@ export class ServerManager {
 
         const initRes = await this.connectionManager.execLua({
             processId: serverId,
-            code: `${Constants.SERVER_SOURCE}\nserver_pfp = ${icon ? `"${icon}"` : "server_pfp"}`,
+            code: `${Constants.SERVER_SOURCE}\nserver_icon = ${icon ? `"${icon}"` : "server_icon"}`,
             tags
         })
         const res = this.connectionManager.parseOutput(initRes)

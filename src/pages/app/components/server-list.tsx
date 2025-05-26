@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
+import { FileDropzone } from "@/components/ui/file-dropzone"
+import { toast } from "sonner"
+import { uploadFileAR } from "@/lib/utils"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -153,6 +156,13 @@ const AddServerButton = () => {
     const [isJoining, setIsJoining] = useState(false)
     const [joinError, setJoinError] = useState("")
 
+    // Create server state
+    const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [serverName, setServerName] = useState("")
+    const [serverIcon, setServerIcon] = useState<File | null>(null)
+    const [isCreating, setIsCreating] = useState(false)
+    const [createError, setCreateError] = useState("")
+
     const subspace = useSubspace()
     const { address } = useWallet()
     const { actions: serverActions, serversJoined } = useServer()
@@ -234,6 +244,118 @@ const AddServerButton = () => {
         }
     }
 
+    const handleCreateServer = async () => {
+        if (!serverName.trim()) {
+            setCreateError("Please enter a server name")
+            return
+        }
+
+        if (!address) {
+            setCreateError("Please connect your wallet first")
+            return
+        }
+
+        setIsCreating(true)
+        setCreateError("")
+
+        try {
+            var iconId: string | undefined
+
+            // Upload icon if provided
+            if (serverIcon) {
+                toast.loading("Uploading server icon...", {
+                    richColors: true,
+                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                })
+
+                try {
+                    iconId = await uploadFileAR(serverIcon)
+                    toast.dismiss()
+                    toast.success("Icon uploaded successfully", {
+                        richColors: true,
+                        style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                    })
+                } catch (error) {
+                    console.error("Error uploading icon:", error)
+                    toast.dismiss()
+                    toast.error("Failed to upload icon. Creating server without icon.")
+                    iconId = undefined
+                }
+            }
+
+            // Create the server
+            toast.loading("Creating server...", {
+                richColors: true,
+                style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+            })
+
+            console.log("Creating server with icon:", iconId)
+
+            const serverId = await subspace.server.createServer({
+                name: serverName.trim(),
+                icon: iconId
+            })
+
+            toast.dismiss()
+
+            if (serverId) {
+                toast.success("Server created successfully!", {
+                    richColors: true,
+                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                })
+
+                // Join the server automatically
+                try {
+                    const joinSuccess = await subspace.user.joinServer({ serverId })
+                    if (!joinSuccess) {
+                        console.warn("Failed to join the created server automatically")
+                        toast.warning("Server created but failed to join automatically. You may need to join manually.")
+                    }
+                } catch (error) {
+                    console.error("Error joining created server:", error)
+                    toast.warning("Server created but failed to join automatically. You may need to join manually.")
+                }
+
+                // Update the local state to include the new server
+                const currentServers = serversJoined[address] || []
+                if (!currentServers.includes(serverId)) {
+                    serverActions.setServersJoined(address, [...currentServers, serverId])
+                }
+
+                // Fetch server details to get the complete server object
+                try {
+                    const serverDetails = await subspace.server.getServerDetails({ serverId })
+                    if (serverDetails) {
+                        const server: Server = {
+                            serverId,
+                            ...serverDetails
+                        }
+                        serverActions.addServer(server)
+
+                        // Set as active server
+                        serverActions.setActiveServerId(serverId)
+                    }
+                } catch (error) {
+                    console.warn("Failed to fetch server details:", error)
+                }
+
+                // Reset form and close dialog
+                setServerName("")
+                setServerIcon(null)
+                setCreateDialogOpen(false)
+                setCreateError("")
+            } else {
+                setCreateError("Failed to create server. Please try again.")
+            }
+        } catch (error) {
+            console.error("Error creating server:", error)
+            toast.dismiss()
+            setCreateError(error instanceof Error ? error.message : "Failed to create server. Please try again.")
+        } finally {
+            setIsCreating(false)
+        }
+    }
+
     const isValidInput = joinInput.trim().length > 0
     const inputType = joinInput.includes('/') ? 'invite link' : 'server ID'
 
@@ -267,6 +389,10 @@ const AddServerButton = () => {
 
     const inputValidation = getInputValidation()
     const isValidForSubmission = inputValidation.isValid
+
+    // Create server validation
+    const isValidServerName = serverName.trim().length > 0
+    const isValidForCreation = isValidServerName
 
     return (
         <div className="relative group mb-3">
@@ -483,13 +609,6 @@ const AddServerButton = () => {
                                             <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
                                                 <AlertDialogCancel disabled={isJoining}>
                                                     Cancel
-                                                    {/* <Button
-                                                        variant="outline"
-                                                        disabled={isJoining}
-                                                        className="transition-all duration-200"
-                                                    >
-                                                        Cancel
-                                                    </Button> */}
                                                 </AlertDialogCancel>
                                                 <Button
                                                     onClick={handleJoinServer}
@@ -518,25 +637,163 @@ const AddServerButton = () => {
                                     </AlertDialogContent>
                                 </AlertDialog>
 
-                                <Button
-                                    variant="ghost"
-                                    className={cn(
-                                        "w-full h-12 p-2.5 justify-start text-left transition-all duration-200 group relative overflow-hidden",
-                                        "hover:bg-gradient-to-r hover:from-green-500/10 hover:to-green-400/5",
-                                        "border border-border/30 hover:border-green-400/30",
-                                        "before:absolute before:inset-0 before:bg-gradient-to-r before:from-green-500/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-3 relative z-10">
-                                        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                                            <Plus className="w-4 h-4 text-green-500" />
+                                <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className={cn(
+                                                "w-full h-12 p-2.5 justify-start text-left transition-all duration-200 group relative overflow-hidden",
+                                                "hover:bg-gradient-to-r hover:from-green-500/10 hover:to-green-400/5",
+                                                "border border-border/30 hover:border-green-400/30",
+                                                "before:absolute before:inset-0 before:bg-gradient-to-r before:from-green-500/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
+                                            )}
+                                            onClick={() => {
+                                                setServerName("")
+                                                setServerIcon(null)
+                                                setCreateError("")
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3 relative z-10">
+                                                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
+                                                    <Plus className="w-4 h-4 text-green-500" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-sm text-foreground">Create Server</div>
+                                                    <div className="text-xs text-muted-foreground">Start your own community</div>
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="max-w-lg p-0">
+                                        <div className="relative overflow-hidden">
+                                            {/* Header with gradient */}
+                                            <AlertDialogHeader className="relative px-6 pt-6 pb-4">
+                                                <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-transparent to-green-500/5 rounded-t-lg" />
+                                                <AlertDialogTitle className="text-xl font-bold flex items-center gap-3 relative">
+                                                    <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                                        <Plus className="w-5 h-5 text-green-500" />
+                                                    </div>
+                                                    <div>
+                                                        <div>Create Server</div>
+                                                        <div className="text-sm font-normal text-muted-foreground mt-1">
+                                                            Start your own community
+                                                        </div>
+                                                    </div>
+                                                </AlertDialogTitle>
+                                            </AlertDialogHeader>
+
+                                            <AlertDialogDescription asChild>
+                                                <div className="px-6 space-y-6 mt-4">
+                                                    <div className="flex gap-4">
+                                                        {/* Server Icon Upload */}
+                                                        <div className="w-1/3">
+                                                            <FileDropzone
+                                                                onFileChange={setServerIcon}
+                                                                label="Server Icon"
+                                                                placeholder="Upload icon"
+                                                                accept={{ 'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp'] }}
+                                                                previewType="square"
+                                                            />
+                                                        </div>
+
+                                                        {/* Server Details */}
+                                                        <div className="flex-1 space-y-4">
+                                                            <div className="space-y-2">
+                                                                <label className="text-sm font-medium text-foreground">
+                                                                    Server Name *
+                                                                </label>
+                                                                <Input
+                                                                    type="text"
+                                                                    placeholder="My Awesome Server"
+                                                                    value={serverName}
+                                                                    onChange={(e) => {
+                                                                        setServerName(e.target.value)
+                                                                        setCreateError("")
+                                                                    }}
+                                                                    className={cn(
+                                                                        "transition-all duration-200",
+                                                                        createError && !serverName.trim()
+                                                                            ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/20"
+                                                                            : isValidServerName
+                                                                                ? "border-green-500/50 focus:border-green-500 focus:ring-green-500/20"
+                                                                                : ""
+                                                                    )}
+                                                                    disabled={isCreating}
+                                                                />
+                                                                {isValidServerName && (
+                                                                    <p className="text-sm text-green-600 flex items-center gap-2">
+                                                                        <div className="w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center">
+                                                                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                                                                        </div>
+                                                                        Valid server name
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Server Description */}
+                                                            <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                                                                <h4 className="text-sm font-medium text-foreground mb-2">What happens next:</h4>
+                                                                <ul className="text-xs text-muted-foreground space-y-1">
+                                                                    <li className="flex items-start gap-2">
+                                                                        <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
+                                                                        <span>Your server will be created on the Arweave network</span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-2">
+                                                                        <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
+                                                                        <span>You'll be the server owner with full permissions</span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-2">
+                                                                        <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
+                                                                        <span>You can invite others and create channels</span>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {createError && (
+                                                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                                            <p className="text-sm text-red-600 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                                                                </div>
+                                                                {createError}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </AlertDialogDescription>
+
+                                            <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
+                                                <AlertDialogCancel disabled={isCreating}>
+                                                    Cancel
+                                                </AlertDialogCancel>
+                                                <Button
+                                                    onClick={handleCreateServer}
+                                                    disabled={!isValidForCreation || isCreating}
+                                                    className={cn(
+                                                        "min-w-[120px] transition-all duration-200",
+                                                        "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700",
+                                                        "shadow-lg shadow-green-500/25 hover:shadow-green-500/40",
+                                                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    {isCreating ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                            <span>Creating...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <Plus className="w-4 h-4" />
+                                                            <span>Create Server</span>
+                                                        </div>
+                                                    )}
+                                                </Button>
+                                            </AlertDialogFooter>
                                         </div>
-                                        <div className="flex-1">
-                                            <div className="font-medium text-sm text-foreground">Create Server</div>
-                                            <div className="text-xs text-muted-foreground">Start your own community</div>
-                                        </div>
-                                    </div>
-                                </Button>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </div>
                         </div>
                     </PopoverContent>

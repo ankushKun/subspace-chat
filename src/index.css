@@ -329,3 +329,7 @@
   outline: none;
   box-shadow: none;
 }
+
+.markdown>* {
+  all: revert !important;
+}

@@ -27,7 +27,6 @@ function Main() {
         <Routes>
           <Route path="/" element={<SubspaceLanding />} />
           <Route path="/app" element={<App />} />
-          <Route path="/app/:serverID?/:channelID?" element={<App />} />
           <Route path="/app/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

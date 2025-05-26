@@ -7,6 +7,10 @@ import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Pape
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
+import Markdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeKatex from "rehype-katex"
+import { mdComponents } from "@/lib/md-components"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -192,8 +196,10 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
         <div className="space-y-2">
             {/* Message text */}
             {content && (
-                <div className="text-sm text-foreground leading-relaxed break-words">
-                    {content}
+                <div className="text-sm text-foreground leading-relaxed break-words markdown">
+                    <Markdown
+                        components={mdComponents}
+                        remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>{content}</Markdown>
                 </div>
             )}
 

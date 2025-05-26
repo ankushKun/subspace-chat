@@ -19,9 +19,13 @@ export class User {
         })
 
         if (res.status == 200) {
-            const primaryName = await this.getPrimaryName({ userId })
             const profile = res.json as Profile;
-            profile.primaryName = primaryName;
+            try {
+                const primaryName = await this.getPrimaryName({ userId })
+                profile.primaryName = primaryName;
+            } catch {
+
+            }
             return profile;
         } else {
             Logger.error("getProfile", res);

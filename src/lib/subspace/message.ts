@@ -8,11 +8,17 @@ import { Constants } from "../constants";
 export class MessageManager {
     constructor(private connectionManager: ConnectionManager) { }
 
-    async getMessages({ serverId, channelId, limit, before, after }: { serverId: string, channelId: string, limit?: number, before?: number, after?: number }): Promise<Message[] | null> {
+    async getMessages({ serverId, channelId, limit = 100, before, after }: { serverId: string, channelId: number, limit?: number, before?: number, after?: number }): Promise<Message[] | null> {
         const path = `${serverId}/get-messages`
+        const body = { channelId, limit }
+
+        if (before && !after && before > 0) body['before'] = before
+        if (after && !before && after > 0) body['after'] = after
+        if (before && after && before > 0 && after > 0) body['after'] = after
+
         const res = await aofetch(path, {
             method: "GET",
-            body: { channelId, limit, before, after },
+            body,
             AO: this.connectionManager.getAo()
         })
         if (res.status == 200) {

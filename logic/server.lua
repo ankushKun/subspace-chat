@@ -752,7 +752,27 @@ app.get("/get-messages", function(req, res)
     local channelId = req.body.channelId
     local limit = VarOrNil(req.body.limit) or 100
     local before = VarOrNil(req.body.before)
-    -- local after = VarOrNil(req.body.after)
+    local after = VarOrNil(req.body.after)
+
+    if before and after then
+        before = nil
+    end
+
+    if before then
+        if before > 0 then
+            before = tonumber(before)
+        else
+            before = nil
+        end
+    end
+
+    if after then
+        if after > 0 then
+            after = tonumber(after)
+        else
+            after = nil
+        end
+    end
 
     local query = "SELECT * FROM messages WHERE channelId = ?"
     local params = { channelId }
@@ -763,11 +783,11 @@ app.get("/get-messages", function(req, res)
         table.insert(params, before)
     end
 
-    -- if after then
-    --     after = tonumber(after)
-    --     query = query .. " AND messageId > ?"
-    --     table.insert(params, after)
-    -- end
+    if after then
+        after = tonumber(after)
+        query = query .. " AND messageId > ?"
+        table.insert(params, after)
+    end
 
     query = query .. " ORDER BY messageId DESC LIMIT ?"
     table.insert(params, limit)

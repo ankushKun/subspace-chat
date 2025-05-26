@@ -84,7 +84,7 @@ export type Profile = {
     userId: string;
     username: string;
     pfp: string;
-    serversJoined: string;
+    serversJoined: string[];
     primaryName?: string | null;
     originalId?: string;
 }

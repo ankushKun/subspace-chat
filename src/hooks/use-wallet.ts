@@ -83,6 +83,9 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                 set((state) => {
                                     if (state.connected && state.connectionStrategy !== ConnectionStrategies.ArWallet)
                                         state.actions.disconnect()
+                                    window.addEventListener("walletSwitch", (e) => {
+                                        set((state) => ({ address: e.detail.address }))
+                                    })
                                     return {
                                         address: address,
                                         connected: true,

@@ -1,6 +1,6 @@
 import { useServer } from "@/hooks/subspace/server"
-import { useEffect, useState } from "react"
-import useSubspace from "@/hooks/subspace"
+import { useState } from "react"
+import useSubspace, { useProfile } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
@@ -45,7 +45,7 @@ const ServerButton = ({ server, isActive = false, onClick }: { server: Server; i
                     <div className={cn(
                         "w-12 h-12 overflow-hidden transition-all duration-300 ease-out relative",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 before:via-transparent before:to-transparent before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-300",
-                        isActive ? "rounded-2xl" : "rounded-3xl group-hover:rounded-2xl"
+                        isActive ? "rounded-2xl" : "rounded-xl group-hover:rounded-2xl"
                     )}>
                         <img
                             src={`https://arweave.net/${server.icon}`}
@@ -145,26 +145,8 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
 }
 
 export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) {
-    const { servers, actions, activeServerId } = useServer()
-    const subspace = useSubspace()
-    const { connected, address } = useWallet()
-
-    useEffect(() => {
-        if (!connected || !address) return
-        (async () => {
-            const profile = await subspace.user.getProfile({ userId: address })
-            const servers = JSON.parse(profile.serversJoined) as string[]
-            console.log(`servers found for user: ${servers.length}`)
-            for (const serverId of servers) {
-                const details = await subspace.server.getServerDetails({ serverId })
-                actions.addServer({
-                    serverId: serverId,
-                    ...details,
-                })
-                await new Promise(resolve => setTimeout(resolve, 200))
-            }
-        })()
-    }, [connected, address])
+    const { address } = useWallet()
+    const { servers, actions, activeServerId, serversJoined } = useServer()
 
     return (
         <div
@@ -182,7 +164,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 bg-primary/5 rounded-full blur-2xl" />
 
             {/* Home Button */}
-            <HomeButton isActive={activeServerId === null} onClick={() => actions.setActiveServerId(null)} />
+            <HomeButton isActive={activeServerId === null} onClick={() => { actions.setActiveServerId(null); actions.setActiveChannelId(null) }} />
 
             {/* Enhanced Separator with gradient */}
             <div className="relative mx-auto mb-3">
@@ -192,7 +174,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
 
             {/* Server Buttons */}
             <div className="space-y-1 overflow-visible">
-                {Object.values(servers).map((server, index) => (
+                {/* {Object.values(servers).filter((server) => serversJoined[server.serverId]).map((server, index) => (
                     <div
                         key={server.serverId}
                         style={{ animationDelay: `${index * 100}ms` }}
@@ -200,7 +182,23 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                     >
                         <ServerButton server={server} isActive={server.serverId === activeServerId} onClick={() => actions.setActiveServerId(server.serverId)} />
                     </div>
-                ))}
+                ))} */}
+                {
+                    serversJoined
+                    && serversJoined[address]
+                    && serversJoined[address].length > 0
+                    && serversJoined[address].map((serverId, index) => (
+                        servers[serverId] && (
+                            <div
+                                key={serverId}
+                                style={{ animationDelay: `${index * 100}ms` }}
+                                className="animate-in slide-in-from-left-5 fade-in duration-500"
+                            >
+                                <ServerButton server={servers[serverId]} isActive={serverId === activeServerId} onClick={() => actions.setActiveServerId(serverId)} />
+                            </div>
+                        )
+                    ))
+                }
             </div>
 
             {/* Ambient glow at bottom */}

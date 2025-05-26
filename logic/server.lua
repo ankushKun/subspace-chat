@@ -1,5 +1,6 @@
 app = require("aoxpress")
 sqlite3 = require("lsqlite3")
+json = require("json")
 
 db = db or sqlite3.open_memory()
 
@@ -802,9 +803,11 @@ app.post("/send-message", function(req, res)
     local timestamp = req.msg.Timestamp
     local messageTxId = req.msg.Id
     local content = req.body.content
-    local channelId = req.body.channelId
+    local channelId = tonumber(req.body.channelId)
     local attachments = VarOrNil(req.body.attachments) or "[]"
     local replyTo = VarOrNil(req.body.replyTo)
+
+    print(attachments)
 
     -- check if author is a member of the server
     local profile = GetProfile(authorId)
@@ -832,8 +835,8 @@ app.post("/send-message", function(req, res)
     end
 
     local rows_updated = SQLWrite(
-        "INSERT INTO messages (content, channelId, authorId, timestamp, messageTxId, attachments, replyTo) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        content, channelId, authorId, timestamp, messageTxId, attachments, replyTo)
+        "INSERT INTO messages (content, channelId, authorId, timestamp, messageTxId, attachments) VALUES (?, ?, ?, ?, ?, ?)",
+        content, channelId, authorId, timestamp, messageTxId, json.encode(attachments))
     if rows_updated == 1 then
         -- Send notifications to mentioned users through the profile registry
         for name, address in pairs(mentions) do

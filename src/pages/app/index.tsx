@@ -8,6 +8,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
 import DMList from "./components/dm-list"
+import type { Profile } from "@/types/subspace"
 
 export default function App() {
 
@@ -55,22 +56,43 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (activeChannelId) {
-        // fetch messages
-        const lastMessageId = messagesActions.getLastMessageId(activeServerId, activeChannelId)
-        const messages = await subspace.server.message.getMessages({ serverId: activeServerId, channelId: activeChannelId, after: lastMessageId })
-        if (messages && messages.length == 100) {
-          messagesActions.setMessages(activeServerId, activeChannelId, messages)
-        } else {
-          messagesActions.addMessages(activeServerId, activeChannelId, messages)
-        }
-      }
       if (activeServerId) {
         // fetch members
         const members = await subspace.server.getServerMembers({ serverId: activeServerId })
         serverActions.updateServerMembers(activeServerId, members)
+        const profiles = await subspace.user.getBulkProfiles({ userIds: members.map(member => member.userId) })
+        profileActions.setProfiles(profiles.reduce((acc, profile) => {
+          acc[profile.userId] = profile
+          return acc
+        }, {} as Record<string, Profile>))
       }
     })()
+  }, [activeServerId])
+
+  // Interval to fetch latest messages every 2000ms
+  useEffect(() => {
+    if (!activeChannelId || !activeServerId) return
+
+    const fetchLatestMessages = async () => {
+      try {
+        const lastMessageId = messagesActions.getLastMessageId(activeServerId, activeChannelId)
+        const messages = await subspace.server.message.getMessages({
+          serverId: activeServerId,
+          channelId: activeChannelId,
+          after: lastMessageId
+        })
+        console.log(messages)
+        if (messages && messages.length > 0) {
+          messagesActions.addMessages(activeServerId, activeChannelId, messages)
+        }
+      } catch (error) {
+        console.error('Error fetching latest messages:', error)
+      }
+    }
+
+    const interval = setInterval(fetchLatestMessages, 2000)
+
+    return () => clearInterval(interval)
   }, [activeServerId, activeChannelId])
 
   return (

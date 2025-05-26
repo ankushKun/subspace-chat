@@ -629,7 +629,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
         try {
             const success = await subspace.server.message.sendMessage({
                 serverId: activeServerId,
-                channelId: activeChannelId.toString(),
+                channelId: activeChannelId,
                 content,
                 attachments,
                 replyTo: replyingTo?.messageId || undefined

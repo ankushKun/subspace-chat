@@ -23,56 +23,92 @@ interface MessagesActions {
 export const useMessages = create<MessagesState>()(persist((set, get) => ({
     messages: {},
     actions: {
-        setMessages: (serverId: string, channelId: number, messages: Message[]) => set((state) => {
-            if (!state.messages) state.messages = {}
-            if (!state.messages[serverId]) state.messages[serverId] = {}
-            if (!state.messages[serverId][channelId]) state.messages[serverId][channelId] = {}
-            state.messages[serverId][channelId] = messages.reduce((acc, message) => ({
-                ...acc,
-                [message.messageId]: message
-            }), {})
-            return state
-        }),
-        addMessages: (serverId: string, channelId: number, messages: Message[]) => set((state) => {
-            if (!state.messages) state.messages = {}
-            if (!state.messages[serverId]) state.messages[serverId] = {}
-            if (!state.messages[serverId][channelId]) state.messages[serverId][channelId] = {}
-            state.messages[serverId][channelId] = {
-                ...state.messages[serverId][channelId],
-                ...messages.reduce((acc, message) => ({
-                    ...acc,
-                    [message.messageId]: message
-                }), {})
+        setMessages: (serverId: string, channelId: number, messages: Message[]) => set((state) => ({
+            ...state,
+            messages: {
+                ...state.messages,
+                [serverId]: {
+                    ...state.messages[serverId],
+                    [channelId]: messages.reduce((acc, message) => ({
+                        ...acc,
+                        [message.messageId]: message
+                    }), {})
+                }
             }
-            return state
-        }),
-        addMessage: (serverId: string, channelId: number, message: Message) => set((state) => {
-            if (!state.messages) state.messages = {}
-            if (!state.messages[serverId]) state.messages[serverId] = {}
-            if (!state.messages[serverId][channelId]) state.messages[serverId][channelId] = {}
-            state.messages[serverId][channelId][message.messageId] = message
-            return state
-        }),
+        })),
+        addMessages: (serverId: string, channelId: number, messages: Message[]) => set((state) => ({
+            ...state,
+            messages: {
+                ...state.messages,
+                [serverId]: {
+                    ...state.messages[serverId],
+                    [channelId]: {
+                        ...(state.messages[serverId]?.[channelId] || {}),
+                        ...messages.reduce((acc, message) => ({
+                            ...acc,
+                            [message.messageId]: message
+                        }), {})
+                    }
+                }
+            }
+        })),
+        addMessage: (serverId: string, channelId: number, message: Message) => set((state) => ({
+            ...state,
+            messages: {
+                ...state.messages,
+                [serverId]: {
+                    ...state.messages[serverId],
+                    [channelId]: {
+                        ...(state.messages[serverId]?.[channelId] || {}),
+                        [message.messageId]: message
+                    }
+                }
+            }
+        })),
         removeMessage: (serverId: string, channelId: number, messageId: number) => set((state) => {
-            delete state.messages[serverId][channelId][messageId]
-            return state
+            const newChannelMessages = { ...(state.messages[serverId]?.[channelId] || {}) }
+            delete newChannelMessages[messageId]
+            return {
+                ...state,
+                messages: {
+                    ...state.messages,
+                    [serverId]: {
+                        ...state.messages[serverId],
+                        [channelId]: newChannelMessages
+                    }
+                }
+            }
         }),
-        updateMessage: (serverId: string, channelId: number, messageId: number, message: Message) => set((state) => {
-            state.messages[serverId][channelId][messageId] = message
-            return state
-        }),
-        clearMessages: (serverId: string, channelId: number) => set((state) => {
-            if (!state.messages) state.messages = {}
-            if (!state.messages[serverId]) state.messages[serverId] = {}
-            if (!state.messages[serverId][channelId]) state.messages[serverId][channelId] = {}
-            state.messages[serverId][channelId] = {}
-            return state
-        }),
+        updateMessage: (serverId: string, channelId: number, messageId: number, message: Message) => set((state) => ({
+            ...state,
+            messages: {
+                ...state.messages,
+                [serverId]: {
+                    ...state.messages[serverId],
+                    [channelId]: {
+                        ...(state.messages[serverId]?.[channelId] || {}),
+                        [messageId]: message
+                    }
+                }
+            }
+        })),
+        clearMessages: (serverId: string, channelId: number) => set((state) => ({
+            ...state,
+            messages: {
+                ...state.messages,
+                [serverId]: {
+                    ...state.messages[serverId],
+                    [channelId]: {}
+                }
+            }
+        })),
         clearAllMessages: () => set({ messages: {} }),
 
         getLastMessageId: (serverId: string, channelId: number) => {
-            if (!get().messages[serverId] || !get().messages[serverId][channelId]) return null
-            return Math.max(...Object.keys(get().messages[serverId][channelId]).map(Number))
+            const state = get()
+            if (!state.messages[serverId] || !state.messages[serverId][channelId]) return null
+            const messageIds = Object.keys(state.messages[serverId][channelId]).map(Number)
+            return messageIds.length > 0 ? Math.max(...messageIds) : null
         }
     }
 }), {

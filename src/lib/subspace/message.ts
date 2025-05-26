@@ -29,11 +29,14 @@ export class MessageManager {
         }
     }
 
-    async sendMessage({ serverId, channelId, content, attachments = [], replyTo }: { serverId: string, channelId: string, content: string, attachments?: string[], replyTo?: number }): Promise<boolean> {
+    async sendMessage({ serverId, channelId, content, attachments = [], replyTo }: { serverId: string, channelId: number, content: string, attachments?: string[], replyTo?: number }): Promise<boolean> {
+        const body = { channelId, content, attachments: JSON.stringify(attachments) }
+        if (replyTo) body['replyTo'] = replyTo
+
         const path = `${serverId}/send-message`
         const res = await aofetch(path, {
             method: "POST",
-            body: { channelId, content, attachments: JSON.stringify(attachments), replyTo },
+            body,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,

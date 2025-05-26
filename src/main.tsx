@@ -8,6 +8,7 @@ import { useWallet } from './hooks/use-wallet'
 import { useEffect } from 'react'
 import NotFound from '@/pages/404'
 import Settings from '@/pages/settings'
+import { Toaster } from 'sonner'
 
 function Main() {
   const { connect } = useWallet((state) => state.actions)
@@ -23,6 +24,7 @@ function Main() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="subspace-theme">
+      <Toaster />
       <HashRouter>
         <Routes>
           <Route path="/" element={<SubspaceLanding />} />

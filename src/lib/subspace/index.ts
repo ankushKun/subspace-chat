@@ -81,7 +81,10 @@ export class ConnectionManager {
             process: processId,
             data: code,
             signer: this.getAoSigner(),
-            tags,
+            tags: [
+                ...tags,
+                { name: "Action", value: "Eval" }
+            ],
         }
         const messageId: string = await this.ao.message(args)
         const res: MessageResult = await this.ao.result({

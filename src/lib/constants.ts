@@ -18,6 +18,7 @@ export class Constants {
         SendMessage: "Send-Message",
 
         UpdateServer: "Update-Server",
+        UpdateServerCode: "Update-Server-Code",
         UpdateProfile: "Update-Profile",
         UpdateMember: "Update-Member",
         UpdateCategory: "Update-Category",

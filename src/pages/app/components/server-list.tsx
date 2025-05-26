@@ -4,8 +4,11 @@ import useSubspace, { useProfile } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
-import { Download, Home, Plus, Sparkles } from "lucide-react"
+import { Download, Home, Plus, Sparkles, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -146,6 +149,124 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
 
 const AddServerButton = () => {
     const [isHovered, setIsHovered] = useState(false)
+    const [joinInput, setJoinInput] = useState("")
+    const [isJoining, setIsJoining] = useState(false)
+    const [joinError, setJoinError] = useState("")
+
+    const subspace = useSubspace()
+    const { address } = useWallet()
+    const { actions: serverActions, serversJoined } = useServer()
+
+    const handleJoinServer = async () => {
+        if (!joinInput.trim()) {
+            setJoinError("Please enter a server ID or invite link")
+            return
+        }
+
+        if (!address) {
+            setJoinError("Please connect your wallet first")
+            return
+        }
+
+        setIsJoining(true)
+        setJoinError("")
+
+        try {
+            // Extract server ID from input (handle both direct IDs and invite links)
+            let serverId = joinInput.trim()
+
+            // If it's an invite link, extract the server ID
+            if (serverId.includes('/')) {
+                const parts = serverId.split('/')
+                serverId = parts[parts.length - 1]
+            }
+
+            // Validate server ID length (must be exactly 43 characters)
+            if (serverId.length !== 43) {
+                setJoinError("Server ID must be exactly 43 characters long")
+                return
+            }
+
+            // Validate server ID format (alphanumeric and some special characters)
+            const serverIdRegex = /^[A-Za-z0-9_-]+$/
+            if (!serverIdRegex.test(serverId)) {
+                setJoinError("Invalid server ID format")
+                return
+            }
+
+            // Call the actual joinServer method from the user service
+            const success = await subspace.user.joinServer({ serverId })
+
+            if (success) {
+                // Update the local state to include the new server
+                const currentServers = serversJoined[address] || []
+                if (!currentServers.includes(serverId)) {
+                    serverActions.setServersJoined(address, [...currentServers, serverId])
+                }
+
+                // Fetch server details if not already cached
+                try {
+                    const serverDetails = await subspace.server.getServerDetails({ serverId })
+                    if (serverDetails) {
+                        // Transform ServerDetailsResponse to Server by adding serverId
+                        const server: Server = {
+                            serverId,
+                            ...serverDetails
+                        }
+                        serverActions.addServer(server)
+                    }
+                } catch (error) {
+                    console.warn("Failed to fetch server details:", error)
+                    // Don't show error to user as the join was successful
+                }
+
+                // Reset form on success
+                setJoinInput("")
+                setJoinError("")
+            } else {
+                setJoinError("Failed to join server. The server may not exist or you may already be a member.")
+            }
+        } catch (error) {
+            console.error("Error joining server:", error)
+            setJoinError("Failed to join server. Please check the ID and try again.")
+        } finally {
+            setIsJoining(false)
+        }
+    }
+
+    const isValidInput = joinInput.trim().length > 0
+    const inputType = joinInput.includes('/') ? 'invite link' : 'server ID'
+
+    // Enhanced validation for server ID length
+    const getInputValidation = () => {
+        if (!joinInput.trim()) return { isValid: false, message: "" }
+
+        let serverId = joinInput.trim()
+        if (serverId.includes('/')) {
+            const parts = serverId.split('/')
+            serverId = parts[parts.length - 1]
+        }
+
+        if (serverId.length !== 43) {
+            return {
+                isValid: false,
+                message: `Server ID must be 43 characters (current: ${serverId.length})`
+            }
+        }
+
+        const serverIdRegex = /^[A-Za-z0-9_-]+$/
+        if (!serverIdRegex.test(serverId)) {
+            return {
+                isValid: false,
+                message: "Server ID contains invalid characters"
+            }
+        }
+
+        return { isValid: true, message: "" }
+    }
+
+    const inputValidation = getInputValidation()
+    const isValidForSubmission = inputValidation.isValid
 
     return (
         <div className="relative group mb-3">
@@ -160,26 +281,266 @@ const AddServerButton = () => {
             />
 
             <div className="flex justify-center relative">
-                <Button
-                    size="icon"
-                    variant="ghost"
-                    className={cn(
-                        "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
-                        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
-                        "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-green-500 hover:to-green-400 hover:shadow-md hover:shadow-green-500/20",
-                        "border-2 border-dashed border-muted-foreground/30 hover:border-green-400/50"
-                    )}
-                    onMouseEnter={() => setIsHovered(true)}
-                    onMouseLeave={() => setIsHovered(false)}
-                >
-                    <Plus className={cn(
-                        "w-5 h-5 transition-all duration-300",
-                        "text-muted-foreground group-hover:text-white group-hover:scale-110 group-hover:rotate-90"
-                    )} />
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className={cn(
+                                "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
+                                "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
+                                "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-green-500 hover:to-green-400 hover:shadow-md hover:shadow-green-500/20",
+                                "border-2 border-dashed border-muted-foreground/30 hover:border-green-400/50"
+                            )}
+                            onMouseEnter={() => setIsHovered(true)}
+                            onMouseLeave={() => setIsHovered(false)}
+                        >
+                            <Plus className={cn(
+                                "w-5 h-5 transition-all duration-300",
+                                "text-muted-foreground group-hover:text-white group-hover:scale-110 group-hover:rotate-90"
+                            )} />
 
-                    {/* Shimmer effect on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-                </Button>
+                            {/* Shimmer effect on hover */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" className="w-72 p-0 shadow-xl border-border/50">
+                        <div className="relative overflow-hidden rounded-lg">
+                            {/* Header with gradient background */}
+                            <div className="px-4 py-3 bg-gradient-to-r from-primary/10 via-accent/5 to-primary/10 border-b border-border/50">
+                                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                    <Plus className="w-4 h-4 text-primary" />
+                                    Server Actions
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-1">Join an existing server or create your own</p>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="p-2 space-y-2">
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className={cn(
+                                                "w-full h-12 p-2.5 justify-start text-left transition-all duration-200 group relative overflow-hidden",
+                                                "hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-blue-400/5",
+                                                "border border-border/30 hover:border-blue-400/30",
+                                                "before:absolute before:inset-0 before:bg-gradient-to-r before:from-blue-500/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
+                                            )}
+                                            onClick={() => {
+                                                setJoinInput("")
+                                                setJoinError("")
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3 relative z-10">
+                                                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                                                    <Users className="w-4 h-4 text-blue-500" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-sm text-foreground">Join Server</div>
+                                                    <div className="text-xs text-muted-foreground">Connect to an existing community</div>
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="max-w-md p-0">
+                                        <div className="relative overflow-hidden">
+                                            {/* Header with gradient */}
+                                            <AlertDialogHeader className="relative px-6 pt-6 pb-4">
+                                                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-blue-500/5 rounded-t-lg" />
+                                                <AlertDialogTitle className="text-xl font-bold flex items-center gap-3 relative">
+                                                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                                        <Users className="w-5 h-5 text-blue-500" />
+                                                    </div>
+                                                    <div>
+                                                        <div>Join Server</div>
+                                                        <div className="text-sm font-normal text-muted-foreground mt-1">
+                                                            Connect to an existing community
+                                                        </div>
+                                                    </div>
+                                                </AlertDialogTitle>
+                                            </AlertDialogHeader>
+
+                                            <AlertDialogDescription asChild>
+                                                <div className="px-6 space-y-4 mt-4">
+                                                    <div className="space-y-4">
+                                                        <label className="text-sm font-medium text-foreground">
+                                                            Server ID or Invite Link
+                                                        </label>
+                                                        <div className="relative">
+                                                            <Input
+                                                                type="text"
+                                                                placeholder="Enter server ID or paste invite link..."
+                                                                value={joinInput}
+                                                                onChange={(e) => {
+                                                                    setJoinInput(e.target.value)
+                                                                    setJoinError("")
+                                                                }}
+                                                                className={cn(
+                                                                    "pr-20 transition-all duration-200",
+                                                                    joinError
+                                                                        ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/20"
+                                                                        : inputValidation.isValid
+                                                                            ? "border-green-500/50 focus:border-green-500 focus:ring-green-500/20"
+                                                                            : isValidInput && !inputValidation.isValid
+                                                                                ? "border-yellow-500/50 focus:border-yellow-500 focus:ring-yellow-500/20"
+                                                                                : ""
+                                                                )}
+                                                                disabled={isJoining}
+                                                            />
+                                                            {isValidInput && (
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                                    <div className={cn(
+                                                                        "px-2 py-1 rounded text-xs transition-colors",
+                                                                        inputValidation.isValid
+                                                                            ? "bg-green-500/10 text-green-600 border border-green-500/20"
+                                                                            : "bg-muted text-muted-foreground"
+                                                                    )}>
+                                                                        {inputType}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Real-time validation feedback */}
+                                                        {isValidInput && !inputValidation.isValid && !joinError && (
+                                                            <p className="text-sm text-yellow-600 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                                                                </div>
+                                                                {inputValidation.message}
+                                                            </p>
+                                                        )}
+
+                                                        {joinError && (
+                                                            <p className="text-sm text-red-500 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                                                                </div>
+                                                                {joinError}
+                                                            </p>
+                                                        )}
+
+                                                        {inputValidation.isValid && (
+                                                            <p className="text-sm text-green-600 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                                                                </div>
+                                                                Valid server ID format
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Help text */}
+                                                    <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                                                        <h4 className="text-sm font-medium text-foreground mb-2">How to join:</h4>
+                                                        <ul className="text-xs text-muted-foreground space-y-1">
+                                                            <li className="flex items-start gap-2">
+                                                                <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                                                                <span>Paste a server ID (exactly 43 characters)</span>
+                                                            </li>
+                                                            <li className="flex items-start gap-2">
+                                                                <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                                                                <span>Paste an invite link from a server member</span>
+                                                            </li>
+                                                            <li className="flex items-start gap-2">
+                                                                <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                                                                <span>Server IDs contain only letters, numbers, hyphens, and underscores</span>
+                                                            </li>
+                                                        </ul>
+
+                                                        {/* Example server ID */}
+                                                        <div className="mt-3 pt-3 border-t border-border/30">
+                                                            <h5 className="text-xs font-medium text-foreground mb-2">Example Server ID:</h5>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setJoinInput("wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8")
+                                                                    setJoinError("")
+                                                                }}
+                                                                className={cn(
+                                                                    "w-full p-3 text-left text-xs font-mono bg-background/50 hover:bg-background/80 border border-border/50 hover:border-blue-400/50 rounded-md transition-all duration-200 group",
+                                                                    "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50"
+                                                                )}
+                                                                disabled={isJoining}
+                                                            >
+                                                                <div className="flex flex-row gap-2 w-full h-5 cursor-pointer">
+                                                                    <span className="text-foreground/80 grow truncate group-hover:text-foreground word-break-all leading-relaxed">
+                                                                        wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8
+                                                                    </span>
+                                                                    <div className="flex justify-end">
+                                                                        <div className="px-2 py-1 bg-blue-500/10 text-blue-600 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                            use
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </AlertDialogDescription>
+
+                                            <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
+                                                <AlertDialogCancel disabled={isJoining}>
+                                                    Cancel
+                                                    {/* <Button
+                                                        variant="outline"
+                                                        disabled={isJoining}
+                                                        className="transition-all duration-200"
+                                                    >
+                                                        Cancel
+                                                    </Button> */}
+                                                </AlertDialogCancel>
+                                                <Button
+                                                    onClick={handleJoinServer}
+                                                    disabled={!isValidForSubmission || isJoining}
+                                                    className={cn(
+                                                        "min-w-[100px] transition-all duration-200",
+                                                        "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700",
+                                                        "shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40",
+                                                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    {isJoining ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                            <span>Joining...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <Users className="w-4 h-4" />
+                                                            <span>Join Server</span>
+                                                        </div>
+                                                    )}
+                                                </Button>
+                                            </AlertDialogFooter>
+                                        </div>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+
+                                <Button
+                                    variant="ghost"
+                                    className={cn(
+                                        "w-full h-12 p-2.5 justify-start text-left transition-all duration-200 group relative overflow-hidden",
+                                        "hover:bg-gradient-to-r hover:from-green-500/10 hover:to-green-400/5",
+                                        "border border-border/30 hover:border-green-400/30",
+                                        "before:absolute before:inset-0 before:bg-gradient-to-r before:from-green-500/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3 relative z-10">
+                                        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
+                                            <Plus className="w-4 h-4 text-green-500" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="font-medium text-sm text-foreground">Create Server</div>
+                                            <div className="text-xs text-muted-foreground">Start your own community</div>
+                                        </div>
+                                    </div>
+                                </Button>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
 
                 {/* Tooltip positioned relative to button */}
                 <div className={cn(
@@ -310,13 +671,10 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                 }
             </div>
 
+            <AddServerButton />
             <div className="grow" />
 
             <InstallPWAButton />
-            <AddServerButton />
-
-            {/* Ambient glow at bottom */}
-            <div className="absolute bottom-4 left-1 /2 -translate-x-1/2 w-12 h-12 bg-primary/3 rounded-full blur-xl" />
         </div>
     )
 }

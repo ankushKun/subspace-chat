@@ -59,6 +59,26 @@ export class ServerManager {
         }
     }
 
+    async updateServerCode({ serverId }: { serverId: string }): Promise<boolean> {
+        try {
+            const result = await this.connectionManager.execLua({
+                processId: serverId,
+                code: Constants.SERVER_SOURCE,
+                tags: [
+                    ...Constants.CommonTags,
+                    { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateServerCode }
+                ]
+            })
+
+            const output = this.connectionManager.parseOutput(result)
+            Logger.info("updateServerCode", { json: output })
+            return true;
+        } catch (error) {
+            Logger.error("updateServerCode", { error: error instanceof Error ? error.message : String(error) });
+            return false;
+        }
+    }
+
     async getServerDetails({ serverId }: { serverId: string }): Promise<ServerDetailsResponse | null> {
         const path = `${serverId}/`
         const res = await aofetch(path, {

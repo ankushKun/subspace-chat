@@ -15,7 +15,9 @@ function Main() {
 
   useEffect(() => {
     if (strategy) {
-      connect(strategy)
+      connect(strategy).then(() => {
+        console.log("connected")
+      })
     }
   }, [])
 

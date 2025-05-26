@@ -69,7 +69,7 @@ export type ServerMember = {
 }
 
 export type Server = {
-    id: string;
+    serverId: string;
     categories: Category[];
     channels: Channel[];
     // roles: Role[]; // TODO: implement

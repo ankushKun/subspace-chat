@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { type Profile } from "@/types/subspace";
+import type { User } from "@/lib/subspace/user";
 
 
 interface ProfileState {

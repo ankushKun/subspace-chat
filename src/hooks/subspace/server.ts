@@ -47,7 +47,7 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
 
         setActiveServerId: (serverId: string) => set({ activeServerId: serverId }),
         setServers: (servers: Record<string, Server>) => set({ servers }),
-        addServer: (server: Server) => set((state) => ({ servers: { ...state.servers, [server.id]: server } })),
+        addServer: (server: Server) => set((state) => ({ servers: { ...state.servers, [server.serverId]: server } })),
         removeServer: (serverId: string) => set((state) => {
             delete state.servers[serverId];
             return state;

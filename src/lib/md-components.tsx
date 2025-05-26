@@ -1,10 +1,47 @@
 import type { Components } from "react-markdown";
 import { cn } from "./utils";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import UserMention from "@/components/user-mention";
+import ChannelMention from "@/components/channel-mention";
+
+// Global store for mentions data (temporary solution)
+let currentMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
+
+export const setCurrentMentions = (mentions: { type: 'user' | 'channel'; display: string; id: string; }[]) => {
+    currentMentions = mentions;
+};
 
 export const mdComponents: Components = {
     a: ({ node, ...props }) => {
-        // return <a {...props} className={cn(props.className, "text-blue-500 hover:underline")} target="_blank" rel="noopener noreferrer" />
+        const href = props.href;
+        const children = props.children;
+
+        // Handle user mention placeholders
+        if (href?.startsWith('#__user_mention_')) {
+            const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
+            const mention = currentMentions[index];
+            if (!mention) return <>{children}</>;
+
+            return <UserMention userId={mention.id} side="bottom" align="start" showAt={true}
+                renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded cursor-pointer">
+                    @{text}
+                </span>} />
+        }
+
+        // Handle channel mention placeholders
+        if (href?.startsWith('#__channel_mention_')) {
+            const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
+            const mention = currentMentions[index];
+            if (!mention) return <>{children}</>;
+
+            return <ChannelMention channelId={mention.id} showHash={true}
+                renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded cursor-pointer">
+                    #{text}
+                </span>} />
+        }
+
+        // Handle regular links with security dialog
         return <Dialog>
             <DialogTrigger asChild>
                 <a
@@ -34,5 +71,5 @@ export const mdComponents: Components = {
                 </div>
             </DialogContent>
         </Dialog>
-    }
+    },
 }

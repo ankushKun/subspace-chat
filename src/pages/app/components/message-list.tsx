@@ -10,7 +10,8 @@ import { Mention, MentionsInput } from "react-mentions"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeKatex from "rehype-katex"
-import { mdComponents } from "@/lib/md-components"
+import { mdComponents, setCurrentMentions } from "@/lib/md-components"
+import UserMention from "@/components/user-mention"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -192,6 +193,49 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
         }
     }, [attachments])
 
+    function preProcessContent(content: string) {
+        // Process mentions similar to legacy implementation
+        const mentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
+        let processedContent = content;
+
+        // Extract and store user mentions: @[Display Name](userId)
+        const userMentionRegex = /@\[([^\]]+)\]\(([A-Za-z0-9_-]+)\)/g;
+        processedContent = processedContent.replace(userMentionRegex, (match, display, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'user', display, id });
+            return `[${display}](#__user_mention_${index}__)`;
+        });
+
+        // Extract and store channel mentions: #[Display Name](channelId)
+        const channelMentionRegex = /#\[([^\]]+)\]\(([0-9]+)\)/g;
+        processedContent = processedContent.replace(channelMentionRegex, (match, display, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'channel', display, id });
+            return `[${display}](#__channel_mention_${index}__)`;
+        });
+
+        // Also handle the expected format for backward compatibility
+        const expectedMentionRegex = /<@([A-Za-z0-9_-]+)>/g;
+        const expectedChannelRegex = /<#([0-9]+)>/g;
+
+        processedContent = processedContent.replace(expectedMentionRegex, (match, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'user', display: id, id });
+            return `[${id}](#__user_mention_${index}__)`;
+        });
+
+        processedContent = processedContent.replace(expectedChannelRegex, (match, id) => {
+            const index = mentions.length;
+            mentions.push({ type: 'channel', display: id, id });
+            return `[${id}](#__channel_mention_${index}__)`;
+        });
+
+        // Set mentions data for the markdown components to access
+        setCurrentMentions(mentions);
+
+        return processedContent;
+    }
+
     return (
         <div className="space-y-2">
             {/* Message text */}
@@ -199,7 +243,9 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                 <div className="text-sm text-foreground leading-relaxed break-words markdown">
                     <Markdown
                         components={mdComponents}
-                        remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>{content}</Markdown>
+                        remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
+                        {preProcessContent(content)}
+                    </Markdown>
                 </div>
             )}
 
@@ -383,11 +429,9 @@ const MessageInput = ({
                 id: member.userId,
                 display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
             }))
-            console.log(firstMembers)
             callback(firstMembers)
             return
         } else {
-
             const filteredMembers = members
                 .filter(member => {
                     const displayName = member.nickname || member.userId
@@ -415,8 +459,6 @@ const MessageInput = ({
                     display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
                 }))
 
-            console.log(filteredMembers)
-
             callback(filteredMembers)
         }
     }
@@ -431,7 +473,6 @@ const MessageInput = ({
     ) => {
         const { profiles } = useProfile()
         const profile = profiles[suggestion.id]
-        console.log(suggestion)
 
         // Handle empty state
         if (suggestion.id === '__no_results__') {
@@ -462,7 +503,7 @@ const MessageInput = ({
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
                     <div className="font-medium text-foreground text-sm leading-tight">
-                        {suggestion.display}
+                        {highlightedDisplay}
                     </div>
                     <div className="text-xs text-muted-foreground/70 leading-tight mt-0.5 font-mono">
                         {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 6)}
@@ -476,6 +517,91 @@ const MessageInput = ({
             </div>
         )
     }
+
+    // Function to get channels data for mentions
+    const getChannelsData = (query: string, callback: (data: any[]) => void) => {
+        if (!activeServerId) {
+            callback([]);
+            return;
+        }
+
+        // Get server channels
+        const server = servers[activeServerId];
+        if (!server?.channels) {
+            callback([]);
+            return;
+        }
+
+        // Filter channels based on query
+        const filteredChannels = server.channels
+            .filter(channel => {
+                const lowerQuery = query.toLowerCase();
+                return channel.name.toLowerCase().includes(lowerQuery);
+            })
+            .sort((a, b) => {
+                // Prioritize exact matches and prefix matches
+                const aName = a.name.toLowerCase();
+                const bName = b.name.toLowerCase();
+                const lowerQuery = query.toLowerCase();
+
+                const aStartsWith = aName.startsWith(lowerQuery);
+                const bStartsWith = bName.startsWith(lowerQuery);
+
+                if (aStartsWith && !bStartsWith) return -1;
+                if (!aStartsWith && bStartsWith) return 1;
+
+                return aName.localeCompare(bName);
+            })
+            .slice(0, 10) // Limit to 10 results
+            .map(channel => ({
+                id: channel.channelId.toString(),
+                display: channel.name
+            }));
+
+        callback(filteredChannels);
+    };
+
+    // Enhanced custom renderer for channel suggestions
+    const renderChannelSuggestion = (
+        suggestion: { id: string; display: string },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        // Handle empty state
+        if (suggestion.id === '__no_results__') {
+            return (
+                <div className="flex items-center justify-center py-6 px-3 text-muted-foreground/60">
+                    <div className="text-sm">No channels found</div>
+                </div>
+            );
+        }
+
+        return (
+            <div className={`flex items-center gap-3 py-3 px-3 rounded-lg transition-all duration-150 cursor-pointer ${focused
+                ? 'bg-primary/10 text-foreground shadow-sm'
+                : 'hover:bg-accent/30 text-foreground'
+                }`}>
+                <div className="w-10 h-10 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center border border-border/20">
+                    <Hash className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                    <div className="font-medium text-foreground text-sm leading-tight">
+                        {highlightedDisplay}
+                    </div>
+                    <div className="text-xs text-muted-foreground/70 leading-tight mt-0.5">
+                        Channel #{suggestion.id}
+                    </div>
+                </div>
+                {focused && (
+                    <div className="flex-shrink-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/60"></div>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -738,7 +864,7 @@ const MessageInput = ({
                                 <Mention
                                     data={getMembersData}
                                     trigger="@"
-                                    markup="<@__id__>"
+                                    markup="@[__display__](__id__)"
                                     displayTransform={(id) => {
                                         // Look up the display name for this ID
                                         const member = servers[activeServerId]?.members?.find(m => m.userId === id)
@@ -756,6 +882,27 @@ const MessageInput = ({
                                         fontSize: '14px',
                                     }}
                                     renderSuggestion={renderMemberSuggestion}
+                                />
+                                <Mention
+                                    data={getChannelsData}
+                                    trigger="#"
+                                    markup="#[__display__](__id__)"
+                                    displayTransform={(id) => {
+                                        // Look up the channel name for this ID
+                                        const channel = servers[activeServerId]?.channels?.find(c => c.channelId.toString() === id)
+                                        return `#${channel?.name || id}`
+                                    }}
+                                    appendSpaceOnAdd
+                                    className="mention-highlight z-10"
+                                    style={{
+                                        backgroundColor: 'var(--primary)',
+                                        color: 'var(--primary-foreground)',
+                                        padding: '1px 0px',
+                                        borderRadius: '3px',
+                                        fontWeight: '500',
+                                        fontSize: '14px',
+                                    }}
+                                    renderSuggestion={renderChannelSuggestion}
                                 />
                             </MentionsInput>
                         </div>
@@ -941,7 +1088,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             {...props}
             className={cn(
                 "flex flex-col h-full relative",
-                "bg-gradient-to-b from-background via-background/98 to-background/95",
+                "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                 props.className

@@ -72,6 +72,14 @@ export default function App() {
           acc[profile.userId] = profile
           return acc
         }, {} as Record<string, Profile>))
+
+        // fetch users primary names
+        // call getProfile for each member with a delay of 200ms and update state
+        for (const member of members) {
+          const profile = await subspace.user.getProfile({ userId: member.userId })
+          profileActions.updateProfile(member.userId, profile)
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
       }
     })()
   }, [activeServerId])
@@ -97,7 +105,7 @@ export default function App() {
       }
     }
 
-    const interval = setInterval(fetchLatestMessages, 2000)
+    const interval = setInterval(fetchLatestMessages, 1500)
 
     return () => clearInterval(interval)
   }, [activeServerId, activeChannelId])

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ServerMember } from "@/types/subspace"
+import UserMention from "@/components/user-mention"
 
 const MemberAvatar = ({
     userId,
@@ -58,62 +59,56 @@ const MemberItem = ({
     const profile = profiles[member.userId]
     const [isHovered, setIsHovered] = useState(false)
 
-    const displayName = member.nickname || profile?.username || member.userId
-
     return (
         <div className="relative group">
-            <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                    "w-full h-10 px-2 justify-start text-sm transition-all duration-200 relative overflow-hidden",
-                    "hover:bg-muted/50 rounded-md",
-                    "text-muted-foreground hover:text-foreground",
-                    "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
-                )}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                onClick={onClick}
-            >
-                <div className="flex items-center gap-3 w-full relative z-10">
-                    {/* Avatar */}
-                    <MemberAvatar userId={member.userId} size="sm" />
-
-                    {/* Member info */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                            <span className="font-medium truncate transition-colors text-foreground">
-                                {displayName}
-                            </span>
-
-                            {/* Owner indicator */}
-                            {isOwner && (
-                                <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Actions on hover */}
-                    {isHovered && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                console.log('Member actions for:', displayName)
-                            }}
-                        >
-                            <MoreHorizontal className="w-3 h-3" />
-                        </Button>
+            <UserMention userId={member.userId} side="left" align="start" renderer={(displayName) =>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                        "w-full h-10 px-2 justify-start text-sm transition-all duration-200 relative overflow-hidden",
+                        "hover:bg-muted/50 rounded-md",
+                        "text-muted-foreground hover:text-foreground",
+                        "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
                     )}
-                </div>
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <div className="flex items-center gap-3 w-full relative z-10">
+                        {/* Avatar */}
+                        <MemberAvatar userId={member.userId} size="sm" />
 
-                {/* Subtle shimmer effect on hover */}
-                {isHovered && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-                )}
-            </Button>
+                        {/* Member info */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium truncate transition-colors text-foreground">
+                                    {displayName}
+                                </span>
+
+                                {/* Owner indicator */}
+                                {isOwner && (
+                                    <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actions on hover */}
+                        {isHovered && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    console.log('Member actions for:', displayName)
+                                }}
+                            >
+                                <MoreHorizontal className="w-3 h-3" />
+                            </Button>
+                        )}
+                    </div>
+                </Button>
+            } />
         </div>
     )
 }

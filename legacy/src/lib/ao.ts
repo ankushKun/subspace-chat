@@ -1,12 +1,12 @@
 import { aofetch } from "ao-fetch"
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
 import { createDataItemSigner as nodeCDIS } from "@permaweb/aoconnect/node"
-import { ArconnectSigner, ArweaveSigner, type JWKInterface, createData, DataItem } from "@dha-team/arbundles/web"
-import type { MessageResult } from "node_modules/@permaweb/aoconnect/dist/lib/result";
+import { ArconnectSigner, ArweaveSigner, type JWKInterface, createData, DataItem } from "@dha-team/arbundles"
+
 import type { Tag, Member, Server } from "@/lib/types"
 import Arweave from "arweave";
 import { useGlobalState } from "@/hooks/global-state"; // Import for the refresh function
-import { ARIO } from "@ar.io/sdk";  // Import AR.IO SDK
+import { ARIO, type MessageResult } from "@ar.io/sdk";  // Import AR.IO SDK
 import { toast } from "sonner";  // Use sonner for toast messages
 import { createLogger } from '@/lib/logger'
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";

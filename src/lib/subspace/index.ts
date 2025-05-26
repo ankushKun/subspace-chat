@@ -1,6 +1,6 @@
 import { connect, createDataItemSigner } from "@permaweb/aoconnect"
 import { Constants } from "../constants";
-import { ArweaveSigner, createData, DataItem } from "@dha-team/arbundles/web"
+import { ArweaveSigner, createData, DataItem } from "@dha-team/arbundles"
 import { ARIO } from "@ar.io/sdk"
 
 import type { JWKInterface } from "arweave/web/lib/wallet";

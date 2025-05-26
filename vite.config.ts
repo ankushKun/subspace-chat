@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import path from "path"
 import fs from "fs"
 
@@ -11,7 +12,7 @@ const serverSource = fs.readFileSync("./logic/server.lua", "utf-8");
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), nodePolyfills()],
   base: "./",
   resolve: {
     alias: {

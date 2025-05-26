@@ -180,7 +180,7 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["owner", "members"]))
 
     const server = activeServerId ? servers[activeServerId] : null
-    const serverMembers = server?.members || []
+    const serverMembers = Array.isArray(server?.members) ? server.members : []
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {
@@ -197,13 +197,16 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
         const ownerMembers: ServerMember[] = []
         const regularMembers: ServerMember[] = []
 
-        filteredMembers.forEach(member => {
-            if (member.userId === server?.owner) {
-                ownerMembers.push(member)
-            } else {
-                regularMembers.push(member)
-            }
-        })
+        // Ensure filteredMembers is an array before calling forEach
+        if (Array.isArray(filteredMembers)) {
+            filteredMembers.forEach(member => {
+                if (member.userId === server?.owner) {
+                    ownerMembers.push(member)
+                } else {
+                    regularMembers.push(member)
+                }
+            })
+        }
 
         return { owner: ownerMembers, members: regularMembers }
     }, [filteredMembers, server?.owner])
@@ -290,7 +293,7 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
 
             {/* Members list */}
             <div className="flex-1 overflow-y-auto space-y-1 px-2">
-                {filteredMembers.length === 0 ? (
+                {!Array.isArray(filteredMembers) || filteredMembers.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-32 text-center">
                         <Users className="w-8 h-8 text-muted-foreground/40 mb-2" />
                         <p className="text-sm text-muted-foreground">

@@ -13,9 +13,9 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
     const { activeServerId, servers } = useServer()
 
     const server = activeServerId ? servers[activeServerId] : null
-    const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname! : null
+    const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname : null
 
-    const profile = profiles[userId]!
+    const profile = profiles[userId]
     const primaryName = profile?.primaryName || null;
 
     const displayText = nickname || primaryName || shortenAddress(userId)
@@ -37,11 +37,19 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                         <div className="px-4 pb-4 -mt-8 relative">
                             {/* Avatar with border */}
                             <div className="relative mb-3">
-                                <img
-                                    src={`https://arweave.net/${profile.pfp}`}
-                                    alt={profile.primaryName}
-                                    className="w-16 h-16 rounded-full border-4 border-card shadow-lg bg-muted"
-                                />
+                                {profile.pfp ? (
+                                    <img
+                                        src={`https://arweave.net/${profile.pfp}`}
+                                        alt={profile.primaryName || nickname || shortenAddress(userId)}
+                                        className="w-16 h-16 rounded-full border-4 border-card shadow-lg bg-muted"
+                                    />
+                                ) : (
+                                    <div className="w-16 h-16 rounded-full border-4 border-card shadow-lg bg-muted flex items-center justify-center">
+                                        <span className="text-2xl font-semibold text-muted-foreground">
+                                            {(profile.primaryName || nickname || shortenAddress(userId)).charAt(0).toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* User info */}
@@ -61,7 +69,7 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
-                                        </div> : <>{nickname || shortenAddress(profile.userId)}</>}
+                                        </div> : <>{nickname || shortenAddress(userId)}</>}
                                     </h3>
                                     {nickname && profile.primaryName && (
                                         <p className="text-sm text-muted-foreground font-medium">
@@ -79,19 +87,21 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                             User ID
                                         </span>
                                         <Badge variant="secondary" className="font-mono text-xs !pointer-events-auto">
-                                            {shortenAddress(userId)} <Copy id="copy-icon" className="w-3 h-3 z-10 !cursor-pointer !pointer-events-auto" onClick={() => {
+                                            {shortenAddress(userId)} <Copy id={`copy-icon-${userId}`} className="w-3 h-3 z-10 !cursor-pointer !pointer-events-auto" onClick={() => {
                                                 navigator.clipboard.writeText(userId)
-                                                const copyIcon = document.getElementById("copy-icon")!;
-                                                const checkIcon = document.getElementById("check-icon")!;
-                                                // hide copy icon and show check icon for 2 seconds
-                                                copyIcon.classList.add("hidden");
-                                                checkIcon.classList.remove("hidden");
-                                                setTimeout(() => {
-                                                    copyIcon.classList.remove("hidden");
-                                                    checkIcon.classList.add("hidden");
-                                                }, 550);
+                                                const copyIcon = document.getElementById(`copy-icon-${userId}`);
+                                                const checkIcon = document.getElementById(`check-icon-${userId}`);
+                                                if (copyIcon && checkIcon) {
+                                                    // hide copy icon and show check icon for 2 seconds
+                                                    copyIcon.classList.add("hidden");
+                                                    checkIcon.classList.remove("hidden");
+                                                    setTimeout(() => {
+                                                        copyIcon.classList.remove("hidden");
+                                                        checkIcon.classList.add("hidden");
+                                                    }, 550);
+                                                }
                                             }} />
-                                            <Check id="check-icon" className="w-3 h-3 hidden" />
+                                            <Check id={`check-icon-${userId}`} className="w-3 h-3 hidden" />
                                         </Badge>
                                     </div>
 

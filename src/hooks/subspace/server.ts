@@ -65,20 +65,48 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
         setServers: (servers: Record<string, Server>) => set({ servers }),
         addServer: (server: Server) => set((state) => ({ servers: { ...state.servers, [server.serverId]: server } })),
         removeServer: (serverId: string) => set((state) => {
-            delete state.servers[serverId];
-            return state;
+            const { [serverId]: removed, ...remainingServers } = state.servers;
+            return { servers: remainingServers };
         }),
-        updateServer: (serverId: string, server: Server) => set((state) => {
-            state.servers[serverId] = server;
-            return state;
-        }),
+        updateServer: (serverId: string, server: Server) => set((state) => ({
+            servers: {
+                ...state.servers,
+                [serverId]: {
+                    ...state.servers[serverId],
+                    ...server
+                }
+            }
+        })),
         updateServerMembers: (serverId: string, members: ServerMember[]) => set((state) => {
-            state.servers[serverId].members = members;
-            return state;
+            if (!state.servers[serverId]) {
+                console.warn(`Attempted to update members for non-existent server: ${serverId}`);
+                return state;
+            }
+            return {
+                servers: {
+                    ...state.servers,
+                    [serverId]: {
+                        ...state.servers[serverId],
+                        members: members
+                    }
+                }
+            };
         }),
         removeServerMember: (serverId: string, memberId: string) => set((state) => {
-            delete state.servers[serverId].members[memberId];
-            return state;
+            if (!state.servers[serverId]) {
+                console.warn(`Attempted to remove member from non-existent server: ${serverId}`);
+                return state;
+            }
+            const updatedMembers = state.servers[serverId]?.members?.filter(member => member.userId !== memberId) || [];
+            return {
+                servers: {
+                    ...state.servers,
+                    [serverId]: {
+                        ...state.servers[serverId],
+                        members: updatedMembers
+                    }
+                }
+            };
         }),
 
         clearAllServers: () => set({ servers: {} }),

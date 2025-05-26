@@ -8,13 +8,13 @@ import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
 import DMList from "./components/dm-list"
-import type { Profile } from "@/types/subspace"
+import type { Profile, Server } from "@/types/subspace"
 
 export default function App() {
 
   const subspace = useSubspace()
   const { connected, address } = useWallet()
-  const { actions: serverActions, activeServerId, activeChannelId } = useServer()
+  const { actions: serverActions, activeServerId, activeChannelId, servers } = useServer()
   const { actions: profileActions } = useProfile()
   const { actions: messagesActions } = useMessages()
 
@@ -38,10 +38,17 @@ export default function App() {
           try {
             const details = await subspace.server.getServerDetails({ serverId })
             if (details) {
-              serverActions.addServer({
-                serverId: serverId,
-                ...details,
-              })
+              // if already exists, update it
+              if (servers[serverId]) {
+                serverActions.updateServer(serverId, details as Server)
+              } else {
+                serverActions.addServer({
+                  serverId: serverId,
+                  ...details,
+                })
+              }
+            } else {
+              console.log(`server ${serverId} not found`)
             }
           } catch (error) {
             console.error(`Failed to load server ${serverId}:`, error)
@@ -81,7 +88,7 @@ export default function App() {
           channelId: activeChannelId,
           after: lastMessageId
         })
-        console.log(messages)
+        console.log(messages.length > 0 ? messages : "no new messages")
         if (messages && messages.length > 0) {
           messagesActions.addMessages(activeServerId, activeChannelId, messages)
         }

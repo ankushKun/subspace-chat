@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign } from "lucide-react"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
+import { Mention, MentionsInput } from "react-mentions"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -357,10 +358,113 @@ const MessageInput = ({
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
     const [attachments, setAttachments] = useState<string[]>([])
-    const inputRef = useRef<HTMLInputElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
     const { profiles } = useProfile()
+
+    // Function to get members data for mentions (similar to legacy implementation)
+    const getMembersData = (query: string, callback: (data: any[]) => void) => {
+        if (!activeServerId) {
+            callback([])
+            return
+        }
+
+        const members = servers[activeServerId]?.members || []
+
+        // If no query, show first 10 members
+        if (!query.trim()) {
+            const firstMembers = members.slice(0, 10).map(member => ({
+                id: member.userId,
+                display: member.nickname || shortenAddress(member.userId)
+            }))
+            callback(firstMembers)
+            return
+        }
+
+        const filteredMembers = members
+            .filter(member => {
+                const displayName = member.nickname || shortenAddress(member.userId)
+                const lowerQuery = query.toLowerCase()
+                return displayName.toLowerCase().includes(lowerQuery) ||
+                    member.userId.toLowerCase().includes(lowerQuery)
+            })
+            .sort((a, b) => {
+                // Prioritize exact matches and prefix matches
+                const aDisplay = (a.nickname || a.userId).toLowerCase()
+                const bDisplay = (b.nickname || b.userId).toLowerCase()
+                const lowerQuery = query.toLowerCase()
+
+                const aStartsWith = aDisplay.startsWith(lowerQuery)
+                const bStartsWith = bDisplay.startsWith(lowerQuery)
+
+                if (aStartsWith && !bStartsWith) return -1
+                if (!aStartsWith && bStartsWith) return 1
+
+                return aDisplay.localeCompare(bDisplay)
+            })
+            .slice(0, 8) // Limit to 8 results
+            .map(member => ({
+                id: member.userId,
+                display: member.nickname || member.userId
+            }))
+
+        callback(filteredMembers)
+    }
+
+    // Enhanced custom renderer for mention suggestions
+    const renderMemberSuggestion = (
+        suggestion: { id: string; display: string },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        const { profiles } = useProfile()
+        const profile = profiles[suggestion.id]
+
+        // Handle empty state
+        if (suggestion.id === '__no_results__') {
+            return (
+                <div className="flex items-center justify-center py-6 px-3 text-muted-foreground/60">
+                    <div className="text-sm">No members found</div>
+                </div>
+            )
+        }
+
+        return (
+            <div className={`flex items-center gap-3 py-3 px-3 rounded-lg transition-all duration-150 cursor-pointer ${focused
+                ? 'bg-primary/10 text-foreground shadow-sm'
+                : 'hover:bg-accent/30 text-foreground'
+                }`}>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
+                    {profile?.pfp ? (
+                        <img
+                            src={`https://arweave.net/${profile.pfp}`}
+                            alt={suggestion.display}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <span className="text-sm font-semibold text-primary">
+                            {suggestion.display.charAt(0).toUpperCase()}
+                        </span>
+                    )}
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                    <div className="font-medium text-foreground text-sm leading-tight">
+                        {highlightedDisplay}
+                    </div>
+                    <div className="text-xs text-muted-foreground/70 leading-tight mt-0.5 font-mono">
+                        {suggestion.id.substring(0, 6)}...{suggestion.id.substring(suggestion.id.length - 6)}
+                    </div>
+                </div>
+                {focused && (
+                    <div className="flex-shrink-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/60"></div>
+                    </div>
+                )}
+            </div>
+        )
+    }
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -402,13 +506,6 @@ const MessageInput = ({
         setMessage(value)
         setIsTyping(value.length > 0)
     }
-
-    // Focus input when channel changes
-    useEffect(() => {
-        if (inputRef.current && !disabled) {
-            inputRef.current.focus()
-        }
-    }, [activeChannelId, disabled])
 
     if (!currentChannel) {
         return null
@@ -489,19 +586,131 @@ const MessageInput = ({
 
                         {/* Text input */}
                         <div className="flex-1 relative">
-                            <Input
-                                ref={inputRef}
+                            <MentionsInput
                                 value={message}
-                                onChange={(e) => handleTyping(e.target.value)}
-                                onKeyPress={handleKeyPress}
+                                onChange={(event, newValue) => handleTyping(newValue)}
+                                onKeyDown={handleKeyPress}
                                 placeholder={`Message #${currentChannel.name}`}
                                 disabled={disabled}
-                                className={cn(
-                                    "border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                                    "placeholder:text-muted-foreground/60 text-sm leading-relaxed",
-                                    "min-h-[20px] max-h-[200px] py-2"
-                                )}
-                            />
+                                singleLine={false}
+                                forceSuggestionsAboveCursor
+                                a11ySuggestionsListLabel="Suggested mentions"
+                                className="w-full border p-0 m-0 relative"
+                                style={{
+                                    control: {
+                                        backgroundColor: 'transparent',
+                                        fontSize: '14px',
+                                        fontWeight: 'normal',
+                                        border: 'none',
+                                        outline: 'none',
+                                        minHeight: '20px',
+                                        maxHeight: '200px',
+                                        padding: '0px 0',
+                                        lineHeight: '1.5',
+                                    },
+                                    '&multiLine': {
+                                        padding: '0px 0',
+                                        control: {
+                                            fontFamily: 'inherit',
+                                            minHeight: '20px',
+                                            border: 'none',
+                                            outline: 'none',
+                                        },
+                                        highlighter: {
+                                            padding: '0px 0px',
+                                            border: 'none',
+                                            minHeight: '20px',
+                                            margin: '0px 0px',
+                                            // zIndex: 1000,
+                                        },
+                                        input: {
+                                            padding: '0px 0',
+                                            border: 'none',
+                                            outline: 'none',
+                                            backgroundColor: 'transparent',
+                                            color: 'inherit',
+                                            // fontSize: '14px',
+                                            fontFamily: 'inherit',
+                                            lineHeight: '1.5',
+                                            minHeight: '20px',
+                                            resize: 'none',
+                                        },
+                                    },
+                                    '&singleLine': {
+                                        control: {
+                                            fontFamily: 'inherit',
+                                            minHeight: '20px',
+                                            border: 'none',
+                                            outline: 'none',
+                                        },
+                                        highlighter: {
+                                            padding: '0px 0',
+                                            border: 'none',
+                                            minHeight: '20px',
+                                        },
+                                        input: {
+                                            padding: '0px 0',
+                                            border: 'none',
+                                            outline: 'none',
+                                            backgroundColor: 'transparent',
+                                            color: 'hsl(var(--foreground))',
+                                            fontSize: '14px',
+                                            fontFamily: 'inherit',
+                                            lineHeight: '1.5',
+                                            minHeight: '20px',
+                                            resize: 'none',
+                                        },
+                                    },
+                                    suggestions: {
+                                        backgroundColor: "transparent",
+                                        width: '100%',
+                                        list: {
+                                            backgroundColor: 'var(--background)',
+                                            border: '1px solid hsl(var(--border))',
+                                            borderRadius: '16px',
+                                            fontSize: '14px',
+                                            boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.05)',
+                                            maxHeight: '280px',
+                                            minWidth: '320px',
+                                            overflowY: 'auto',
+                                            overflowX: 'hidden',
+                                            zIndex: 1000,
+                                            padding: '8px',
+                                            backdropFilter: 'blur(12px)',
+                                            scrollbarWidth: 'thin',
+                                            scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent',
+                                        },
+                                        item: {
+                                            padding: '0',
+                                            border: 'none',
+                                            borderRadius: '0',
+                                            margin: '0',
+                                            backgroundColor: 'transparent',
+                                            '&focused': {
+                                                backgroundColor: 'transparent',
+                                            },
+                                        },
+                                    },
+                                }}
+                            >
+                                <Mention
+                                    data={getMembersData}
+                                    trigger="@"
+                                    markup="<@__id__>"
+                                    displayTransform={(id, display) => `@${display.length == 43 ? shortenAddress(display) : display}`}
+                                    appendSpaceOnAdd
+                                    className="border relative"
+                                    style={{
+                                        backgroundColor: 'var(--primary)',
+                                        color: 'var(--primary-foreground)',
+                                        padding: '1px 4px',
+                                        // borderRadius: '3px',
+                                        // fontWeight: '500',
+                                        // fontSize: '14px',
+                                    }}
+                                    renderSuggestion={renderMemberSuggestion}
+                                />
+                            </MentionsInput>
                         </div>
 
                         {/* Right actions */}

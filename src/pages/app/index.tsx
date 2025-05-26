@@ -96,7 +96,7 @@ export default function App() {
   }, [activeServerId, activeChannelId])
 
   return (
-    <div className="flex flex-row items-start justify-start h-svh">
+    <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip">
       <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
       {activeServerId ? (
         <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />

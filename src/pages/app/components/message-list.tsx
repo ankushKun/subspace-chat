@@ -724,7 +724,7 @@ const MessageSkeleton = ({ showAvatar = true, isGrouped = false }: { showAvatar?
 
 const MessageListSkeleton = () => {
     // Generate 100 skeleton messages with realistic grouping
-    const skeletonMessages = Array.from({ length: 10 }, (_, index) => {
+    const skeletonMessages = Array.from({ length: 15 }, (_, index) => {
         // Simulate message grouping - show avatar for first message or when "author" changes
         const showAvatar = index === 0 || Math.random() > 0.6
         const isGrouped = index > 0 && !showAvatar

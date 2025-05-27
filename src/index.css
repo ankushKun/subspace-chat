@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 html {
-  background: grey;
+  background: #17181c;
   width: 100vw;
   height: 100vh;
   overflow: hidden;

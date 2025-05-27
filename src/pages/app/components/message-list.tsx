@@ -3,7 +3,7 @@ import { useServer } from "@/hooks/subspace/server"
 import { useEffect, useState, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign } from "lucide-react"
+import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2 } from "lucide-react"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
@@ -12,6 +12,8 @@ import remarkGfm from "remark-gfm"
 import rehypeKatex from "rehype-katex"
 import { mdComponents, setCurrentMentions } from "@/lib/md-components"
 import UserMention from "@/components/user-mention"
+import { useWallet } from "@/hooks/use-wallet"
+import { toast } from "sonner"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -164,6 +166,17 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     onEdit?: () => void;
     onDelete?: () => void;
 }) => {
+    const { address } = useWallet()
+    const { activeServerId, servers } = useServer()
+
+    // Check if current user can edit (only message author)
+    const canEdit = message.authorId === address
+
+    // Check if current user can delete (message author OR server owner)
+    const currentServer = activeServerId ? servers[activeServerId] : null
+    const isServerOwner = currentServer?.owner === address
+    const canDelete = message.authorId === address || isServerOwner
+
     return (
         <div className="absolute -top-4 right-4 bg-background border border-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center">
             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onReply}>
@@ -172,9 +185,22 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
                 <Smile className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onEdit}>
-                <Edit className="w-4 h-4" />
-            </Button>
+            {canEdit && (
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onEdit}>
+                    <Edit className="w-4 h-4" />
+                </Button>
+            )}
+            {canDelete && (
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 hover:bg-muted text-destructive hover:text-destructive"
+                    onClick={onDelete}
+                    title={isServerOwner && message.authorId !== address ? "Delete as server owner" : "Delete message"}
+                >
+                    <Trash2 className="w-4 h-4" />
+                </Button>
+            )}
             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
                 <MoreHorizontal className="w-4 h-4" />
             </Button>
@@ -271,7 +297,13 @@ const MessageItem = ({
     isGrouped = false,
     onReply,
     onEdit,
-    onDelete
+    onDelete,
+    isEditing = false,
+    editedContent = "",
+    onEditContentChange,
+    onSaveEdit,
+    onCancelEdit,
+    isSavingEdit = false
 }: {
     message: Message;
     showAvatar?: boolean;
@@ -279,6 +311,12 @@ const MessageItem = ({
     onReply?: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
+    isEditing?: boolean;
+    editedContent?: string;
+    onEditContentChange?: (content: string) => void;
+    onSaveEdit?: () => void;
+    onCancelEdit?: () => void;
+    isSavingEdit?: boolean;
 }) => {
     const { profiles } = useProfile()
     const profile = profiles[message.authorId]
@@ -315,15 +353,59 @@ const MessageItem = ({
                                 </span>
                             } />
                             <MessageTimestamp timestamp={message.timestamp} />
+                            {message.edited === 1 && (
+                                <span className="text-xs text-muted-foreground/80 italic" title="This message has been edited">
+                                    (edited)
+                                </span>
+                            )}
                         </div>
                     )}
 
-                    <MessageContent content={message.content} attachments={message.attachments} />
+                    {/* Show edit input if editing this message */}
+                    {isEditing ? (
+                        <div className="mt-1">
+                            <div className="flex gap-2 mt-2">
+                                <Input
+                                    type="text"
+                                    value={editedContent}
+                                    onChange={(e) => onEditContentChange?.(e.target.value)}
+                                    className="w-full p-2 text-sm bg-muted/50 rounded-md"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault()
+                                            onSaveEdit?.()
+                                        } else if (e.key === 'Escape') {
+                                            onCancelEdit?.()
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onSaveEdit}
+                                    disabled={isSavingEdit}
+                                >
+                                    {isSavingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onCancelEdit}
+                                    disabled={isSavingEdit}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <MessageContent content={message.content} attachments={message.attachments} />
+                    )}
                 </div>
             </div>
 
             {/* Message actions */}
-            {isHovered && (
+            {isHovered && !isEditing && (
                 <MessageActions
                     message={message}
                     onReply={onReply}
@@ -964,6 +1046,13 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const subspace = useSubspace()
     const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+    const { address } = useWallet()
+
+    // State for editing messages
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null)
+    const [editedContent, setEditedContent] = useState("")
+    const [isSavingEdit, setIsSavingEdit] = useState(false)
+    const [isDeletingMessage, setIsDeletingMessage] = useState(false)
 
     // Check if no channel is selected
     const hasActiveChannel = activeChannelId && activeChannelId !== 0
@@ -1030,13 +1119,112 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     }
 
     const handleEdit = (message: Message) => {
-        console.log('Edit message:', message)
-        // TODO: Implement edit functionality
+        setEditingMessage(message)
+        setEditedContent(message.content)
+    }
+
+    const handleCancelEdit = () => {
+        setEditingMessage(null)
+        setEditedContent("")
+    }
+
+    const handleSaveEdit = async () => {
+        if (!editingMessage || !editedContent.trim() || !activeServerId) {
+            return
+        }
+
+        setIsSavingEdit(true)
+
+        try {
+            // Optimistic update - update the message in local state immediately
+            const updatedMessage: Message = {
+                ...editingMessage,
+                content: editedContent.trim(),
+                edited: 1
+            }
+            messageActions.updateMessage(activeServerId, activeChannelId, editingMessage.messageId, updatedMessage)
+
+            // Send the edit to the server
+            const success = await subspace.server.message.editMessage({
+                serverId: activeServerId,
+                messageId: editingMessage.messageId.toString(),
+                content: editedContent.trim()
+            })
+
+            if (success) {
+                // Exit edit mode
+                setEditingMessage(null)
+                setEditedContent("")
+
+                // Refresh messages after a small delay to get the updated message from server
+                setTimeout(() => {
+                    // The real-time updates should handle this, but we can add a manual refresh if needed
+                    console.log('Message edited successfully')
+                }, 500)
+            } else {
+                throw new Error('Failed to edit message')
+            }
+        } catch (error) {
+            console.error("Error editing message:", error)
+            toast.error("Failed to edit message")
+
+            // Revert the optimistic update by refreshing messages
+            // The real-time system should handle this automatically
+        } finally {
+            setIsSavingEdit(false)
+        }
     }
 
     const handleDelete = (message: Message) => {
-        console.log('Delete message:', message)
-        // TODO: Implement delete functionality
+        if (!activeServerId) return
+
+        // Show a confirmation dialog with note about Arweave permanence
+        toast.warning("Delete message?", {
+            description: "This will remove the message from the UI, but due to Arweave's permanent nature, the message data will still exist on the blockchain.",
+            action: {
+                label: "Delete",
+                onClick: () => performMessageDeletion(message)
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => { /* Do nothing */ }
+            },
+            duration: 10000 // 10 seconds to give time to read
+        })
+    }
+
+    const performMessageDeletion = async (message: Message) => {
+        if (!activeServerId) return
+
+        setIsDeletingMessage(true)
+
+        try {
+            // Optimistic update - remove the message from local state immediately
+            messageActions.removeMessage(activeServerId, activeChannelId, message.messageId)
+
+            // Send delete request to server
+            const success = await subspace.server.message.deleteMessage({
+                serverId: activeServerId,
+                messageId: message.messageId.toString()
+            })
+
+            if (success) {
+                // Refresh messages after a small delay to ensure consistency
+                setTimeout(() => {
+                    console.log('Message deleted successfully')
+                }, 500)
+            } else {
+                throw new Error('Failed to delete message')
+            }
+        } catch (error) {
+            console.error("Error deleting message:", error)
+            toast.error("Failed to delete message")
+
+            // Revert the optimistic update by refreshing messages
+            // The real-time system should handle this automatically
+        } finally {
+            setIsDeletingMessage(false)
+        }
     }
 
     // If no channel is selected, show the no channel state
@@ -1099,6 +1287,12 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                                 onReply={() => handleReply(message)}
                                 onEdit={() => handleEdit(message)}
                                 onDelete={() => handleDelete(message)}
+                                isEditing={editingMessage?.messageId === message.messageId}
+                                editedContent={editedContent}
+                                onEditContentChange={setEditedContent}
+                                onSaveEdit={handleSaveEdit}
+                                onCancelEdit={handleCancelEdit}
+                                isSavingEdit={isSavingEdit}
                             />
                         ))}
                         <div ref={messagesEndRef} />

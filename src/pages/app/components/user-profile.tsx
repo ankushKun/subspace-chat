@@ -245,6 +245,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                             sideOffset={4}
                         >
                             <DropdownMenuItem
+                                id="open-profile-editor"
                                 onClick={handleOpenProfile}
                                 className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md transition-colors"
                             >

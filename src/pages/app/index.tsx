@@ -9,6 +9,7 @@ import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
 import DMList from "./components/dm-list"
 import type { Profile, Server } from "@/types/subspace"
+import UserProfile from "./components/user-profile"
 
 export default function App() {
 
@@ -17,6 +18,14 @@ export default function App() {
   const { actions: serverActions, activeServerId, activeChannelId, servers } = useServer()
   const { actions: profileActions } = useProfile()
   const { actions: messagesActions } = useMessages()
+
+  useEffect(() => {
+    if (!connected || !address) {
+      serverActions.setActiveChannelId(null)
+      serverActions.setActiveServerId(null)
+      serverActions.setServersJoined(address, [])
+    }
+  }, [connected, address])
 
   useEffect(() => {
     if (!connected || !address) return
@@ -113,17 +122,19 @@ export default function App() {
   return (
     <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip">
       <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
-      {activeServerId ? (
+      {connected && <div className="flex flex-col h-svh">{activeServerId ? (
         <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
       ) : (
         <DMList className="w-[350px] min-w-[350px] max-w-[350px]" />
       )}
+        <UserProfile />
+      </div>}
       {connected && address ? (
         <MessageList className="grow h-svh" />
       ) : (
         <LoginPrompt />
       )}
-      {activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
+      {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
     </div>
   )
 }

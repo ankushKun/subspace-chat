@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { MessageCircle } from "lucide-react";
 import { useState } from "react"
 import { cn } from "@/lib/utils";
+import UserProfile from "./user-profile";
 
 type DirectMessage = {
     userId: string;
@@ -142,7 +143,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                 props.className
             )}>
             {/* Header */}
-            <div className="mb-4 p-4 flex flex-col justify-center items-start relative">
+            <div className="mb-2 p-4 flex flex-col justify-center items-start relative">
                 <div className="flex items-center gap-2 w-full">
                     <MessageCircle className="w-5 h-5 text-muted-foreground" />
                     <h2 className="text-lg font-semibold text-foreground">
@@ -153,14 +154,28 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
             </div>
 
             {/* Search and actions */}
-            <div className="px-2 mb-4 space-y-2">
+            <div className="px-2 space-y-2">
                 <Button
+                    disabled
                     variant="ghost"
                     size="sm"
                     className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
                 >
                     <Search className="w-4 h-4 mr-2" />
                     Find or start a conversation
+                </Button>
+            </div>
+
+            {/* Quick actions */}
+            <div className="p-2 border-border/30 border-b">
+                <Button
+                    disabled
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Add Friend
                 </Button>
             </div>
 
@@ -189,17 +204,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                 )} */}
             </div>
 
-            {/* Quick actions */}
-            <div className="p-2 border-t border-border/30 mt-auto">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-                >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Friend
-                </Button>
-            </div>
+
         </div>
     )
 }

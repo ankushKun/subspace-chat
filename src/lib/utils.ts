@@ -23,10 +23,15 @@ export class Logger {
   }
 }
 
-export function fileToUint8Array(file: File) {
-  const reader = new FileReader();
-  reader.readAsArrayBuffer(file);
-  return new Uint8Array(reader.result as ArrayBuffer);
+export function fileToUint8Array(file: File): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(new Uint8Array(reader.result as ArrayBuffer));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 export async function uploadFileAR(file: File, jwk?: JWKInterface) {
@@ -36,17 +41,16 @@ export async function uploadFileAR(file: File, jwk?: JWKInterface) {
     protocol: "https",
   });
 
-  const data = fileToUint8Array(file);
+  const data = await fileToUint8Array(file);
   const tx = await ar.createTransaction({ data }, jwk ?? "use_wallet");
 
   tx.addTag("Content-Type", file.type);
-  tx.addTag("Content-Length", data.length.toString());
   tx.addTag("Name", file.name);
   tx.addTag(Constants.TagNames.AppName, Constants.TagValues.AppName);
   tx.addTag(Constants.TagNames.AppVersion, Constants.TagValues.AppVersion);
   tx.addTag(Constants.TagNames.SubspaceFunction, Constants.TagValues.UploadFileAR);
 
-  await ar.transactions.sign(tx, jwk ?? "use_wallet");
+  await ar.transactions.sign(tx, jwk ? jwk : "use_wallet");
   const res = await ar.transactions.post(tx);
 
   if (res.status == 200) {

@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronRight, Hash, Volume2, Lock, Settings, Plus, Link, LogOut, Trash2, Edit, Code } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Category, Channel, Server } from "@/types/subspace"
-import { useProfile } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Constants } from "@/lib/constants"
+import UserProfile from "./user-profile"
 
 
 
@@ -368,6 +368,8 @@ const ServerHeader = ({ server }: { server: Server }) => {
     )
 }
 
+
+
 export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { servers, activeServerId, activeChannelId, actions } = useServer()
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set())
@@ -454,6 +456,15 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                 {/* Ambient glow at top */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-16 bg-primary/5 rounded-full blur-2xl" />
 
+                {/* DM Content Area - placeholder for future DM list */}
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center text-muted-foreground">
+                        <Hash className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Direct Messages</p>
+                        <p className="text-xs mt-1">Coming soon...</p>
+                    </div>
+                </div>
+
                 {/* Ambient glow at bottom */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-12 bg-primary/3 rounded-full blur-xl" />
             </div>
@@ -478,6 +489,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                         <p className="text-sm">Server not found</p>
                     </div>
                 </div>
+
             </div>
         )
     }

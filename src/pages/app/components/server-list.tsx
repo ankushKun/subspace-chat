@@ -265,7 +265,16 @@ const AddServerButton = () => {
             if (serverIcon) {
                 toast.loading("Uploading server icon...", {
                     richColors: true,
-                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                    style: {
+                        backgroundColor: "var(--background)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                        backdropFilter: "blur(8px)"
+                    },
+                    className: "font-medium",
+                    duration: Infinity
                 })
 
                 try {
@@ -273,20 +282,50 @@ const AddServerButton = () => {
                     toast.dismiss()
                     toast.success("Icon uploaded successfully", {
                         richColors: true,
-                        style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                        style: {
+                            backgroundColor: "var(--background)",
+                            color: "var(--foreground)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "12px",
+                            boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                            backdropFilter: "blur(8px)"
+                        },
+                        className: "font-medium",
+                        duration: 3000
                     })
                 } catch (error) {
                     console.error("Error uploading icon:", error)
                     toast.dismiss()
-                    toast.error("Failed to upload icon. Creating server without icon.")
+                    toast.error("Failed to upload icon. Creating server without icon.", {
+                        richColors: true,
+                        style: {
+                            backgroundColor: "var(--background)",
+                            color: "var(--foreground)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "12px",
+                            boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+                            backdropFilter: "blur(8px)"
+                        },
+                        className: "font-medium",
+                        duration: 4000
+                    })
                     iconId = undefined
                 }
             }
 
             // Create the server
-            toast.loading("Creating server...", {
+            toast.loading("Creating server... Don't close this window!", {
                 richColors: true,
-                style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                style: {
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                    backdropFilter: "blur(8px)"
+                },
+                className: "font-medium",
+                duration: Infinity
             })
 
             console.log("Creating server with icon:", iconId)
@@ -301,7 +340,16 @@ const AddServerButton = () => {
             if (serverId) {
                 toast.success("Server created successfully!", {
                     richColors: true,
-                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                    style: {
+                        backgroundColor: "var(--background)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                        backdropFilter: "blur(8px)"
+                    },
+                    className: "font-medium",
+                    duration: 4000
                 })
 
                 // Join the server automatically
@@ -309,11 +357,35 @@ const AddServerButton = () => {
                     const joinSuccess = await subspace.user.joinServer({ serverId })
                     if (!joinSuccess) {
                         console.warn("Failed to join the created server automatically")
-                        toast.warning("Server created but failed to join automatically. You may need to join manually.")
+                        toast.warning("Server created but failed to join automatically. You may need to join manually.", {
+                            richColors: true,
+                            style: {
+                                backgroundColor: "var(--background)",
+                                color: "var(--foreground)",
+                                border: "1px solid var(--border)",
+                                borderRadius: "12px",
+                                boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.15), 0 4px 6px -2px rgba(245, 158, 11, 0.1)",
+                                backdropFilter: "blur(8px)"
+                            },
+                            className: "font-medium",
+                            duration: 5000
+                        })
                     }
                 } catch (error) {
                     console.error("Error joining created server:", error)
-                    toast.warning("Server created but failed to join automatically. You may need to join manually.")
+                    toast.warning("Server created but failed to join automatically. You may need to join manually.", {
+                        richColors: true,
+                        style: {
+                            backgroundColor: "var(--background)",
+                            color: "var(--foreground)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "12px",
+                            boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.15), 0 4px 6px -2px rgba(245, 158, 11, 0.1)",
+                            backdropFilter: "blur(8px)"
+                        },
+                        className: "font-medium",
+                        duration: 5000
+                    })
                 }
 
                 // Update the local state to include the new server

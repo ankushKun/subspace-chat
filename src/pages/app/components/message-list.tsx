@@ -576,12 +576,14 @@ const MessageInput = ({
     onSendMessage,
     replyingTo,
     onCancelReply,
-    disabled = false
+    disabled = false,
+    messagesInChannel = []
 }: {
     onSendMessage: (content: string, attachments?: string[]) => void;
     replyingTo?: Message | null;
     onCancelReply?: () => void;
     disabled?: boolean;
+    messagesInChannel?: Message[];
 }) => {
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
@@ -590,38 +592,90 @@ const MessageInput = ({
     const { activeServerId, activeChannelId, servers } = useServer()
     const { profiles } = useProfile()
 
-    // Function to get members data for mentions (similar to legacy implementation)
+    // Function to get unified members data for mentions (server members + chat participants)
     const getMembersData = (query: string, callback: (data: any[]) => void) => {
         if (!activeServerId) {
             callback([])
             return
         }
 
-        const members = servers[activeServerId]?.members || []
+        const serverMembers = servers[activeServerId]?.members || []
 
-        // If no query, show first 10 members
-        if (!query.trim()) {
-            const firstMembers = members.slice(0, 10).map(member => ({
+        // Extract unique user IDs from messages in the current channel
+        const chatParticipants = new Set<string>()
+        messagesInChannel.forEach(message => {
+            chatParticipants.add(message.authorId)
+        })
+
+        // Create a unified list of users with their source information
+        const allUsers = new Map<string, {
+            id: string;
+            display: string;
+            isServerMember: boolean;
+            isChatParticipant: boolean;
+            nickname?: string;
+        }>()
+
+        // Add server members
+        serverMembers.forEach(member => {
+            const displayName = member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
+            allUsers.set(member.userId, {
                 id: member.userId,
-                display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
-            }))
-            callback(firstMembers)
+                display: displayName,
+                isServerMember: true,
+                isChatParticipant: chatParticipants.has(member.userId),
+                nickname: member.nickname
+            })
+        })
+
+        // Add chat participants who might not be in server members list
+        chatParticipants.forEach(userId => {
+            if (!allUsers.has(userId)) {
+                const displayName = profiles[userId]?.primaryName || shortenAddress(userId)
+                allUsers.set(userId, {
+                    id: userId,
+                    display: displayName,
+                    isServerMember: false,
+                    isChatParticipant: true
+                })
+            }
+        })
+
+        const allUsersArray = Array.from(allUsers.values())
+
+        // If no query, show first 10 users, prioritizing chat participants and server members
+        if (!query.trim()) {
+            const sortedUsers = allUsersArray
+                .sort((a, b) => {
+                    // Prioritize chat participants, then server members
+                    if (a.isChatParticipant && !b.isChatParticipant) return -1
+                    if (!a.isChatParticipant && b.isChatParticipant) return 1
+                    if (a.isServerMember && !b.isServerMember) return -1
+                    if (!a.isServerMember && b.isServerMember) return 1
+                    return a.display.localeCompare(b.display)
+                })
+                .slice(0, 10)
+                .map(user => ({
+                    id: user.id,
+                    display: user.display
+                }))
+
+            callback(sortedUsers)
             return
         } else {
-            const filteredMembers = members
-                .filter(member => {
-                    const displayName = member.nickname || member.userId
-                    const primaryName = profiles[member.userId]?.primaryName
-                    const lowerQuery = query.toLowerCase()
-                    return displayName.toLowerCase().includes(lowerQuery) ||
-                        member.userId.toLowerCase().includes(lowerQuery) ||
-                        (primaryName && primaryName.toLowerCase().includes(lowerQuery))
+            const lowerQuery = query.toLowerCase()
+            const filteredUsers = allUsersArray
+                .filter(user => {
+                    const primaryName = profiles[user.id]?.primaryName
+                    return user.display.toLowerCase().includes(lowerQuery) ||
+                        user.id.toLowerCase().includes(lowerQuery) ||
+                        (primaryName && primaryName.toLowerCase().includes(lowerQuery)) ||
+                        (user.nickname && user.nickname.toLowerCase().includes(lowerQuery))
                 })
                 .sort((a, b) => {
                     // Prioritize exact matches and prefix matches
-                    const aDisplay = (a.nickname || profiles[a.userId]?.primaryName || a.userId).toLowerCase()
-                    const bDisplay = (b.nickname || profiles[b.userId]?.primaryName || b.userId).toLowerCase()
-                    const lowerQuery = query.toLowerCase()
+                    const aDisplay = a.display.toLowerCase()
+                    const bDisplay = b.display.toLowerCase()
 
                     const aStartsWith = aDisplay.startsWith(lowerQuery)
                     const bStartsWith = bDisplay.startsWith(lowerQuery)
@@ -629,15 +683,21 @@ const MessageInput = ({
                     if (aStartsWith && !bStartsWith) return -1
                     if (!aStartsWith && bStartsWith) return 1
 
+                    // Then prioritize chat participants and server members
+                    if (a.isChatParticipant && !b.isChatParticipant) return -1
+                    if (!a.isChatParticipant && b.isChatParticipant) return 1
+                    if (a.isServerMember && !b.isServerMember) return -1
+                    if (!a.isServerMember && b.isServerMember) return 1
+
                     return aDisplay.localeCompare(bDisplay)
                 })
                 .slice(0, 10) // Limit to 10 results
-                .map(member => ({
-                    id: member.userId,
-                    display: member.nickname || profiles[member.userId]?.primaryName || shortenAddress(member.userId)
+                .map(user => ({
+                    id: user.id,
+                    display: user.display
                 }))
 
-            callback(filteredMembers)
+            callback(filteredUsers)
         }
     }
 
@@ -656,17 +716,22 @@ const MessageInput = ({
         if (suggestion.id === '__no_results__') {
             return (
                 <div className="flex items-center justify-center py-6 px-3 text-muted-foreground/60">
-                    <div className="text-sm">No members found</div>
+                    <div className="text-sm">No users found</div>
                 </div>
             )
         }
+
+        // Check if user is a server member and/or chat participant
+        const serverMembers = servers[activeServerId]?.members || []
+        const isServerMember = serverMembers.some(member => member.userId === suggestion.id)
+        const isChatParticipant = messagesInChannel.some(message => message.authorId === suggestion.id)
 
         return (
             <div className={`flex items-center gap-3 py-3 px-3 rounded-lg transition-all duration-150 cursor-pointer ${focused
                 ? 'bg-primary/10 text-foreground shadow-sm'
                 : 'hover:bg-accent/30 text-foreground'
                 }`}>
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20 relative">
                     {profile?.pfp ? (
                         <img
                             src={`https://arweave.net/${profile.pfp}`}
@@ -677,6 +742,11 @@ const MessageInput = ({
                         <span className="text-sm font-semibold text-primary">
                             {suggestion.display.charAt(0).toUpperCase()}
                         </span>
+                    )}
+                    {/* Status indicator */}
+                    {isChatParticipant && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-background"
+                            title="Active in this chat" />
                     )}
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
@@ -1428,6 +1498,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                 replyingTo={replyingTo}
                 onCancelReply={handleCancelReply}
                 disabled={!activeServerId || !hasActiveChannel}
+                messagesInChannel={messagesInChannel}
             />
         </div>
     )

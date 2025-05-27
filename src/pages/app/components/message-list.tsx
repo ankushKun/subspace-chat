@@ -1,9 +1,9 @@
 import useSubspace, { useMessages, useProfile } from "@/hooks/subspace"
 import { useServer } from "@/hooks/subspace/server"
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2 } from "lucide-react"
+import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown } from "lucide-react"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
@@ -291,6 +291,81 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
     )
 }
 
+const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAttributes<HTMLDivElement> & {
+    replyToId: number;
+    messages: Record<number, Message>;
+    onJumpToMessage?: (messageId: number) => void;
+}) => {
+    const { profiles } = useProfile()
+
+    // Find the original message
+    const originalMessage = messages[replyToId]
+
+    if (!originalMessage) {
+        return (
+            <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
+                <CornerDownRight className="w-3 h-3" />
+                <span className="italic">Original message not found</span>
+            </div>
+        )
+    }
+
+    const authorProfile = profiles[originalMessage.authorId]
+    const displayName = authorProfile?.username || authorProfile?.primaryName || shortenAddress(originalMessage.authorId)
+
+    // Truncate content for preview
+    const previewContent = originalMessage.content.length > 50
+        ? originalMessage.content.substring(0, 50) + "..."
+        : originalMessage.content
+
+    return (
+        <div
+            {...props}
+            className={cn("flex items-start gap-2 border-muted-foreground/30 hover:border-primary/50 transition-all duration-200 cursor-pointer rounded-r-md hover:bg-muted/30 py-1.5 -my-1 group/reply", props.className)}
+            onClick={() => onJumpToMessage?.(replyToId)}
+            title="Click to jump to original message"
+        >
+            <CornerLeftDown className="w-3 h-3 text-muted-foreground/50 group-hover/reply:text-primary/70 mt-0.5 flex-shrink-0 transition-colors" />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+                {/* Small avatar */}
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
+                    {authorProfile?.pfp ? (
+                        <img
+                            src={`https://arweave.net/${authorProfile.pfp}`}
+                            alt={displayName}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <span className="text-[8px] font-semibold text-primary">
+                            {displayName.charAt(0).toUpperCase()}
+                        </span>
+                    )}
+                </div>
+
+                {/* Author name and content preview */}
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <UserMention
+                        side="top"
+                        align="start"
+                        userId={originalMessage.authorId}
+                        renderer={(text) => (
+                            <span className="text-xs font-medium text-foreground/70 group-hover/reply:text-primary flex-shrink-0 hover:underline">
+                                {text}
+                            </span>
+                        )}
+                    />
+                    {/* <span className="text-xs text-muted-foreground/80 group-hover/reply:text-muted-foreground truncate">
+                        {displayName}
+                    </span> */}
+                    <span className="text-xs text-muted-foreground/60 group-hover/reply:text-muted-foreground truncate">
+                        {previewContent}
+                    </span>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const MessageItem = ({
     message,
     showAvatar = true,
@@ -303,7 +378,9 @@ const MessageItem = ({
     onEditContentChange,
     onSaveEdit,
     onCancelEdit,
-    isSavingEdit = false
+    isSavingEdit = false,
+    allMessages = {},
+    onJumpToMessage
 }: {
     message: Message;
     showAvatar?: boolean;
@@ -317,6 +394,8 @@ const MessageItem = ({
     onSaveEdit?: () => void;
     onCancelEdit?: () => void;
     isSavingEdit?: boolean;
+    allMessages?: Record<number, Message>;
+    onJumpToMessage?: (messageId: number) => void;
 }) => {
     const { profiles } = useProfile()
     const profile = profiles[message.authorId]
@@ -331,10 +410,20 @@ const MessageItem = ({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
+            {/* Reply preview - show if this message is a reply */}
+            {message.replyTo && (
+                <div className="relative left-7 h-6">
+                    <ReplyPreview
+                        replyToId={message.replyTo}
+                        messages={allMessages}
+                        onJumpToMessage={onJumpToMessage}
+                    />
+                </div>
+            )}
             <div className="flex gap-1">
                 {/* Avatar or timestamp spacer */}
                 <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-16 flex-shrink-0 flex justify-center cursor-pointer">
-                    {showAvatar ? (
+                    {showAvatar || message.replyTo ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
                         <div className="opacity-0 hover:opacity-100 transition-opacity duration-150 !text-xs text-center">
@@ -360,6 +449,7 @@ const MessageItem = ({
                             )}
                         </div>
                     )}
+
 
                     {/* Show edit input if editing this message */}
                     {isEditing ? (
@@ -1044,6 +1134,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     const { messages, actions: messageActions } = useMessages()
     const { activeServerId, activeChannelId, servers } = useServer()
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const messagesContainerRef = useRef<HTMLDivElement>(null)
     const subspace = useSubspace()
     const [replyingTo, setReplyingTo] = useState<Message | null>(null)
     const { address } = useWallet()
@@ -1227,6 +1318,31 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
         }
     }
 
+    const handleJumpToMessage = (messageId: number) => {
+        // Find the message element and scroll to it
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`)
+        if (messageElement) {
+            messageElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            })
+
+            // Add a brief highlight effect with animation
+            messageElement.classList.add('bg-primary/20', 'transition-colors', 'duration-300')
+            setTimeout(() => {
+                messageElement.classList.remove('bg-primary/20')
+                setTimeout(() => {
+                    messageElement.classList.remove('transition-colors', 'duration-300')
+                }, 300)
+            }, 1500)
+        } else {
+            // Message not found in current view
+            toast.info("Message not found in current view", {
+                description: "The message you're looking for might be in a different part of the conversation."
+            })
+        }
+    }
+
     // If no channel is selected, show the no channel state
     if (!hasActiveChannel) {
         return (
@@ -1273,27 +1389,33 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             />
 
             {/* Messages container */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40">
+            <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
+            >
                 {individualMessages.length === 0 ? (
                     <EmptyChannelState channelName={currentChannel?.name} />
                 ) : (
                     <div className="pt-6">
                         {individualMessages.map((message, index) => (
-                            <MessageItem
-                                key={message.messageId}
-                                message={message}
-                                showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
-                                isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
-                                onReply={() => handleReply(message)}
-                                onEdit={() => handleEdit(message)}
-                                onDelete={() => handleDelete(message)}
-                                isEditing={editingMessage?.messageId === message.messageId}
-                                editedContent={editedContent}
-                                onEditContentChange={setEditedContent}
-                                onSaveEdit={handleSaveEdit}
-                                onCancelEdit={handleCancelEdit}
-                                isSavingEdit={isSavingEdit}
-                            />
+                            <div key={message.messageId} data-message-id={message.messageId}>
+                                <MessageItem
+                                    message={message}
+                                    showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
+                                    isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
+                                    onReply={() => handleReply(message)}
+                                    onEdit={() => handleEdit(message)}
+                                    onDelete={() => handleDelete(message)}
+                                    isEditing={editingMessage?.messageId === message.messageId}
+                                    editedContent={editedContent}
+                                    onEditContentChange={setEditedContent}
+                                    onSaveEdit={handleSaveEdit}
+                                    onCancelEdit={handleCancelEdit}
+                                    isSavingEdit={isSavingEdit}
+                                    allMessages={messages[activeServerId]?.[activeChannelId] || {}}
+                                    onJumpToMessage={handleJumpToMessage}
+                                />
+                            </div>
                         ))}
                         <div ref={messagesEndRef} />
                     </div>

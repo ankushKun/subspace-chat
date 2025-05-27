@@ -22,7 +22,7 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
 
     return (
         <Popover>
-            <PopoverTrigger asChild>
+            <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                 {renderer(displayText)}
             </PopoverTrigger>
             <PopoverContent className="w-80 p-0 shadow-md" side={side} align={align}>

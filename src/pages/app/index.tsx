@@ -158,6 +158,7 @@ function MobileLayout({ connected, activeServerId, activeChannelId }: { connecte
   const handlers = useSwipeable({
     // onSwiped: (eventData) => console.log("User Swiped!", eventData),
     // preventScrollOnSwipe: true,
+    swipeDuration: 1500,
     trackMouse: true,
     onSwipedLeft: () => {
       if (screen === Screens.Right) return

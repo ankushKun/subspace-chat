@@ -9,6 +9,7 @@ import { useEffect } from 'react'
 import NotFound from '@/pages/404'
 import Settings from '@/pages/settings'
 import { Toaster } from 'sonner'
+import Invite from './pages/invite'
 
 function Main() {
   const { connect } = useWallet((state) => state.actions)
@@ -31,6 +32,7 @@ function Main() {
           <Route path="/" element={<SubspaceLanding />} />
           <Route path="/app" element={<App />} />
           <Route path="/app/settings" element={<Settings />} />
+          <Route path="/invite/:invite?" element={<Invite />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </HashRouter>

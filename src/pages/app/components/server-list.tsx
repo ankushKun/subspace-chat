@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { FileDropzone } from "@/components/ui/file-dropzone"
 import { toast } from "sonner"
 import { uploadFileAR } from "@/lib/utils"
+import { usePWA } from "@/hooks/use-pwa"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -933,6 +934,7 @@ const AddServerButton = () => {
 
 const InstallPWAButton = () => {
     const [isHovered, setIsHovered] = useState(false)
+    const { showInstallPrompt } = usePWA()
 
     return (
         <div className="relative group mb-3">
@@ -957,6 +959,7 @@ const InstallPWAButton = () => {
                     )}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
+                    onClick={showInstallPrompt}
                 >
                     <Download className={cn(
                         "w-5 h-5 transition-all duration-300",
@@ -988,6 +991,7 @@ const InstallPWAButton = () => {
 export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { address } = useWallet()
     const { servers, actions, activeServerId, serversJoined } = useServer()
+    const { isInstallable, isInstalled, showInstallPrompt } = usePWA()
 
     return (
         <div
@@ -1045,7 +1049,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
             <AddServerButton />
             <div className="grow" />
 
-            <InstallPWAButton />
+            {isInstallable && isInstalled && <InstallPWAButton />}
         </div>
     )
 }

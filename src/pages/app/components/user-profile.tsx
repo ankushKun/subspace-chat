@@ -6,6 +6,7 @@ import { useProfile } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { useWallet } from "@/hooks/use-wallet"
+import { NavLink } from "react-router"
 
 interface UserProfileProps {
     className?: string
@@ -115,15 +116,16 @@ export default function UserProfile({ className }: UserProfileProps) {
                 </DropdownMenu>
 
                 {/* Settings Button */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-8 h-8 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={handleOpenSettings}
-                    title="User Settings"
-                >
-                    <Settings className="w-4 h-4" />
-                </Button>
+                <NavLink to="/app/settings">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-8 h-8 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                        title="User Settings"
+                    >
+                        <Settings className="w-4 h-4" />
+                    </Button>
+                </NavLink>
             </div>
         </div>
     )

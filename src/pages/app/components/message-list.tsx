@@ -295,21 +295,23 @@ const MessageItem = ({
         >
             <div className="flex gap-3">
                 {/* Avatar or timestamp spacer */}
-                <div className="w-10 flex-shrink-0 flex justify-center">
+                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-10 flex-shrink-0 flex justify-center cursor-pointer">
                     {showAvatar ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
                         <MessageTimestamp timestamp={message.timestamp} />
                     )}
-                </div>
+                </div>} />
 
                 {/* Message content */}
                 <div className="flex-1 min-w-0">
                     {showAvatar && (
                         <div className="flex items-baseline gap-2 mb-1">
-                            <span className="text-foreground hover:underline cursor-pointer">
-                                {profile?.username || shortenAddress(message.authorId)}
-                            </span>
+                            <UserMention side="bottom" align="start" userId={message.authorId} renderer={(text) =>
+                                <span className="text-foreground hover:underline cursor-pointer">
+                                    {text}
+                                </span>
+                            } />
                             <MessageTimestamp timestamp={message.timestamp} />
                         </div>
                     )}

@@ -1,6 +1,6 @@
 import './index.css'
 import { createRoot } from 'react-dom/client'
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider, useTheme } from "@/components/theme-provider"
 import App from '@/pages/app'
 import { HashRouter, Route, Routes } from "react-router"
 import SubspaceLanding from '@/pages/landing'
@@ -13,6 +13,7 @@ import { Toaster } from 'sonner'
 function Main() {
   const { connect } = useWallet((state) => state.actions)
   const strategy = useWallet((state) => state.connectionStrategy)
+  const { theme } = useTheme()
 
   useEffect(() => {
     if (strategy) {
@@ -24,7 +25,7 @@ function Main() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="subspace-theme">
-      <Toaster />
+      <Toaster theme={theme} />
       <HashRouter>
         <Routes>
           <Route path="/" element={<SubspaceLanding />} />

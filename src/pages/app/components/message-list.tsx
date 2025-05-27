@@ -439,14 +439,16 @@ const MessageInput = ({
             const filteredMembers = members
                 .filter(member => {
                     const displayName = member.nickname || member.userId
+                    const primaryName = profiles[member.userId]?.primaryName
                     const lowerQuery = query.toLowerCase()
                     return displayName.toLowerCase().includes(lowerQuery) ||
-                        member.userId.toLowerCase().includes(lowerQuery)
+                        member.userId.toLowerCase().includes(lowerQuery) ||
+                        (primaryName && primaryName.toLowerCase().includes(lowerQuery))
                 })
                 .sort((a, b) => {
                     // Prioritize exact matches and prefix matches
-                    const aDisplay = (a.nickname || a.userId).toLowerCase()
-                    const bDisplay = (b.nickname || b.userId).toLowerCase()
+                    const aDisplay = (a.nickname || profiles[a.userId]?.primaryName || a.userId).toLowerCase()
+                    const bDisplay = (b.nickname || profiles[b.userId]?.primaryName || b.userId).toLowerCase()
                     const lowerQuery = query.toLowerCase()
 
                     const aStartsWith = aDisplay.startsWith(lowerQuery)

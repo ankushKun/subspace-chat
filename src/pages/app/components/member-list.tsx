@@ -176,6 +176,7 @@ const MemberSection = ({
 
 export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { activeServerId, servers } = useServer()
+    const { profiles } = useProfile()
     const [searchQuery, setSearchQuery] = useState("")
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["owner", "members"]))
 
@@ -188,9 +189,15 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
 
         return serverMembers.filter(member => {
             const displayName = member.nickname || member.userId
-            return displayName.toLowerCase().includes(searchQuery.toLowerCase())
+            const profile = profiles[member.userId]
+            const primaryName = profile?.primaryName
+            const lowerQuery = searchQuery.toLowerCase()
+
+            return displayName.toLowerCase().includes(lowerQuery) ||
+                member.userId.toLowerCase().includes(lowerQuery) ||
+                (primaryName && primaryName.toLowerCase().includes(lowerQuery))
         })
-    }, [serverMembers, searchQuery])
+    }, [serverMembers, searchQuery, profiles])
 
     // Organize members into owner and regular members
     const organizedMembers = useMemo(() => {

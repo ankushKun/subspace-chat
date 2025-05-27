@@ -150,11 +150,18 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
     )
 }
 
+const sampleInvites = [
+    "wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8",
+    "subspace.ar.io/#/invite/wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8"
+]
+
 const AddServerButton = () => {
     const [isHovered, setIsHovered] = useState(false)
     const [joinInput, setJoinInput] = useState("")
     const [isJoining, setIsJoining] = useState(false)
     const [joinError, setJoinError] = useState("")
+    const [joinDialogOpen, setJoinDialogOpen] = useState(false)
+    const [popoverOpen, setPopoverOpen] = useState(false)
 
     // Create server state
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -204,12 +211,18 @@ const AddServerButton = () => {
                 return
             }
 
+            // Check if user is already in this server
+            const currentServers = serversJoined[address] || []
+            if (currentServers.includes(serverId)) {
+                setJoinError("You are already a member of this server")
+                return
+            }
+
             // Call the actual joinServer method from the user service
             const success = await subspace.user.joinServer({ serverId })
 
             if (success) {
                 // Update the local state to include the new server
-                const currentServers = serversJoined[address] || []
                 if (!currentServers.includes(serverId)) {
                     serverActions.setServersJoined(address, [...currentServers, serverId])
                 }
@@ -230,15 +243,37 @@ const AddServerButton = () => {
                     // Don't show error to user as the join was successful
                 }
 
-                // Reset form on success
+                // Reset form and close dialog on success
                 setJoinInput("")
                 setJoinError("")
+                setJoinDialogOpen(false)
+
+                toast.success("Successfully joined server!", {
+                    richColors: true,
+                    style: {
+                        backgroundColor: "var(--background)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                        backdropFilter: "blur(8px)"
+                    },
+                    className: "font-medium",
+                    duration: 3000
+                })
             } else {
-                setJoinError("Failed to join server. The server may not exist or you may already be a member.")
+                setJoinError("Failed to join server. The server may not exist.")
             }
         } catch (error) {
             console.error("Error joining server:", error)
-            setJoinError("Failed to join server. Please check the ID and try again.")
+
+            // Check if the error is about already being in the server
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            if (errorMessage.includes("Already joined server")) {
+                setJoinError("You are already a member of this server")
+            } else {
+                setJoinError("Failed to join server. Please check the ID and try again.")
+            }
         } finally {
             setIsJoining(false)
         }
@@ -479,7 +514,7 @@ const AddServerButton = () => {
             />
 
             <div className="flex justify-center relative">
-                <Popover>
+                <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                     <PopoverTrigger asChild>
                         <Button
                             size="icon"
@@ -515,7 +550,7 @@ const AddServerButton = () => {
 
                             {/* Action buttons */}
                             <div className="p-2 space-y-2">
-                                <AlertDialog>
+                                <AlertDialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
                                     <AlertDialogTrigger asChild>
                                         <Button
                                             variant="ghost"
@@ -528,6 +563,8 @@ const AddServerButton = () => {
                                             onClick={() => {
                                                 setJoinInput("")
                                                 setJoinError("")
+                                                setJoinDialogOpen(true)
+                                                setPopoverOpen(false)
                                             }}
                                         >
                                             <div className="flex items-center gap-3 relative z-10">
@@ -649,11 +686,12 @@ const AddServerButton = () => {
 
                                                         {/* Example server ID */}
                                                         <div className="mt-3 pt-3 border-t border-border/30">
-                                                            <h5 className="text-xs font-medium text-foreground mb-2">Example Server ID:</h5>
-                                                            <button
+                                                            <h5 className="text-xs font-medium text-foreground mb-2">Example invites:</h5>
+                                                            {sampleInvites.map((invite) => <button
+                                                                key={invite}
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setJoinInput("wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8")
+                                                                    setJoinInput(invite)
                                                                     setJoinError("")
                                                                 }}
                                                                 className={cn(
@@ -664,22 +702,25 @@ const AddServerButton = () => {
                                                             >
                                                                 <div className="flex flex-row gap-2 w-full h-5 cursor-pointer">
                                                                     <span className="text-foreground/80 grow truncate group-hover:text-foreground word-break-all leading-relaxed">
-                                                                        wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8
+                                                                        {invite}
                                                                     </span>
                                                                     <div className="flex justify-end">
                                                                         <div className="px-2 py-1 bg-blue-500/10 text-blue-600 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                            use
+                                                                            join
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </button>
+                                                            </button>)}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </AlertDialogDescription>
 
                                             <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
-                                                <AlertDialogCancel disabled={isJoining}>
+                                                <AlertDialogCancel
+                                                    disabled={isJoining}
+                                                    onClick={() => setJoinDialogOpen(false)}
+                                                >
                                                     Cancel
                                                 </AlertDialogCancel>
                                                 <Button
@@ -723,6 +764,7 @@ const AddServerButton = () => {
                                                 setServerName("")
                                                 setServerIcon(null)
                                                 setCreateError("")
+                                                setPopoverOpen(false)
                                             }}
                                         >
                                             <div className="flex items-center gap-3 relative z-10">

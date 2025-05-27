@@ -1104,6 +1104,98 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
             {/* Ambient glow at bottom */}
             < div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-12 bg-primary/3 rounded-full blur-xl" />
 
+            {/* Channel Context Menu Dialog */}
+            <AlertDialog open={showChannelContextMenu} onOpenChange={setShowChannelContextMenu}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Channel Actions</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Choose an action for "{selectedChannel?.name}"
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="flex flex-col gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowChannelContextMenu(false)
+                                setEditChannelOpen(true)
+                            }}
+                            className="justify-start"
+                        >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Channel
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowChannelContextMenu(false)
+                                setDeleteChannelOpen(true)
+                            }}
+                            className="justify-start text-destructive hover:text-destructive"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Channel
+                        </Button>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Category Context Menu Dialog */}
+            <AlertDialog open={showCategoryContextMenu} onOpenChange={setShowCategoryContextMenu}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Category Actions</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Choose an action for "{selectedCategory?.name}"
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="flex flex-col gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowCategoryContextMenu(false)
+                                setEditCategoryOpen(true)
+                            }}
+                            className="justify-start"
+                        >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Category
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowCategoryContextMenu(false)
+                                setDeleteCategoryOpen(true)
+                            }}
+                            className="justify-start text-destructive hover:text-destructive"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Category
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowCategoryContextMenu(false)
+                                if (selectedCategory) {
+                                    setTargetCategoryId(selectedCategory.categoryId)
+                                    setCreateChannelOpen(true)
+                                }
+                            }}
+                            className="justify-start"
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Channel
+                        </Button>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Leave/Delete Server Confirmation Dialog */}
             < AlertDialog open={leaveServerOpen} onOpenChange={setLeaveServerOpen} >
                 <AlertDialogContent>

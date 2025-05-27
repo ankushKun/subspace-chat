@@ -43,6 +43,7 @@
     "@tailwindcss/vite": "^4.1.7",
     "@types/react-mentions": "^4.4.1",
     "@wanderapp/connect": "^0.1.1",
+    "@yudiel/react-qr-scanner": "^2.3.1",
     "ao-fetch": "^1.0.8",
     "arweave": "^1.15.7",
     "class-variance-authority": "^0.7.1",

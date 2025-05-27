@@ -24,7 +24,7 @@ interface WalletState {
 interface WalletActions {
     setWanderInstance: (instance: WanderConnect | null) => void
     updateAddress: (address: string) => void
-    connect: (strategy: ConnectionStrategies) => Promise<void>
+    connect: (strategy: ConnectionStrategies, jwk?: JWKInterface) => Promise<void>
     disconnect: () => void
 }
 

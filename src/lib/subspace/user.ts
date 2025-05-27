@@ -41,11 +41,12 @@ export class User {
         return null;
     }
 
-    async updateProfile({ username, pfp }: { username?: string, pfp?: string }): Promise<boolean> {
+    // async updateProfile({ username, pfp }: { username?: string, pfp?: string }): Promise<boolean> {
+    async updateProfile({ pfp }: { pfp?: string }): Promise<boolean> {
         const path = `${Constants.Profiles}/update-profile`
         const res = await aofetch(path, {
             method: "POST",
-            body: { username, pfp },
+            body: { pfp },
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,

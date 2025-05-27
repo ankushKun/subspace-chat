@@ -1349,10 +1349,29 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     // No grouping - just use individual messages
     const individualMessages = messagesInChannel
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive (only if user is near bottom)
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        // Check if user is near the bottom (within 100px)
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 200
+
+        // Only auto-scroll if user is near the bottom
+        if (isNearBottom) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
     }, [individualMessages.length])
+
+    // Initial scroll to bottom when channel changes or component mounts
+    useEffect(() => {
+        if (messagesInChannel.length > 0) {
+            // Use setTimeout to ensure DOM is updated
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+            }, 0)
+        }
+    }, [activeChannelId, activeServerId])
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -1583,7 +1602,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             {/* Messages container */}
             <div
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
+                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
             >
                 {individualMessages.length === 0 ? (
                     <EmptyChannelState channelName={currentChannel?.name} />

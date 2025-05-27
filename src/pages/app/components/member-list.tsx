@@ -7,6 +7,7 @@ import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, 
 import { cn } from "@/lib/utils"
 import type { ServerMember } from "@/types/subspace"
 import UserMention from "@/components/user-mention"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const MemberAvatar = ({
     userId,
@@ -58,10 +59,11 @@ const MemberItem = ({
     const { profiles } = useProfile()
     const profile = profiles[member.userId]
     const [isHovered, setIsHovered] = useState(false)
+    const isMobile = useIsMobile()
 
     return (
         <div className="relative group">
-            <UserMention userId={member.userId} side="left" align="start" renderer={(displayName) =>
+            <UserMention userId={member.userId} side={isMobile ? "bottom" : "left"} align="start" renderer={(displayName) =>
                 <Button
                     variant="ghost"
                     size="sm"

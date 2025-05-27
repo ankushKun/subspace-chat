@@ -3,13 +3,16 @@ import ChannelList from "./components/channel-list"
 import MemberList from "./components/member-list"
 import MessageList from "./components/message-list"
 import useSubspace, { useMessages, useProfile } from "@/hooks/subspace"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
 import DMList from "./components/dm-list"
 import type { Profile, Server } from "@/types/subspace"
 import UserProfile from "./components/user-profile"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useSwipeable } from 'react-swipeable';
+
 
 export default function App() {
 
@@ -18,6 +21,7 @@ export default function App() {
   const { actions: serverActions, activeServerId, activeChannelId, servers } = useServer()
   const { actions: profileActions } = useProfile()
   const { actions: messagesActions } = useMessages()
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     if (!connected || !address) {
@@ -119,22 +123,83 @@ export default function App() {
     return () => clearInterval(interval)
   }, [activeServerId, activeChannelId])
 
+  if (isMobile) return <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} />
+
   return (
     <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip">
-      <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
-      {connected && <div className="flex flex-col h-svh">{activeServerId ? (
-        <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
-      ) : (
-        <DMList className="w-[350px] min-w-[350px] max-w-[350px]" />
-      )}
-        <UserProfile />
-      </div>}
+      <>
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
+        {connected && <div className="flex flex-col h-svh">{activeServerId ? (
+          <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
+        ) : (
+          <DMList className="w-[350px] min-w-[350px] max-w-[350px]" />
+        )}
+          <UserProfile />
+        </div>}
+      </>
       {connected && address ? (
         <MessageList className="grow h-svh" />
       ) : (
         <LoginPrompt />
       )}
       {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
+    </div>
+  )
+}
+
+enum Screens {
+  Left = "left",
+  Middle = "middle",
+  Right = "right"
+}
+
+function MobileLayout({ connected, activeServerId, activeChannelId }: { connected: boolean, activeServerId: string | null, activeChannelId: number | null }) {
+  const [screen, setScreen] = useState<Screens>(Screens.Left)
+  const handlers = useSwipeable({
+    // onSwiped: (eventData) => console.log("User Swiped!", eventData),
+    // preventScrollOnSwipe: true,
+    trackMouse: true,
+    onSwipedLeft: () => {
+      if (screen === Screens.Right) return
+      if (!connected || !activeServerId || !activeChannelId) return
+      setScreen((screen) => screen === Screens.Left ? Screens.Middle : Screens.Right)
+    },
+    onSwipedRight: () => {
+      setScreen((screen) => screen === Screens.Right ? Screens.Middle : Screens.Left)
+    }
+  });
+
+  useEffect(() => {
+    console.log("screen", screen)
+  }, [screen])
+
+  useEffect(() => {
+    if (!activeChannelId || !activeServerId) setScreen(Screens.Left)
+  }, [activeChannelId, activeServerId])
+
+  useEffect(() => {
+    if (activeChannelId) setScreen(Screens.Middle)
+  }, [activeChannelId])
+
+  return (
+    <div className="h-svh flex w-screen p-0 m-0" {...handlers}>
+      {screen === Screens.Left && <div className="flex flex-row h-full grow">
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
+        {connected && <div className="flex flex-col h-svh w-full grow">{activeServerId ? (
+          <ChannelList className="grow w-full" />
+        ) : (
+          <DMList className="grow w-full overflow-clip" />
+        )}
+          <UserProfile />
+        </div>}
+      </div>}
+      {screen === Screens.Middle && <div className="w-screen flex flex-row h-full">
+        {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-svh" />}
+      </div>}
+      {screen === Screens.Right && <div className="w-screen grow overflow-clip">
+        {connected && activeServerId && <MemberList className="grow w-full h-svh overflow-clip" />}
+      </div>}
+
     </div>
   )
 }

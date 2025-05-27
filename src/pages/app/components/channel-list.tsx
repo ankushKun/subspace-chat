@@ -12,8 +12,6 @@ import { useWallet } from "@/hooks/use-wallet"
 import { Constants } from "@/lib/constants"
 import UserProfile from "./user-profile"
 
-
-
 const CategoryHeader = ({
     category,
     isExpanded,

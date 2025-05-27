@@ -185,9 +185,9 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onReply}>
                 <Reply className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
+            {/* <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
                 <Smile className="w-4 h-4" />
-            </Button>
+            </Button> */}
             {canEdit && (
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onEdit}>
                     <Edit className="w-4 h-4" />
@@ -204,9 +204,9 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
                     <Trash2 className="w-4 h-4" />
                 </Button>
             )}
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
+            {/* <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
                 <MoreHorizontal className="w-4 h-4" />
-            </Button>
+            </Button> */}
         </div>
     )
 }
@@ -1074,22 +1074,23 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-center grow gap-3 p-3 relative z-10">
+                    <div className="flex items-center justify-center grow gap-3 p-3 relative z-10">
                         {/* Left actions */}
-                        <div className="flex items-center gap-1 pt-1">
+                        <div className="flex items-center gap-1">
                             <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 w-8 p-0 hover:bg-muted rounded transition-colors"
                                 onClick={handleFileUpload}
-                                disabled={disabled}
+                                // disabled={disabled}
+                                disabled
                             >
                                 <Plus className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                             </Button>
                         </div>
 
                         {/* Text input */}
-                        <div className="flex relative min-h-[20px] z-0 grow" ref={mentionsInputRef}>
+                        <div className="flex relative items-center min-h-[20px] z-0 grow" ref={mentionsInputRef}>
                             <MentionsInput
                                 autoFocus
                                 value={message}
@@ -1209,6 +1210,8 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                             backdropFilter: 'blur(12px)',
                                             scrollbarWidth: 'thin',
                                             scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent',
+                                            position: "relative",
+                                            bottom: '26px'
                                         },
                                         item: {
                                             padding: '0',
@@ -1270,18 +1273,18 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         </div>
 
                         {/* Right actions */}
-                        <div className="flex items-center gap-1 pt-1">
-                            <Button
+                        <div className="flex items-center gap-1">
+                            {/* <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
                                 disabled={disabled}
                             >
                                 <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button>
+                            </Button> */}
 
                             {/* Send button - only show when there's content */}
-                            {(message.trim() || attachments.length > 0) && (
+                            {(
                                 <Button
                                     size="sm"
                                     className={cn(
@@ -1291,7 +1294,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                         "hover:scale-105 active:scale-95"
                                     )}
                                     onClick={handleSend}
-                                    disabled={disabled}
+                                    disabled={disabled || !(message.trim() || attachments.length > 0)}
                                 >
                                     <Send className="w-4 h-4" />
                                 </Button>

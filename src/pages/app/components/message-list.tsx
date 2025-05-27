@@ -1,6 +1,6 @@
 import useSubspace, { useMessages, useProfile } from "@/hooks/subspace"
 import { useServer } from "@/hooks/subspace/server"
-import { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
+import React, { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown } from "lucide-react"
@@ -307,7 +307,7 @@ const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAt
     if (!originalMessage) {
         return (
             <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
-                <CornerDownRight className="w-3 h-3" />
+                <CornerLeftDown className="w-3 h-3" />
                 <span className="italic">Original message not found</span>
             </div>
         )
@@ -401,14 +401,38 @@ const MessageItem = ({
     onJumpToMessage?: (messageId: number) => void;
 }) => {
     const { profiles } = useProfile()
+    const { address } = useWallet()
     const profile = profiles[message.authorId]
     const [isHovered, setIsHovered] = useState(false)
+
+    // Check if the current user is mentioned in this message
+    const isCurrentUserMentioned = useMemo(() => {
+        if (!address || !message.content) return false
+
+        // Check for mentions in the format @[Display Name](userId) where userId matches current address
+        const userMentionRegex = /@\[([^\]]+)\]\(([A-Za-z0-9_-]+)\)/g
+        const expectedMentionRegex = /<@([A-Za-z0-9_-]+)>/g
+
+        let match
+        // Check @[Display Name](userId) format
+        while ((match = userMentionRegex.exec(message.content)) !== null) {
+            if (match[2] === address) return true
+        }
+
+        // Check <@userId> format for backward compatibility
+        while ((match = expectedMentionRegex.exec(message.content)) !== null) {
+            if (match[1] === address) return true
+        }
+
+        return false
+    }, [message.content, address])
 
     return (
         <div
             className={cn(
                 "group relative hover:bg-accent/30 transition-colors duration-150",
-                isGrouped ? "py-0.5" : "pt-2 pb-1"
+                isGrouped ? "py-0.5" : "pt-2 pb-1",
+                isCurrentUserMentioned && "bg-yellow-400/8 hover:bg-yellow-400/12 border-l-2 border-yellow-500/70 pl-2 -ml-2"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -492,7 +516,10 @@ const MessageItem = ({
                             </div>
                         </div>
                     ) : (
-                        <MessageContent content={message.content} attachments={message.attachments} />
+                        <MessageContent
+                            content={message.content}
+                            attachments={message.attachments}
+                        />
                     )}
                 </div>
             </div>
@@ -644,25 +671,44 @@ const EmptyChannelState = ({ channelName }: { channelName?: string }) => {
     )
 }
 
-const MessageInput = ({
-    onSendMessage,
-    replyingTo,
-    onCancelReply,
-    disabled = false,
-    messagesInChannel = []
-}: {
+interface MessageInputRef {
+    focus: () => void;
+}
+
+const MessageInput = React.forwardRef<MessageInputRef, {
     onSendMessage: (content: string, attachments?: string[]) => void;
     replyingTo?: Message | null;
     onCancelReply?: () => void;
     disabled?: boolean;
     messagesInChannel?: Message[];
-}) => {
+}>(({
+    onSendMessage,
+    replyingTo,
+    onCancelReply,
+    disabled = false,
+    messagesInChannel = []
+}, ref) => {
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
     const [attachments, setAttachments] = useState<string[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const mentionsInputRef = useRef<any>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
     const { profiles } = useProfile()
+
+    // Expose focus method to parent component
+    React.useImperativeHandle(ref, () => ({
+        focus: () => {
+            // Focus the MentionsInput by finding its textarea element
+            const mentionsContainer = mentionsInputRef.current
+            if (mentionsContainer) {
+                const textarea = mentionsContainer.querySelector('textarea')
+                if (textarea) {
+                    textarea.focus()
+                }
+            }
+        }
+    }))
 
     // Function to get unified members data for mentions (server members + chat participants)
     const getMembersData = (query: string, callback: (data: any[]) => void) => {
@@ -1043,8 +1089,9 @@ const MessageInput = ({
                         </div>
 
                         {/* Text input */}
-                        <div className="flex relative min-h-[20px] z-0 grow">
+                        <div className="flex relative min-h-[20px] z-0 grow" ref={mentionsInputRef}>
                             <MentionsInput
+                                autoFocus
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
                                 onKeyDown={handleKeyPress}
@@ -1265,13 +1312,14 @@ const MessageInput = ({
             </div>
         </div>
     )
-}
+})
 
 export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { messages, actions: messageActions } = useMessages()
     const { activeServerId, activeChannelId, servers } = useServer()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const messagesContainerRef = useRef<HTMLDivElement>(null)
+    const messageInputRef = useRef<MessageInputRef>(null)
     const subspace = useSubspace()
     const [replyingTo, setReplyingTo] = useState<Message | null>(null)
     const { address } = useWallet()
@@ -1340,6 +1388,10 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
     const handleReply = (message: Message) => {
         setReplyingTo(message)
+        // Focus the message input after setting the reply
+        setTimeout(() => {
+            messageInputRef.current?.focus()
+        }, 100)
     }
 
     const handleCancelReply = () => {
@@ -1561,6 +1613,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
             {/* Message input */}
             <MessageInput
+                ref={messageInputRef}
                 onSendMessage={handleSendMessage}
                 replyingTo={replyingTo}
                 onCancelReply={handleCancelReply}

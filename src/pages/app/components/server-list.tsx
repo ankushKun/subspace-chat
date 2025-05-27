@@ -997,7 +997,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
         <div
             {...props}
             className={cn(
-                "flex flex-col w-[72px] h-full py-4 px-3 relative z-10",
+                "flex flex-col w-[72px] h-full py-4 pb-2 px-3 relative z-10",
                 "bg-gradient-to-b from-background via-background/95 to-background/90",
                 "border-r border-border/50 backdrop-blur-sm",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
@@ -1049,7 +1049,10 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
             <AddServerButton />
             <div className="grow" />
 
-            {isInstallable && isInstalled && <InstallPWAButton />}
+            {isInstallable && !isInstalled && <InstallPWAButton />}
+
+            {/* @ts-ignore */}
+            <div className="h-5 text-xs text-muted-foreground/60 mx-auto text-center">v{__VERSION__}</div>
         </div>
     )
 }

@@ -20,6 +20,9 @@ export default defineConfig({
     devOptions: {
       enabled: true,
     },
+    workbox: {
+      maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20mb
+    },
     manifest: {
       name: 'Subspace Chat',
       short_name: 'Subspace',

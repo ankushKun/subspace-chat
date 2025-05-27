@@ -332,4 +332,6 @@
 
 .markdown>* {
   all: revert !important;
+  margin: 0px !important;
+  padding: 0px !important;
 }

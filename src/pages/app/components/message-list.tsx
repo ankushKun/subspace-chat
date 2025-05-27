@@ -237,11 +237,11 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-">
             {/* Message text */}
             {content && (
                 <div className="text-sm text-foreground leading-relaxed break-words markdown">
-                    <Markdown
+                    <Markdown skipHtml
                         components={mdComponents}
                         remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
                         {preProcessContent(content)}
@@ -251,9 +251,9 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
 
             {/* Attachments */}
             {parsedAttachments.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-">
                     {parsedAttachments.map((attachment: string, index: number) => (
-                        <div key={index} className="bg-muted/30 rounded-lg p-3 border border-border/50">
+                        <div key={index} className="bg-muted/30 rounded-lg p- border border-border/50">
                             <div className="text-sm text-muted-foreground">
                                 Attachment: {attachment}
                             </div>
@@ -287,26 +287,28 @@ const MessageItem = ({
     return (
         <div
             className={cn(
-                "group relative px-4 py-1 hover:bg-accent/30 transition-colors duration-150",
-                isGrouped ? "py-0.5" : "py-2"
+                "group relative hover:bg-accent/30 transition-colors duration-150",
+                isGrouped ? "py-0.5" : "pt-2 pb-1"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
-            <div className="flex gap-3">
+            <div className="flex gap-1">
                 {/* Avatar or timestamp spacer */}
-                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-10 flex-shrink-0 flex justify-center cursor-pointer">
+                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-16 flex-shrink-0 flex justify-center cursor-pointer">
                     {showAvatar ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
-                        <MessageTimestamp timestamp={message.timestamp} />
+                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-150 !text-xs text-center">
+                            <MessageTimestamp timestamp={message.timestamp} />
+                        </div>
                     )}
                 </div>} />
 
                 {/* Message content */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 m-0 my-1 p-0">
                     {showAvatar && (
-                        <div className="flex items-baseline gap-2 mb-1">
+                        <div className="flex items-baseline gap-2">
                             <UserMention side="bottom" align="start" userId={message.authorId} renderer={(text) =>
                                 <span className="text-foreground hover:underline cursor-pointer">
                                     {text}
@@ -347,8 +349,8 @@ const MessageGroup = ({ messages, onReply, onEdit, onDelete }: {
                 <MessageItem
                     key={message.messageId}
                     message={message}
-                    showAvatar={index === 0}
-                    isGrouped={index > 0}
+                    showAvatar={messages[index - 1]?.authorId != message.authorId}
+                    isGrouped={messages[index - 1]?.authorId == message.authorId}
                     onReply={() => onReply?.(message)}
                     onEdit={() => onEdit?.(message)}
                     onDelete={() => onDelete?.(message)}
@@ -974,39 +976,13 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             .sort((a, b) => a.timestamp - b.timestamp)
     }, [messages, activeServerId, activeChannelId, hasActiveChannel])
 
-    // Group messages by author and time proximity (within 5 minutes)
-    const messageGroups = useMemo(() => {
-        const groups: Message[][] = []
-        let currentGroup: Message[] = []
-
-        for (const message of messagesInChannel) {
-            const lastMessage = currentGroup[currentGroup.length - 1]
-
-            // Start new group if different author or more than 5 minutes apart
-            if (!lastMessage ||
-                lastMessage.authorId !== message.authorId ||
-                message.timestamp - lastMessage.timestamp > 300) {
-
-                if (currentGroup.length > 0) {
-                    groups.push(currentGroup)
-                }
-                currentGroup = [message]
-            } else {
-                currentGroup.push(message)
-            }
-        }
-
-        if (currentGroup.length > 0) {
-            groups.push(currentGroup)
-        }
-
-        return groups
-    }, [messagesInChannel])
+    // No grouping - just use individual messages
+    const individualMessages = messagesInChannel
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messagesInChannel.length])
+    }, [individualMessages.length])
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -1108,17 +1084,19 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
             {/* Messages container */}
             <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40">
-                {messageGroups.length === 0 ? (
+                {individualMessages.length === 0 ? (
                     <EmptyChannelState channelName={currentChannel?.name} />
                 ) : (
                     <div className="pt-6">
-                        {messageGroups.map((group, index) => (
-                            <MessageGroup
-                                key={`${group[0].authorId}-${group[0].timestamp}-${index}`}
-                                messages={group}
-                                onReply={handleReply}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
+                        {individualMessages.map((message, index) => (
+                            <MessageItem
+                                key={message.messageId}
+                                message={message}
+                                showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
+                                isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
+                                onReply={() => handleReply(message)}
+                                onEdit={() => handleEdit(message)}
+                                onDelete={() => handleDelete(message)}
                             />
                         ))}
                         <div ref={messagesEndRef} />

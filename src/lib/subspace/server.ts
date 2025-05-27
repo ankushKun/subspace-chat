@@ -113,6 +113,7 @@ export class ServerManager {
             AO: this.connectionManager.getAo()
         })
         if (res.status == 200) {
+            console.log(res.json)
             return res.json as ServerMember[];
         } else {
             Logger.error("getServerMembers", res);

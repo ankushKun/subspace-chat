@@ -102,12 +102,12 @@ const MessageAvatar = ({ authorId, size = "md" }: { authorId: string; size?: "sm
             {profile?.pfp ? (
                 <img
                     src={`https://arweave.net/${profile.pfp}`}
-                    alt={profile.username || authorId}
+                    alt={authorId}
                     className="w-full h-full object-cover"
                 />
             ) : (
                 <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-sm">
-                    {(profile?.username || authorId).charAt(0).toUpperCase()}
+                    {(profile?.primaryName || authorId).charAt(0).toUpperCase()}
                 </div>
             )}
         </div>
@@ -311,7 +311,7 @@ const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAt
     }
 
     const authorProfile = profiles[originalMessage.authorId]
-    const displayName = authorProfile?.username || authorProfile?.primaryName || shortenAddress(originalMessage.authorId)
+    const displayName = authorProfile?.primaryName || shortenAddress(originalMessage.authorId)
 
     // Truncate content for preview
     const previewContent = originalMessage.content.length > 50
@@ -534,23 +534,90 @@ const MessageGroup = ({ messages, onReply, onEdit, onDelete }: {
 
 const NoChannelSelected = ({ serverName }: { serverName?: string }) => {
     return (
-        <div className="flex flex-col items-center justify-center h-full text-center p-8">
-            <div className="w-20 h-20 rounded-full bg-muted/20 flex items-center justify-center mb-6">
-                <Hash className="w-10 h-10 text-muted-foreground/40" />
+        <div className="flex flex-col items-center justify-center h-full text-center p-8 relative overflow-hidden">
+            {/* Background decorative elements */}
+            <div className="absolute inset-0 pointer-events-none">
+                {/* Floating orbs */}
+                <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/5 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-primary/3 rounded-full blur-2xl animate-pulse delay-1000" />
+                <div className="absolute top-1/2 right-1/3 w-16 h-16 bg-primary/4 rounded-full blur-xl animate-pulse delay-500" />
+
+                {/* Grid pattern */}
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_70%)]" />
             </div>
-            <h3 className="text-2xl font-semibold text-foreground mb-3">
-                {serverName ? `Welcome to ${serverName}!` : 'Select a server / DM to start talking'}
-            </h3>
-            <p className="text-muted-foreground max-w-md leading-relaxed">
-                {serverName
-                    ? `Select a channel from the sidebar to start viewing and sending messages`
-                    : ''
-                }
-            </p>
-            {/* <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground/60">
-                <Hash className="w-4 h-4" />
-                <span>Pick a channel to get started</span>
-            </div> */}
+
+            {/* Main content */}
+            <div className="relative z-10 max-w-lg mx-auto">
+                {/* Icon container with enhanced styling */}
+                <div className="relative mb-8 group">
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 flex items-center justify-center mb-2 mx-auto border border-primary/10 shadow-lg shadow-primary/5 group-hover:shadow-primary/10 transition-all duration-500 group-hover:scale-105">
+                        <Hash className="w-12 h-12 text-primary/70 group-hover:text-primary transition-colors duration-300" />
+
+                        {/* Animated ring */}
+                        <div className="absolute inset-0 rounded-2xl border-2 border-primary/20 animate-pulse" />
+                        <div className="absolute inset-2 rounded-xl border border-primary/10 opacity-50" />
+                    </div>
+
+                    {/* Floating particles */}
+                    <div className="absolute -top-2 -right-2 w-3 h-3 bg-primary/40 rounded-full animate-bounce delay-300" />
+                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-primary/30 rounded-full animate-bounce delay-700" />
+                    <div className="absolute top-1/2 -right-4 w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce delay-1000" />
+                </div>
+
+                {/* Title with gradient text */}
+                <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent leading-tight">
+                    {serverName ? (
+                        <>
+                            Welcome to <br />
+                            <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
+                                {serverName}
+                            </span>
+                        </>
+                    ) : (
+                        'Welcome to Subspace'
+                    )}
+                </h1>
+
+                {/* Subtitle */}
+                <p className="text-lg text-muted-foreground/80 mb-8 leading-relaxed max-w-md mx-auto">
+                    {serverName ? (
+                        'Select a channel from the sidebar to start viewing and sending messages'
+                    ) : (
+                        'Connect with communities, join conversations, and share ideas in a decentralized space'
+                    )}
+                </p>
+
+                {/* Action hints */}
+                <div className="space-y-4">
+                    {serverName ? (
+                        <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground/60 bg-muted/20 rounded-full px-6 py-3 border border-border/30">
+                            <Hash className="w-4 h-4 text-primary/60" />
+                            <span>Pick a channel to get started</span>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground/60 bg-muted/20 rounded-full px-6 py-3 border border-border/30 hover:bg-muted/30 transition-colors">
+                                <Users className="w-4 h-4 text-primary/60" />
+                                <span>Join a server to connect with communities</span>
+                            </div>
+                            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground/60 bg-muted/20 rounded-full px-6 py-3 border border-border/30 hover:bg-muted/30 transition-colors">
+                                <AtSign className="w-4 h-4 text-primary/60" />
+                                <span>Start a direct message conversation</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Decorative elements */}
+                <div className="mt-12 flex items-center justify-center gap-2 opacity-30">
+                    <div className="w-2 h-2 bg-primary/40 rounded-full animate-pulse" />
+                    <div className="w-1.5 h-1.5 bg-primary/30 rounded-full animate-pulse delay-200" />
+                    <div className="w-1 h-1 bg-primary/20 rounded-full animate-pulse delay-400" />
+                </div>
+            </div>
+
+            {/* Bottom ambient glow */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-24 bg-gradient-to-t from-primary/5 to-transparent rounded-full blur-3xl" />
         </div>
     )
 }
@@ -912,7 +979,7 @@ const MessageInput = ({
                             <Reply className="w-4 h-4 text-muted-foreground" />
                             <span className="text-muted-foreground">Replying to</span>
                             <span className="font-semibold text-foreground">
-                                {profiles[replyingTo.authorId]?.username || shortenAddress(replyingTo.authorId)}
+                                {profiles[replyingTo.authorId]?.primaryName || shortenAddress(replyingTo.authorId)}
                             </span>
                         </div>
                         <Button

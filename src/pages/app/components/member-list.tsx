@@ -34,12 +34,12 @@ const MemberAvatar = ({
                 {profile?.pfp ? (
                     <img
                         src={`https://arweave.net/${profile.pfp}`}
-                        alt={profile.username || userId}
+                        alt={userId}
                         className="w-full h-full object-cover"
                     />
                 ) : (
                     <span className="text-primary font-semibold text-xs">
-                        {(profile?.username || userId).charAt(0).toUpperCase()}
+                        {(profile?.primaryName || userId).charAt(0).toUpperCase()}
                     </span>
                 )}
             </div>

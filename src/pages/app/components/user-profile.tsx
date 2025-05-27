@@ -47,7 +47,8 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     const profile = profiles[address] ? profiles[address] : null
     const server = activeServerId ? servers[activeServerId] : null
-    const serverNickname = server?.members.find(m => m.userId === address)?.nickname
+    console.log(server)
+    const serverNickname = server && Object.prototype.toString.call(server.members) == "[object Array]" ? server?.members?.find(m => m.userId === address)?.nickname : null
 
     // Initialize form state when dialog opens
     useEffect(() => {

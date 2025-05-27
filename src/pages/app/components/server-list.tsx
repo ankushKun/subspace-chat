@@ -1110,7 +1110,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
             {isInstallable && !isInstalled && <InstallPWAButton />}
 
             {/* @ts-ignore */}
-            <div className="h-5 text-xs text-muted-foreground/60 mx-auto text-center">v{__VERSION__}</div>
+            <div className="h-5 text-xs text-muted-foreground/40 mx-auto text-center">v{__VERSION__}</div>
         </div>
     )
 }

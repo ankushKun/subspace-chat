@@ -2,7 +2,7 @@ import { useServer } from "@/hooks/subspace/server"
 import { useState } from "react"
 import useSubspace, { useProfile } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
-import { type Server } from "@/types/subspace"
+import { type Profile, type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
 import { Download, Home, Plus, Sparkles, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -121,12 +121,24 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
                     onMouseLeave={() => setIsHovered(false)}
                     onClick={onClick}
                 >
-                    <Home className={cn(
+                    {/* <Home className={cn(
                         "w-5 h-5 transition-all duration-300",
                         isActive
                             ? "text-primary-foreground drop-shadow-sm"
                             : "text-muted-foreground group-hover:text-primary-foreground group-hover:scale-110"
-                    )} />
+                    )} /> */}
+
+                    <img
+                        src="/s.png"
+                        alt="Home"
+                        className={cn(
+                            "w-10 h-10 object-cover transition-all duration-300 rounded-lg",
+                            isActive
+                                ? "drop-shadow-sm scale-100"
+                                : "group-hover:scale-110 opacity-90 group-hover:opacity-100"
+                        )}
+                    />
+
                     {/* Sparkle effect for active state */}
                     {/* {isActive && (
                         <Sparkles className="absolute top-1 right-1 w-3 h-3 text-primary-foreground/60 animate-pulse" />
@@ -990,8 +1002,13 @@ const InstallPWAButton = () => {
 
 export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) {
     const { address } = useWallet()
-    const { servers, actions, activeServerId, serversJoined } = useServer()
+    const { servers, actions, activeServerId, serversJoined, loadingServers } = useServer()
     const { isInstallable, isInstalled, showInstallPrompt } = usePWA()
+    const profiles = useProfile(state => state.profiles)
+
+    const myProfile: Profile = address ? profiles[address] : null
+    const myServers = myProfile?.serversJoined ? myProfile?.serversJoined : []
+
 
     return (
         <div
@@ -1044,6 +1061,47 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                         )
                     ))
                 }
+                {/* Skeleton loaders for servers being loaded */}
+                {(() => {
+                    // Get the list of server IDs that should be loaded
+                    const expectedServerIds = serversJoined[address] || [];
+
+                    // Count how many servers have actually been loaded (have data in servers object)
+                    const loadedServersCount = expectedServerIds.filter(serverId => servers[serverId]).length;
+
+                    // Show skeletons for servers that are expected but not yet loaded
+                    const skeletonsToShow = loadingServers ? Math.max(0, expectedServerIds.length - loadedServersCount) : 0;
+
+                    console.log('Skeleton Debug:', {
+                        expectedServerIds: expectedServerIds.length,
+                        loadedServersCount,
+                        skeletonsToShow,
+                        loadingServers
+                    });
+
+                    return Array.from({ length: skeletonsToShow }, (_, index) => (
+                        <div
+                            key={`skeleton-${index}`}
+                            className="relative group mb-3 animate-in slide-in-from-left-5 fade-in duration-500"
+                            style={{ animationDelay: `${(loadedServersCount + index) * 100}ms` }}
+                        >
+                            {/* Skeleton glow effect */}
+                            <div className="absolute inset-0 bg-muted/20 rounded-2xl blur-xl scale-110 animate-pulse" />
+
+                            <div className="flex justify-center relative">
+                                <div className="w-12 h-12 p-0 rounded-3xl bg-muted/50 relative overflow-hidden animate-pulse">
+                                    {/* Skeleton shimmer effect */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-muted-foreground/10 to-transparent -translate-x-full animate-shimmer" />
+
+                                    {/* Skeleton content */}
+                                    <div className="w-full h-full rounded-xl bg-muted/30 flex items-center justify-center">
+                                        <div className="w-6 h-6 bg-muted-foreground/20 rounded animate-pulse" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ));
+                })()}
             </div>
 
             <AddServerButton />

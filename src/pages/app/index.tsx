@@ -37,6 +37,7 @@ export default function App() {
       try {
         serverActions.setActiveChannelId(0)
         serverActions.setActiveServerId(null)
+        serverActions.setLoadingServers(true)
         const profile = await subspace.user.getProfile({ userId: address })
         if (!profile?.serversJoined) {
           profile.serversJoined = []
@@ -68,6 +69,7 @@ export default function App() {
           }
           await new Promise(resolve => setTimeout(resolve, 200))
         }
+        serverActions.setLoadingServers(false)
       } catch (error) {
         console.error('Error loading user servers:', error)
       }

@@ -17,17 +17,65 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
     injectRegister: 'auto',
+    includeAssets: ['/s.png', '/favicon.ico'],
     devOptions: {
       enabled: true,
     },
     workbox: {
       maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20mb
+      clientsClaim: true,
+      skipWaiting: true,
+      cleanupOutdatedCaches: true,
+      runtimeCaching: [
+        {
+          // cache html,js and css but keep them network first
+          urlPattern: /\.html$|\.js$|\.css$|\.png/,
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'app-cache',
+            expiration: {
+              maxEntries: 100,
+              maxAgeSeconds: 5 * 60, // 5 minutes
+            }
+          }
+        },
+        {
+          // arweave.net/*
+          urlPattern: /arweave\.net\/.*/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'arweave-net-cache',
+            expiration: {
+              maxEntries: 100,
+              maxAgeSeconds: 15 * 60, // 15 minutes
+            }
+          }
+        },
+        {
+          // All other assets load from network
+          urlPattern: /.*/,
+          handler: 'NetworkOnly'
+        }
+      ]
     },
     manifest: {
       name: 'Subspace Chat',
       short_name: 'Subspace',
       description: 'Subspace is an intergalactic communication app built on the Permaweb. It allows you to chat in online communities without the fear of censorship.',
-      theme_color: '#8b5cf6',
+      theme_color: '#111111',
+      display: "standalone",
+      orientation: "any",
+      scope: "/",
+      start_url: "/#/app",
+      categories: ["social", "communication"],
+      shortcuts: [
+        {
+          name: "Settings",
+          short_name: "Settings",
+          description: "Subspace settings",
+          url: "/#/app/settings"
+        }
+      ],
       icons: [
         {
           src: '/icon-512.png',

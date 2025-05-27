@@ -1,12 +1,13 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings, LogOut, User } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useProfile } from "@/hooks/subspace"
+import { cn, shortenAddress } from "@/lib/utils"
+import useSubspace, { useProfile, useServer } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { useWallet } from "@/hooks/use-wallet"
 import { NavLink } from "react-router"
+import type { Profile } from "@/types/subspace"
 
 interface UserProfileProps {
     className?: string
@@ -14,14 +15,31 @@ interface UserProfileProps {
 
 export default function UserProfile({ className }: UserProfileProps) {
     const { address, actions: walletActions } = useWallet()
-    const { profiles } = useProfile()
+    const { profiles, actions: profileActions } = useProfile()
+    const { servers, activeServerId } = useServer()
+    const subspace = useSubspace()
 
-    const profile = address ? profiles[address] : null
+    useEffect(() => {
+        if (address) {
+            subspace.user.getPrimaryName({ userId: address }).then(data => {
+                if (data) {
+                    profileActions.updateProfile(address, { primaryName: data } as any)
+                }
+            })
+        }
+    }, [address])
+
+    const profile = profiles[address] ? profiles[address] : null
+
+    const server = activeServerId ? servers[activeServerId] : null
+    const serverNickname = server?.members.find(m => m.userId === address)?.nickname
+
 
     // Get display name
     const getDisplayName = () => {
+        if (serverNickname) return serverNickname
         if (profile?.primaryName) return profile.primaryName
-        if (profile?.username) return profile.username
+        // if (profile?.username) return profile.username
         if (address) return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
         return 'Not Connected'
     }
@@ -78,8 +96,8 @@ export default function UserProfile({ className }: UserProfileProps) {
                                     {getDisplayName()}
                                 </div>
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                                    <span className="truncate">Online</span>
+                                    {/* <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span> */}
+                                    <span className="truncate">{shortenAddress(address)}</span>
                                 </div>
                             </div>
                         </Button>

@@ -3,6 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html {
+  background: grey;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
 @font-face {
   font-family: "KA";
   src: url(./assets/fonts/ka1.ttf), format("truetype");
@@ -259,6 +266,21 @@
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+}
+
+/* Shimmer animation for skeleton loaders */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
 }
 
 #wanderConnectButtonHost {

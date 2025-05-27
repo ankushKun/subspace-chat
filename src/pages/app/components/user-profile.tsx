@@ -37,6 +37,11 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     useEffect(() => {
         if (address) {
+            subspace.user.getProfile({ userId: address }).then(data => {
+                if (data) {
+                    profileActions.updateProfile(address, data as any)
+                }
+            })
             subspace.user.getPrimaryName({ userId: address }).then(data => {
                 if (data) {
                     profileActions.updateProfile(address, { primaryName: data } as any)

@@ -3,12 +3,14 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 interface MessagesState {
+    loadingMessages: boolean;
     messages: Record<string, Record<number, Record<number, Message>>>; // serverId -> channelId -> messageId -> message
 
     actions: MessagesActions;
 }
 
 interface MessagesActions {
+    setLoadingMessages: (loading: boolean) => void;
     setMessages: (serverId: string, channelId: number, messages: Message[]) => void;
     addMessage: (serverId: string, channelId: number, message: Message) => void;
     addMessages: (serverId: string, channelId: number, messages: Message[]) => void;
@@ -21,8 +23,10 @@ interface MessagesActions {
 }
 
 export const useMessages = create<MessagesState>()(persist((set, get) => ({
+    loadingMessages: false,
     messages: {},
     actions: {
+        setLoadingMessages: (loading: boolean) => set({ loadingMessages: loading }),
         setMessages: (serverId: string, channelId: number, messages: Message[]) => set((state) => ({
             ...state,
             messages: {

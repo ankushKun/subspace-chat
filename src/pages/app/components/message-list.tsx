@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useRef, type HTMLAttributes } from
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
@@ -684,6 +685,65 @@ const EmptyChannelState = ({ channelName }: { channelName?: string }) => {
     )
 }
 
+const MessageSkeleton = ({ showAvatar = true, isGrouped = false }: { showAvatar?: boolean; isGrouped?: boolean }) => {
+    return (
+        <div className={cn(
+            "group relative hover:bg-accent/30 transition-colors duration-150",
+            isGrouped ? "py-0.5" : "pt-2 pb-1"
+        )}>
+            <div className="flex gap-1">
+                {/* Avatar or timestamp spacer */}
+                <div className="w-16 flex-shrink-0 flex justify-center">
+                    {showAvatar ? (
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                    ) : (
+                        <div className="w-10 h-10" />
+                    )}
+                </div>
+
+                {/* Message content */}
+                <div className="flex-1 min-w-0 m-0 my-1 p-0">
+                    {showAvatar && (
+                        <div className="flex items-baseline gap-2 mb-1">
+                            <Skeleton className="w-24 h-4" />
+                            <Skeleton className="w-16 h-3" />
+                        </div>
+                    )}
+
+                    {/* Message text lines */}
+                    <div className="space-y-1">
+                        <Skeleton className="w-full h-4" />
+                        <Skeleton className="w-3/4 h-4" />
+                        {Math.random() > 0.7 && <Skeleton className="w-1/2 h-4" />}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+const MessageListSkeleton = () => {
+    // Generate 100 skeleton messages with realistic grouping
+    const skeletonMessages = Array.from({ length: 100 }, (_, index) => {
+        // Simulate message grouping - show avatar for first message or when "author" changes
+        const showAvatar = index === 0 || Math.random() > 0.6
+        const isGrouped = index > 0 && !showAvatar
+        return (
+            <MessageSkeleton
+                key={`skeleton-${index}`}
+                showAvatar={showAvatar}
+                isGrouped={isGrouped}
+            />
+        )
+    })
+
+    return (
+        <div className="pt-6 mb-0.5">
+            {skeletonMessages}
+        </div>
+    )
+}
+
 interface MessageInputRef {
     focus: () => void;
 }
@@ -1331,7 +1391,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
 })
 
 export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>) {
-    const { messages, actions: messageActions } = useMessages()
+    const { messages, actions: messageActions, loadingMessages } = useMessages()
     const { activeServerId, activeChannelId, servers } = useServer()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -1345,6 +1405,9 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     const [editedContent, setEditedContent] = useState("")
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [isDeletingMessage, setIsDeletingMessage] = useState(false)
+
+    // Track previous message count to detect first-time loading
+    const prevMessageCountRef = useRef<number>(0)
 
     // Check if no channel is selected
     const hasActiveChannel = activeChannelId && activeChannelId !== 0
@@ -1378,6 +1441,9 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
     // Initial scroll to bottom when channel changes or component mounts
     useEffect(() => {
+        // Reset the previous message count when channel changes
+        prevMessageCountRef.current = 0
+
         if (messagesInChannel.length > 0) {
             // Use setTimeout to ensure DOM is updated
             setTimeout(() => {
@@ -1385,6 +1451,32 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             }, 0)
         }
     }, [activeChannelId, activeServerId])
+
+    // Scroll to bottom when messages load for the first time (empty list -> has messages)
+    useEffect(() => {
+        const currentMessageCount = messagesInChannel.length
+        const previousMessageCount = prevMessageCountRef.current
+
+        // If we went from 0 messages to having messages, scroll to bottom
+        if (previousMessageCount === 0 && currentMessageCount > 0) {
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+            }, 100) // Slightly longer delay to ensure DOM is fully updated
+        }
+
+        // Update the ref with current count
+        prevMessageCountRef.current = currentMessageCount
+    }, [messagesInChannel.length])
+
+    // Scroll to bottom when skeleton loader is shown
+    useEffect(() => {
+        if (loadingMessages && messagesInChannel.length === 0) {
+            // Use a longer timeout to ensure skeleton is rendered
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+            }, 200)
+        }
+    }, [loadingMessages, messagesInChannel.length])
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -1617,7 +1709,12 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
             >
-                {individualMessages.length === 0 ? (
+                {loadingMessages && individualMessages.length === 0 ? (
+                    <>
+                        <MessageListSkeleton />
+                        <div ref={messagesEndRef} />
+                    </>
+                ) : individualMessages.length === 0 ? (
                     <EmptyChannelState channelName={currentChannel?.name} />
                 ) : (
                     <div className="pt-6">

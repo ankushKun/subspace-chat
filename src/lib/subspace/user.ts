@@ -138,7 +138,8 @@ export class User {
         const res = await aofetch(path, {
             method: "GET",
             body: { userId },
-            AO: this.connectionManager.getAo()
+            AO: this.connectionManager.getAo(),
+            CU_URL: this.connectionManager.getCuUrl()
         })
 
         if (res.status == 200) {

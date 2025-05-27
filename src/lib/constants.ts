@@ -53,7 +53,7 @@ export class Constants {
 
     static readonly CuEndpoints = [
         "https://cu.arnode.asia",
-        // "https://cu.ardrive.io",
+        "https://cu.ardrive.io",
     ]
 
     static readonly CommonTags: Tag[] = [

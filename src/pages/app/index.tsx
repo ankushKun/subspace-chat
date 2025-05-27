@@ -112,8 +112,6 @@ export default function App() {
 
   // Interval to fetch latest messages every 2000ms
   useEffect(() => {
-    console.log(activeServerId, activeChannelId)
-
     // Set title based on current context
     if (activeServerId) {
       const server = servers[activeServerId]
@@ -151,6 +149,7 @@ export default function App() {
     const fetchLatestMessages = async () => {
       try {
         const lastMessageId = messagesActions.getLastMessageId(activeServerId, activeChannelId)
+        messagesActions.setLoadingMessages(true)
         const messages = await subspace.server.message.getMessages({
           serverId: activeServerId,
           channelId: activeChannelId,
@@ -162,6 +161,8 @@ export default function App() {
         }
       } catch (error) {
         console.error('Error fetching latest messages:', error)
+      } finally {
+        messagesActions.setLoadingMessages(false)
       }
     }
 

@@ -33,17 +33,17 @@ export class ConnectionManager {
 
     constructor() {
         this.cuIndex = 0;
-        this.ao = connect({ MODE: "legacy", CU_URL: Constants.CuEndpoints[this.cuIndex] })
+        this.ao = connect({ MODE: "legacy", CU_URL: this.getCuUrl() })
     }
 
     switchCu() {
         this.cuIndex = (this.cuIndex + 1) % Constants.CuEndpoints.length;
-        this.ao = connect({ MODE: "legacy", CU_URL: Constants.CuEndpoints[this.cuIndex] })
+        this.ao = connect({ MODE: "legacy", CU_URL: this.getCuUrl() })
         return this.ao
     }
 
-    getCuUrl() { Constants.CuEndpoints[this.cuIndex] }
-    getAo() { this.ao }
+    getAo() { return this.ao }
+    getCuUrl() { return Constants.CuEndpoints[this.cuIndex] }
 
     getAoSigner(jwk?: JWKInterface) {
         if (jwk) {

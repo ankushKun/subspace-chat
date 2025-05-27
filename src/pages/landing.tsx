@@ -3,17 +3,27 @@ import { ThemeToggleButton } from "@/components/theme-toggle"
 import LoginDialog from "../components/login-dialog"
 import { useIsMobile } from "../hooks/use-mobile"
 import { useWallet } from "@/hooks/use-wallet"
+import { useEffect, useRef } from "react"
 
 import s1 from "@/assets/s1.png"
 import s2 from "@/assets/s2.png"
 import chk from "@/assets/chkthisout.png"
 import { ExternalLink } from "lucide-react"
-import { Link, NavLink } from "react-router"
+import { Link, NavLink, useNavigate } from "react-router"
 
 
 export default function SubspaceLanding() {
     const isMobile = useIsMobile()
     const connected = useWallet((state) => state.connected)
+    const navigate = useNavigate()
+    const wasConnectedOnMount = useRef(connected)
+
+    // Redirect to /app only when user authenticates on this page (goes from not connected to connected)
+    useEffect(() => {
+        if (!wasConnectedOnMount.current && connected) {
+            navigate("/app")
+        }
+    }, [connected, navigate])
 
     // force this page to always be in light mode
     return (
@@ -35,8 +45,8 @@ export default function SubspaceLanding() {
             </div>
             <div className="flex flex-col items-center justify-center gap-2 my-52 pb-14">
                 {(() => {
-                    const Btn = <Button className="z-20 md:p-10 drop-shadow-2xl tracking-wider px-14 bg-primary text-primary-foreground hover:bg-primary-foreground font-ka 
-                    md:text-3xl hover:text-primary transform hover:scale-110 transition duration-500">Start Talking</Button>
+                    const Btn = <Button className="z-20 p-10 drop-shadow-2xl tracking-wider px-12 bg-primary text-primary-foreground hover:bg-primary-foreground font-ka 
+                    text-2xl md:text-3xl hover:text-primary transform hover:scale-110 transition duration-500">Start Talking</Button>
                     return connected ? <NavLink to="/app">{Btn}</NavLink> : <LoginDialog>{Btn}</LoginDialog>
                 })()}
             </div>
@@ -47,6 +57,8 @@ export default function SubspaceLanding() {
                 <div className="flex flex-col items-center justify-center gap-2">
                     <div className="font-ka tracking-widest">powered by <Link draggable={false} target="_blank" to="https://x.com/aoTheComputer" className="hover:underline underline-offset-8 hover:text-white">aoTheComputer</Link></div>
                 </div>
+                {/* @ts-ignore */}
+                <div className="text-xs text-white/60 font-vipnagorgialla text-left md:text-center">v{__VERSION__}</div>
             </div>
         </div>
     )

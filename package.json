@@ -12,6 +12,7 @@
   "dependencies": {
     "@ar.io/sdk": "^3.12.1",
     "@dha-team/arbundles": "^1.0.3",
+    "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.0.1",
     "@permaweb/aoconnect": "^0.0.85",
     "@radix-ui/react-accordion": "^1.2.11",

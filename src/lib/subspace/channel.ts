@@ -7,11 +7,15 @@ import type { CreateChannelResponse } from "@/types/subspace";
 export class ChannelManager {
     constructor(private connectionManager: ConnectionManager) { }
 
-    async createChannel({ serverId, parentCategoryId, name, orderId }: { serverId: string, parentCategoryId?: string, name: string, orderId?: number }): Promise<CreateChannelResponse | null> {
+    async createChannel({ serverId, parentCategoryId, name, orderId = undefined }: { serverId: string, parentCategoryId?: string, name: string, orderId?: number }): Promise<CreateChannelResponse | null> {
+        const body = { parentCategoryId, name }
+        if (orderId !== undefined) {
+            body['orderId'] = orderId;
+        }
         const path = `${serverId}/create-channel`
         const res = await aofetch(path, {
             method: "POST",
-            body: { parentCategoryId, name, orderId },
+            body,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,
@@ -26,11 +30,21 @@ export class ChannelManager {
         }
     }
 
-    async updateChannel({ serverId, channelId, name, parentCategoryId, orderId }: { serverId: string, channelId: string, name?: string, parentCategoryId?: string, orderId?: number }): Promise<boolean> {
+    async updateChannel({ serverId, channelId, name, parentCategoryId, orderId = undefined }: { serverId: string, channelId: string, name?: string, parentCategoryId?: string, orderId?: number }): Promise<boolean> {
+        const body = { channelId }
+        if (orderId !== undefined) {
+            body['orderId'] = orderId;
+        }
+        if (name !== undefined) {
+            body['name'] = name;
+        }
+        if (parentCategoryId !== undefined) {
+            body['parentCategoryId'] = parentCategoryId;
+        }
         const path = `${serverId}/update-channel`
         const res = await aofetch(path, {
             method: "POST",
-            body: { channelId, name, parentCategoryId, orderId },
+            body,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,

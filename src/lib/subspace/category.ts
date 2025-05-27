@@ -7,11 +7,15 @@ import type { CreateCategoryResponse } from "@/types/subspace";
 export class CategoryManager {
     constructor(private connectionManager: ConnectionManager) { }
 
-    async createCategory({ serverId, name, orderId }: { serverId: string, name: string, orderId?: number }): Promise<number | null> {
+    async createCategory({ serverId, name, orderId = undefined }: { serverId: string, name: string, orderId?: number }): Promise<number | null> {
+        const body = { name }
+        if (orderId !== undefined) {
+            body['orderId'] = orderId;
+        }
         const path = `${serverId}/create-category`
         const res = await aofetch(path, {
             method: "POST",
-            body: { name, orderId },
+            body,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,
@@ -27,11 +31,18 @@ export class CategoryManager {
         }
     }
 
-    async updateCategory({ serverId, categoryId, name, orderId }: { serverId: string, categoryId: string, name?: string, orderId?: number }): Promise<boolean> {
+    async updateCategory({ serverId, categoryId, name, orderId = undefined }: { serverId: string, categoryId: string, name?: string, orderId?: number }): Promise<boolean> {
+        const body = { categoryId }
+        if (orderId !== undefined) {
+            body['orderId'] = orderId;
+        }
+        if (name !== undefined) {
+            body['name'] = name;
+        }
         const path = `${serverId}/update-category`
         const res = await aofetch(path, {
             method: "POST",
-            body: { categoryId, name, orderId },
+            body,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,

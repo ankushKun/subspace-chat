@@ -28,6 +28,7 @@ export default function SubspaceLanding() {
     // force this page to always be in light mode
     return (
         <div className="flex flex-col items-center justify-center min-h-screen">
+            <title>Subspace</title>
             {connected ? <NavLink to="/app"><Button className="absolute top-8 right-6 z-20 font-bold">Go Subspace <ExternalLink /></Button></NavLink>
                 : <LoginDialog>
                     <Button className="absolute top-6 right-6 z-20 font-bold">Login</Button>

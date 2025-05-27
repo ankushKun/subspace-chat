@@ -15,7 +15,7 @@ import { useSwipeable } from 'react-swipeable';
 
 
 export default function App() {
-
+  const [title, setTitle] = useState("Subspace")
   const subspace = useSubspace()
   const { connected, address } = useWallet()
   const { actions: serverActions, activeServerId, activeChannelId, servers } = useServer()
@@ -99,7 +99,35 @@ export default function App() {
 
   // Interval to fetch latest messages every 2000ms
   useEffect(() => {
-    if (!activeChannelId || !activeServerId) return
+    console.log(activeServerId, activeChannelId)
+
+    // Set title based on current context
+    if (activeServerId) {
+      const server = servers[activeServerId]
+      if (server) {
+        if (activeChannelId) {
+          console.log(server.channels)
+          const channel = server.channels.find(channel => channel.channelId == activeChannelId)
+          console.log(channel)
+          if (channel) {
+            setTitle(`#${channel.name} | Subspace`)
+          } else {
+            setTitle(`${server.name} | Subspace`)
+          }
+        } else {
+          setTitle(`${server.name} | Subspace`)
+        }
+      } else {
+        setTitle("Subspace")
+      }
+    } else {
+      setTitle("Subspace")
+    }
+
+    // Only return early if we don't have both activeServerId and activeChannelId for message fetching
+    if (!activeChannelId || !activeServerId) {
+      return
+    }
 
     const fetchLatestMessages = async () => {
       try {
@@ -127,6 +155,7 @@ export default function App() {
 
   return (
     <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip">
+      <title>{title}</title>
       <>
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
         {connected && <div className="flex flex-col h-svh">{activeServerId ? (

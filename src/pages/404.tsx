@@ -4,6 +4,7 @@ import { NavLink } from "react-router";
 
 export default function NotFound() {
     return <div className="flex flex-col items-center justify-center h-screen bg-primary text-primary-foreground">
+        <title>Subspace | 404</title>
         <h1 className="text-8xl font-bold font-ka tracking-widest max-w-screen overflow-clip">404</h1>
         <p className="text-lg mt-4">Page not found</p>
         <NavLink to="/app">

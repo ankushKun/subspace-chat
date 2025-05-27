@@ -63,6 +63,7 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
                 const result = await subspace.user.getNotifications({ userId: address });
 
                 if (result && Array.isArray(result)) {
+                    console.log(result);
                     // Mark new notifications as unread (read: 0)
                     const newNotifications = result.map(notification => ({
                         ...notification,
@@ -172,7 +173,9 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
     // Format timestamp
     const formatTimestamp = (timestamp: number): string => {
         try {
-            const date = new Date(timestamp * 1000);
+            // Handle both seconds and milliseconds timestamps
+            // If timestamp is less than a reasonable threshold, assume it's in seconds
+            const date = new Date(timestamp < 10000000000 ? timestamp * 1000 : timestamp);
             const now = new Date();
             const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
 

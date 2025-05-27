@@ -14,6 +14,7 @@ import { mdComponents, setCurrentMentions } from "@/lib/md-components"
 import UserMention from "@/components/user-mention"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
+import InboxComponent from "@/components/inbox"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -64,13 +65,15 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
                     <Search className="w-4 h-4" />
                 </Button> */}
 
-                <Button
+                {/* <Button
                     size="sm"
                     variant="ghost"
                     className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <Inbox className="w-4 h-4" />
-                </Button>
+                </Button> */}
+
+                <InboxComponent className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" />
 
                 {/* <Button
                     size="sm"
@@ -535,6 +538,8 @@ const MessageGroup = ({ messages, onReply, onEdit, onDelete }: {
 const NoChannelSelected = ({ serverName }: { serverName?: string }) => {
     return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8 relative overflow-hidden">
+            <InboxComponent className="absolute top-4 right-4" />
+
             {/* Background decorative elements */}
             <div className="absolute inset-0 pointer-events-none">
                 {/* Floating orbs */}

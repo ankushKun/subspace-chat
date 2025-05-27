@@ -79,11 +79,18 @@ export class ChannelManager {
         }
     }
 
-    async markRead({ serverId, channelId }: { serverId: string, channelId: string }): Promise<number | null> {
+    async markRead({ serverId, channelId }: { serverId?: string, channelId?: number }): Promise<number | null> {
+        const data = {}
+        if (serverId) {
+            data['serverId'] = serverId;
+        }
+        if (channelId) {
+            data['channelId'] = channelId;
+        }
         const path = `${Constants.Profiles}/mark-read`
         const res = await aofetch(path, {
             method: "POST",
-            body: { serverId, channelId },
+            body: data,
             AO: this.connectionManager.getAo(),
             tags: [
                 ...Constants.CommonTags,

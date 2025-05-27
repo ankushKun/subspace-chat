@@ -1072,12 +1072,12 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                     // Show skeletons for servers that are expected but not yet loaded
                     const skeletonsToShow = loadingServers ? Math.max(0, expectedServerIds.length - loadedServersCount) : 0;
 
-                    console.log('Skeleton Debug:', {
-                        expectedServerIds: expectedServerIds.length,
-                        loadedServersCount,
-                        skeletonsToShow,
-                        loadingServers
-                    });
+                    // console.log('Skeleton Debug:', {
+                    //     expectedServerIds: expectedServerIds.length,
+                    //     loadedServersCount,
+                    //     skeletonsToShow,
+                    //     loadingServers
+                    // });
 
                     return Array.from({ length: skeletonsToShow }, (_, index) => (
                         <div

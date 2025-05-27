@@ -517,21 +517,30 @@ end)
 app.post("/mark-read", function(req, res)
     local userId = req.msg.From
     userId = TranslateDelegation(userId)
-    local serverId = req.body.serverId
-    local channelId = req.body.channelId
+    local serverId = VarOrNil(req.body.serverId)
+    local channelId = VarOrNil(req.body.channelId)
 
-    if not serverId or not channelId then
-        res:status(400):json({
-            error = "Missing serverId or channelId"
-        })
-        return
+    local rowsUpdated
+
+    if serverId and channelId then
+        -- Delete notifications for specific server and channel
+        rowsUpdated = SQLWrite([[
+            DELETE FROM notifications
+            WHERE userId = ? AND serverId = ? AND channelId = ?
+        ]], userId, serverId, channelId)
+    elseif serverId then
+        -- Delete notifications for entire server (any channel)
+        rowsUpdated = SQLWrite([[
+            DELETE FROM notifications
+            WHERE userId = ? AND serverId = ?
+        ]], userId, serverId)
+    else
+        -- Delete all notifications for user
+        rowsUpdated = SQLWrite([[
+            DELETE FROM notifications
+            WHERE userId = ?
+        ]], userId)
     end
-
-    -- Delete all notifications for this user, server, and channel
-    local rowsUpdated = SQLWrite([[
-        DELETE FROM notifications
-        WHERE userId = ? AND serverId = ? AND channelId = ?
-    ]], userId, serverId, channelId)
 
     res:json({
         notificationsDeleted = rowsUpdated

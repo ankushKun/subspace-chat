@@ -131,6 +131,12 @@ export default function App() {
       return
     }
 
+    // mark channel as read
+    subspace.server.channel.markRead({
+      serverId: activeServerId,
+      channelId: activeChannelId
+    })
+
     const fetchLatestMessages = async () => {
       try {
         const lastMessageId = messagesActions.getLastMessageId(activeServerId, activeChannelId)

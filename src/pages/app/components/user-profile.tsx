@@ -47,7 +47,6 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     const profile = profiles[address] ? profiles[address] : null
     const server = activeServerId ? servers[activeServerId] : null
-    console.log(server)
     const serverNickname = server && Object.prototype.toString.call(server.members) == "[object Array]" ? server?.members?.find(m => m.userId === address)?.nickname : null
 
     // Initialize form state when dialog opens
@@ -271,6 +270,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
 
                     {/* Settings Button */}
                     <NavLink to="/app/settings">

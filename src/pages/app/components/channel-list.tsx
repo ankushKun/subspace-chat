@@ -9,7 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import useSubspace from "@/hooks/subspace"
+import useSubspace, { useNotifications } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Constants } from "@/lib/constants"
 import UserProfile from "./user-profile"
@@ -22,6 +22,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set())
     const subspace = useSubspace()
     const { address } = useWallet()
+    const { unreadCountsByChannel } = useNotifications()
 
     // Drag and drop state
     const [isUpdating, setIsUpdating] = useState(false)
@@ -906,9 +907,22 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                                                                             : "text-muted-foreground/60 group-hover:text-muted-foreground"
                                                                     )} />
                                                                     <span className="truncate">{channel.name}</span>
-                                                                    {updatingChannels.includes(channel.channelId) && (
-                                                                        <Loader2 className="ml-auto h-3 w-3 animate-spin text-primary" />
-                                                                    )}
+                                                                    <div className="ml-auto flex items-center gap-1">
+                                                                        {/* Mention count badge */}
+                                                                        {activeServerId && unreadCountsByChannel[activeServerId]?.[channel.channelId.toString()] > 0 && channel.channelId !== activeChannelId && (
+                                                                            <div className={cn(
+                                                                                "flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[9px] font-semibold text-white rounded-full",
+                                                                                "bg-gradient-to-br from-red-500 to-red-600 shadow-sm shadow-red-500/30",
+                                                                                "border border-background/20",
+                                                                                "transition-all duration-200 ease-out"
+                                                                            )}>
+                                                                                {unreadCountsByChannel[activeServerId][channel.channelId.toString()] > 99 ? '99+' : unreadCountsByChannel[activeServerId][channel.channelId.toString()]}
+                                                                            </div>
+                                                                        )}
+                                                                        {updatingChannels.includes(channel.channelId) && (
+                                                                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1002,6 +1016,23 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                                                                 </div>
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-muted-foreground/60">{categoryChannels.length}</span>
+                                                                    {/* Category mention count badge - only show when collapsed and has unread mentions */}
+                                                                    {!isExpanded && activeServerId && (() => {
+                                                                        const categoryUnreadCount = categoryChannels.reduce((total, channel) => {
+                                                                            const channelUnread = unreadCountsByChannel[activeServerId]?.[channel.channelId.toString()] || 0;
+                                                                            return total + (channel.channelId !== activeChannelId ? channelUnread : 0);
+                                                                        }, 0);
+                                                                        return categoryUnreadCount > 0 ? (
+                                                                            <div className={cn(
+                                                                                "flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[8px] font-semibold text-white rounded-full",
+                                                                                "bg-gradient-to-br from-red-500 to-red-600 shadow-sm shadow-red-500/30",
+                                                                                "border border-background/20",
+                                                                                "transition-all duration-200 ease-out"
+                                                                            )}>
+                                                                                {categoryUnreadCount > 99 ? '99+' : categoryUnreadCount}
+                                                                            </div>
+                                                                        ) : null;
+                                                                    })()}
                                                                     {isServerOwner && (
                                                                         <button
                                                                             className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 hover:bg-muted transition-all rounded flex items-center justify-center"
@@ -1074,9 +1105,22 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                                                                                                         : "text-muted-foreground/60 group-hover:text-muted-foreground"
                                                                                                 )} />
                                                                                                 <span className="truncate">{channel.name}</span>
-                                                                                                {updatingChannels.includes(channel.channelId) && (
-                                                                                                    <Loader2 className="ml-auto h-3 w-3 animate-spin text-primary" />
-                                                                                                )}
+                                                                                                <div className="ml-auto flex items-center gap-1">
+                                                                                                    {/* Mention count badge */}
+                                                                                                    {activeServerId && unreadCountsByChannel[activeServerId]?.[channel.channelId.toString()] > 0 && channel.channelId !== activeChannelId && (
+                                                                                                        <div className={cn(
+                                                                                                            "flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[9px] font-semibold text-white rounded-full",
+                                                                                                            "bg-gradient-to-br from-red-500 to-red-600 shadow-sm shadow-red-500/30",
+                                                                                                            "border border-background/20",
+                                                                                                            "transition-all duration-200 ease-out"
+                                                                                                        )}>
+                                                                                                            {unreadCountsByChannel[activeServerId][channel.channelId.toString()] > 99 ? '99+' : unreadCountsByChannel[activeServerId][channel.channelId.toString()]}
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {updatingChannels.includes(channel.channelId) && (
+                                                                                                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                                                                    )}
+                                                                                                </div>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>

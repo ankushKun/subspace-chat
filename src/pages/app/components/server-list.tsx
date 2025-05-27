@@ -1,6 +1,6 @@
 import { useServer } from "@/hooks/subspace/server"
 import { useState } from "react"
-import useSubspace, { useProfile } from "@/hooks/subspace"
+import useSubspace, { useProfile, useNotifications } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { type Profile, type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,10 @@ import { usePWA } from "@/hooks/use-pwa"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
+    const { unreadCountsByServer } = useNotifications()
+
+    // Get unread count for this server
+    const unreadCount = unreadCountsByServer[server.serverId] || 0
 
     return (
         <div className="relative group mb-3">
@@ -64,6 +68,21 @@ const ServerButton = ({ server, isActive = false, onClick }: { server: Server; i
                     </div>
                 </Button>
 
+                {/* Mention count badge */}
+                {unreadCount > 0 && (
+                    <div className="absolute -top-1 -right-1 z-10">
+                        <div className={cn(
+                            "flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold text-white rounded-full aspect-square",
+                            "bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30",
+                            "border border-background/20 backdrop-blur-sm",
+                            "transition-all duration-200 ease-out",
+                            "animate-in zoom-in-50 duration-300"
+                        )}>
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                    </div>
+                )}
+
                 {/* Tooltip positioned relative to button */}
                 <div className={cn(
                     "absolute left-full ml-4 top-1/2 -translate-y-1/2 transition-all duration-200 pointer-events-none z-[100]",
@@ -73,6 +92,12 @@ const ServerButton = ({ server, isActive = false, onClick }: { server: Server; i
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-primary rounded-full" />
                             <span className="font-medium">{server.name}</span>
+                            {unreadCount > 0 && (
+                                <div className="flex items-center gap-1 ml-2 px-1.5 py-0.5 bg-red-500/10 text-red-600 rounded text-xs">
+                                    <span>{unreadCount}</span>
+                                    <span className="text-red-500/70">mention{unreadCount !== 1 ? 's' : ''}</span>
+                                </div>
+                            )}
                         </div>
                         {/* Arrow pointing left */}
                         <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-transparent border-l-popover" />
@@ -86,6 +111,7 @@ const ServerButton = ({ server, isActive = false, onClick }: { server: Server; i
 const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
     const actions = useServer(state => state.actions)
+    const { unreadCount } = useNotifications()
 
     return (
         <div className="relative group mb-3">
@@ -145,6 +171,22 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
                     )} */}
                 </Button>
 
+                {/* Mention count badge */}
+                {/* will be useful when dms are implemented */}
+                {/* {(
+                    <div className="absolute -top-1 -right-1 z-10">
+                        <div className={cn(
+                            "flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold text-white rounded-full",
+                            "bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30",
+                            "border border-background/20 backdrop-blur-sm",
+                            "transition-all duration-200 ease-out",
+                            "animate-in zoom-in-50 duration-300"
+                        )}>
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                    </div>
+                )} */}
+
                 {/* Tooltip positioned relative to button */}
                 <div className={cn(
                     "absolute left-full ml-4 top-1/2 -translate-y-1/2 transition-all duration-200 pointer-events-none z-[100]",
@@ -154,6 +196,13 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
                         <div className="flex items-center gap-2">
                             <Home className="w-3 h-3 text-primary" />
                             <span className="font-medium">Home</span>
+                            {/* { will be useful when dms are implemented */}
+                            {/* {(
+                                <div className="flex items-center gap-1 ml-2 px-1.5 py-0.5 bg-red-500/10 text-red-600 rounded text-xs">
+                                    <span>{unreadCount}</span>
+                                    <span className="text-red-500/70">mention{unreadCount !== 1 ? 's' : ''}</span>
+                                </div>
+                            )} */}
                         </div>
                         <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-transparent border-l-popover" />
                     </div>

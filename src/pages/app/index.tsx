@@ -2,7 +2,7 @@ import ServerList from "./components/server-list"
 import ChannelList from "./components/channel-list"
 import MemberList from "./components/member-list"
 import MessageList from "./components/message-list"
-import useSubspace, { useMessages, useProfile } from "@/hooks/subspace"
+import useSubspace, { useMessages, useProfile, useNotifications } from "@/hooks/subspace"
 import { useEffect, useState } from "react"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
@@ -18,9 +18,10 @@ export default function App() {
   const [title, setTitle] = useState("Subspace")
   const subspace = useSubspace()
   const { connected, address } = useWallet()
-  const { actions: serverActions, activeServerId, activeChannelId, servers } = useServer()
+  const { actions: serverActions, activeServerId, activeChannelId, servers, serversJoined } = useServer()
   const { actions: profileActions } = useProfile()
   const { actions: messagesActions } = useMessages()
+  const { actions: notificationActions } = useNotifications()
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -47,6 +48,9 @@ export default function App() {
         }
         console.log(`servers found for user: ${profile.serversJoined.length}`)
         serverActions.setServersJoined(address, profile.serversJoined)
+
+        // Update notification counts with joined servers
+        notificationActions.updateUnreadCounts(profile.serversJoined)
 
         for (const serverId of profile.serversJoined) {
           try {
@@ -75,6 +79,13 @@ export default function App() {
       }
     })()
   }, [connected, address])
+
+  // Update notification counts when joined servers change
+  useEffect(() => {
+    if (address && serversJoined[address]) {
+      notificationActions.updateUnreadCounts(serversJoined[address])
+    }
+  }, [address, serversJoined])
 
   useEffect(() => {
     (async () => {

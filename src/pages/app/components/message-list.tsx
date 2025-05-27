@@ -72,13 +72,13 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
                     <Inbox className="w-4 h-4" />
                 </Button>
 
-                <Button
+                {/* <Button
                     size="sm"
                     variant="ghost"
                     className="h-8 px-2 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
                     <Users className="w-4 h-4" />
-                </Button>
+                </Button> */}
             </div>
         </div>
     )

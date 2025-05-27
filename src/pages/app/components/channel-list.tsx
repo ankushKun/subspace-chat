@@ -1205,7 +1205,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {isServerOwner
-                                ? "Are you sure you want to delete this server? This action cannot be undone and all data will be permanently lost."
+                                ? "Are you sure you want to delete this server? Although this server will be removed from Subspace, the data and messages will still exist somewhere on the permaweb"
                                 : "Are you sure you want to leave this server? You'll need a new invite to join again."
                             }
                         </AlertDialogDescription>
@@ -1434,7 +1434,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Channel</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this channel? All messages will be permanently lost.
+                            Are you sure you want to delete this channel? Although this channel will loose it's messages, they will still exist somewhere on the permaweb
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

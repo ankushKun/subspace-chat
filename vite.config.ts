@@ -17,7 +17,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
     injectRegister: 'auto',
-    includeAssets: ['/icon-192.png', '/icon-512.png', '/icon-192-maskable.png', '/icon-512-maskable.png', '/apple-touch-icon.png', '/favicon.ico'],
+    includeAssets: ['/icon-192.png', '/icon-512.png', '/icon-192-maskable.png', '/icon-512-maskable.png', '/apple-touch-icon.png', '/favicon.ico', '/notification.wav'],
     devOptions: {
       enabled: true,
     },
@@ -29,7 +29,7 @@ export default defineConfig({
       runtimeCaching: [
         {
           // cache html,js and css but keep them network first
-          urlPattern: /\.html$|\.js$|\.css$|\.png/,
+          urlPattern: /\.html$|\.js$|\.css$|\.png$|\.wav$/,
           handler: 'NetworkFirst',
           options: {
             cacheName: 'app-cache',

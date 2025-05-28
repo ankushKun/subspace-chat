@@ -1,10 +1,11 @@
-import { InboxIcon, X, Trash2, CheckCheck } from "lucide-react";
+import { InboxIcon, X, Trash2, CheckCheck, Volume2, VolumeX, Bell, BellOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn, shortenAddress } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@/hooks/use-wallet";
 import useSubspace, { useNotifications, useServer } from "@/hooks/subspace";
+import { useSound } from "@/hooks/use-sound";
 import { format } from "date-fns";
 import type { SubspaceNotification } from "@/types/subspace";
 
@@ -24,11 +25,49 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
         serversJoined,
         actions: serverActions
     } = useServer();
+    const {
+        playNotification,
+        showBrowserNotification,
+        isLoaded: soundLoaded,
+        isEnabled: soundEnabled,
+        setEnabled: setSoundEnabled,
+        browserNotificationsEnabled,
+        setBrowserNotificationsEnabled,
+        requestNotificationPermission,
+        notificationPermission
+    } = useSound();
 
     // Set current user ID when address changes
     useEffect(() => {
         notificationActions.setCurrentUserId(address);
     }, [address]);
+
+    // Set up notification sound callback
+    useEffect(() => {
+        notificationActions.setOnNewNotification(playNotification);
+
+        // Cleanup callback on unmount
+        return () => {
+            notificationActions.setOnNewNotification(null);
+        };
+    }, [playNotification]);
+
+    // Set up browser notification callback
+    useEffect(() => {
+        notificationActions.setOnShowBrowserNotification(showBrowserNotification);
+
+        // Cleanup callback on unmount
+        return () => {
+            notificationActions.setOnShowBrowserNotification(null);
+        };
+    }, [showBrowserNotification]);
+
+    // Request notification permission when browser notifications are enabled
+    useEffect(() => {
+        if (browserNotificationsEnabled && notificationPermission === 'default') {
+            requestNotificationPermission();
+        }
+    }, [browserNotificationsEnabled, notificationPermission, requestNotificationPermission]);
 
     // Get notifications for current user only
     const currentUserNotifications = notificationActions.getCurrentUserNotifications();
@@ -233,6 +272,52 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
                 <div className="flex items-center justify-between p-3 border-b border-border">
                     <h3 className="font-medium">Mentions</h3>
                     <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSoundEnabled(!soundEnabled)}
+                            title={soundEnabled ? "Disable notification sounds" : "Enable notification sounds"}
+                            className="text-xs rounded-full p-0"
+                        >
+                            {soundEnabled ? (
+                                <Volume2 className="!w-4 !h-4" />
+                            ) : (
+                                <VolumeX className="!w-4 !h-4" />
+                            )}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={async () => {
+                                if (!browserNotificationsEnabled) {
+                                    // Request permission when enabling
+                                    const granted = await requestNotificationPermission();
+                                    if (granted) {
+                                        setBrowserNotificationsEnabled(true);
+                                    }
+                                } else {
+                                    setBrowserNotificationsEnabled(false);
+                                }
+                            }}
+                            title={
+                                notificationPermission === 'denied'
+                                    ? "Browser notifications blocked - check browser settings"
+                                    : browserNotificationsEnabled
+                                        ? "Disable browser notifications"
+                                        : "Enable browser notifications"
+                            }
+                            className={cn(
+                                "text-xs rounded-full p-0",
+                                notificationPermission === 'denied' && "opacity-50 cursor-not-allowed"
+                            )}
+                            disabled={notificationPermission === 'denied'}
+                        >
+                            {browserNotificationsEnabled && notificationPermission === 'granted' ? (
+                                <Bell className="!w-4 !h-4" />
+                            ) : (
+                                <BellOff className="!w-4 !h-4" />
+                            )}
+                        </Button>
                         {filteredNotifications.length > 0 && (
                             <Button
                                 variant="ghost"
@@ -293,7 +378,7 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
                                         >
                                             <div className="flex justify-between items-start">
                                                 <span className={`font-medium text-sm ${notification.read === 1 ? 'text-muted-foreground' : ''}`}>
-                                                    {notification.authorName || shortenAddress(notification.authorId)}
+                                                    {notification.authorName.length > 20 ? notification.authorName.slice(0, 20) + '...' : notification.authorName || shortenAddress(notification.authorId)}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground ml-2">
                                                     {formatTimestamp(notification.timestamp)}

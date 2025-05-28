@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { SubspaceNotification } from "@/types/subspace";
+import { shortenAddress } from "@/lib/utils";
 
 interface NotificationState {
     notifications: SubspaceNotification[];
@@ -10,6 +11,8 @@ interface NotificationState {
     unreadCountsByServer: Record<string, number>;
     unreadCountsByChannel: Record<string, Record<string, number>>;
     currentUserId: string | null;
+    onNewNotification: (() => void) | null;
+    onShowBrowserNotification: ((title: string, body: string, options?: { icon?: string; serverId?: string; channelId?: number }) => void) | null;
 
     actions: NotificationActions;
 }
@@ -24,6 +27,8 @@ interface NotificationActions {
     updateUnreadCounts: (joinedServers: string[]) => void;
     setCurrentUserId: (userId: string | null) => void;
     getCurrentUserNotifications: () => SubspaceNotification[];
+    setOnNewNotification: (callback: (() => void) | null) => void;
+    setOnShowBrowserNotification: (callback: ((title: string, body: string, options?: { icon?: string; serverId?: string; channelId?: number }) => void) | null) => void;
 }
 
 const MAX_STORED_NOTIFICATIONS = 200;
@@ -36,6 +41,8 @@ export const useNotifications = create<NotificationState>()(persist((set, get) =
     unreadCountsByServer: {},
     unreadCountsByChannel: {},
     currentUserId: null,
+    onNewNotification: null,
+    onShowBrowserNotification: null,
 
     actions: {
         setNotifications: (notifications: SubspaceNotification[]) => {
@@ -51,10 +58,27 @@ export const useNotifications = create<NotificationState>()(persist((set, get) =
         },
 
         addNotifications: (newNotifications: SubspaceNotification[]) => {
+            const state = get();
+            let hasNewUnreadNotifications = false;
+            let latestNotification: SubspaceNotification | null = null;
+
             set((state) => {
                 // Filter out duplicates
                 const existingIds = new Set(state.notifications.map(n => n.notificationId));
                 const uniqueNewNotifications = newNotifications.filter(n => !existingIds.has(n.notificationId));
+
+                // Check if any new notifications are unread for the current user
+                if (state.currentUserId) {
+                    const newUnreadNotifications = uniqueNewNotifications.filter(
+                        notification => notification.userId === state.currentUserId && notification.read === 0
+                    );
+
+                    if (newUnreadNotifications.length > 0) {
+                        hasNewUnreadNotifications = true;
+                        // Get the latest notification for browser notification
+                        latestNotification = newUnreadNotifications.sort((a, b) => b.timestamp - a.timestamp)[0];
+                    }
+                }
 
                 // Combine and sort
                 const allNotifications = [...state.notifications, ...uniqueNewNotifications]
@@ -63,6 +87,35 @@ export const useNotifications = create<NotificationState>()(persist((set, get) =
 
                 return { notifications: allNotifications };
             });
+
+            // Play notification sound and show browser notification if there are new unread notifications
+            if (hasNewUnreadNotifications) {
+                if (state.onNewNotification) {
+                    state.onNewNotification();
+                }
+
+                if (state.onShowBrowserNotification && latestNotification) {
+                    // Format the notification content for display
+                    const formatContent = (content: string): string => {
+                        if (!content) return "";
+                        // Replace @[name](address) with @name and limit length
+                        let formatted = content.replace(/@\[(.*?)\]\((.*?)\)/g, '@$1');
+                        // Truncate if too long
+                        if (formatted.length > 200) {
+                            formatted = formatted.substring(0, 197) + '...';
+                        }
+                        return formatted;
+                    };
+
+                    const title = `New mention in ${latestNotification.serverName}`;
+                    const body = `${latestNotification.authorName.length > 25 ? latestNotification.authorName.substring(0, 22) + "..." : latestNotification.authorName || shortenAddress(latestNotification.authorId)} mentioned you in #${latestNotification.channelName}: ${formatContent(latestNotification.content)}`;
+
+                    state.onShowBrowserNotification(title, body, {
+                        serverId: latestNotification.serverId,
+                        channelId: latestNotification.channelId
+                    });
+                }
+            }
 
             // Update unread counts
             get().actions.updateUnreadCounts([]);
@@ -162,6 +215,14 @@ export const useNotifications = create<NotificationState>()(persist((set, get) =
             const state = get();
             if (!state.currentUserId) return [];
             return state.notifications.filter(notification => notification.userId === state.currentUserId);
+        },
+
+        setOnNewNotification: (callback: (() => void) | null) => {
+            set({ onNewNotification: callback });
+        },
+
+        setOnShowBrowserNotification: (callback: ((title: string, body: string, options?: { icon?: string; serverId?: string; channelId?: number }) => void) | null) => {
+            set({ onShowBrowserNotification: callback });
         }
     }
 }), {

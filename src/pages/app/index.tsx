@@ -198,6 +198,42 @@ export default function App() {
     return () => clearInterval(interval)
   }, [activeServerId, activeChannelId])
 
+  // Listen for browser notification navigation events
+  useEffect(() => {
+    const handleNotificationNavigate = async (event: CustomEvent) => {
+      const { serverId, channelId } = event.detail;
+
+      if (serverId && channelId) {
+        try {
+          // Navigate to the server and channel
+          serverActions.setActiveServerId(serverId);
+          serverActions.setActiveChannelId(channelId);
+
+          // Mark notifications for this channel as read on the server
+          await subspace.server.channel.markRead({
+            serverId: serverId,
+            channelId: channelId
+          });
+
+          // Update local notification state
+          notificationActions.markNotificationsAsRead(serverId, channelId);
+
+          console.log(`Navigated to server ${serverId}, channel ${channelId} from browser notification`);
+        } catch (error) {
+          console.error("Error handling notification navigation:", error);
+        }
+      }
+    };
+
+    // Add event listener for custom notification navigation events
+    window.addEventListener('subspace-notification-navigate', handleNotificationNavigate as EventListener);
+
+    // Cleanup event listener on unmount
+    return () => {
+      window.removeEventListener('subspace-notification-navigate', handleNotificationNavigate as EventListener);
+    };
+  }, [subspace, serverActions, notificationActions]);
+
   if (isMobile) return (
     <>
       <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} onServerJoined={showWelcome} />

@@ -25,11 +25,19 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
         actions: serverActions
     } = useServer();
 
+    // Set current user ID when address changes
+    useEffect(() => {
+        notificationActions.setCurrentUserId(address);
+    }, [address]);
+
+    // Get notifications for current user only
+    const currentUserNotifications = notificationActions.getCurrentUserNotifications();
+
     // Get joined servers for current user
     const joinedServers = address ? serversJoined[address] || [] : [];
 
     // Filter notifications to only show those from joined servers
-    const filteredNotifications = notifications.filter(notification =>
+    const filteredNotifications = currentUserNotifications.filter(notification =>
         joinedServers.includes(notification.serverId)
     );
 
@@ -113,7 +121,7 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
         if (!activeServerId || !activeChannelId || !address) return;
 
         // Check if we have unread notifications for this channel
-        const hasUnreadNotificationsForChannel = notifications.some(
+        const hasUnreadNotificationsForChannel = currentUserNotifications.some(
             notification =>
                 notification.serverId === activeServerId &&
                 notification.channelId === activeChannelId &&
@@ -124,7 +132,7 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
             // Mark notifications for this channel as read locally
             notificationActions.markNotificationsAsRead(activeServerId, activeChannelId);
         }
-    }, [activeServerId, activeChannelId, address]);
+    }, [activeServerId, activeChannelId, address, currentUserNotifications]);
 
     // Handle notification click - navigate and mark as read
     const handleNotificationClick = async (notification: SubspaceNotification) => {

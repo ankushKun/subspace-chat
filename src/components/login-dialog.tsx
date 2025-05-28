@@ -134,14 +134,14 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             onClick={() => connect(ConnectionStrategies.ArWallet)}
                         >
                             <div>Arweave Wallet</div>
-                            <span className="text-muted-foreground/50">(supports web3 auth)</span>
+                            <span className="text-muted-foreground/50">(wallet extension)</span>
                             <img src={arweave} className="w-8 h-8 p-0.5 ml-auto aspect-square opacity-60 group-hover:opacity-100 transition-opacity duration-200 invert dark:invert-0" />
                         </Button>}
                         <Button variant="ghost" className="text-start justify-start border border-border/50 h-12"
                             onClick={() => connect(ConnectionStrategies.WanderConnect)}
                         >
                             <div>Wander Connect</div>
-                            <span className="text-muted-foreground/50">(supports web2 auth)</span>
+                            <span className="text-muted-foreground/50">(web2 auth)</span>
                             <img src={wander} className="w-8 h-8 ml-auto aspect-square object-contain" />
                         </Button>
                         {isMobileDevice && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"

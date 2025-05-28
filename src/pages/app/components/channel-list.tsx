@@ -65,7 +65,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
 
     const handleCopyInvite = () => {
         if (!server) return
-        const inviteLink = `${window.location.origin}/invite/${server.serverId}`
+        const inviteLink = `${window.location.origin}/#/invite/${server.serverId}`
         navigator.clipboard.writeText(inviteLink)
         toast.success("Invite link copied to clipboard")
     }

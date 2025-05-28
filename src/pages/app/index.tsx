@@ -174,7 +174,7 @@ export default function App() {
   if (isMobile) return <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} />
 
   return (
-    <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip">
+    <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip !overflow-clip">
       <title>{title}</title>
       <>
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
@@ -235,13 +235,13 @@ function MobileLayout({ connected, activeServerId, activeChannelId }: { connecte
     <div className="h-svh flex w-screen p-0 m-0" {...handlers}>
       {screen === Screens.Left && <div className="flex flex-row h-full grow">
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
-        {connected && <div className="flex flex-col h-svh w-full grow">{activeServerId ? (
+        {connected ? <div className="flex flex-col h-svh w-full grow">{activeServerId ? (
           <ChannelList className="grow w-full" />
         ) : (
           <DMList className="grow w-full overflow-clip" />
         )}
           <UserProfile />
-        </div>}
+        </div> : <LoginPrompt />}
       </div>}
       {screen === Screens.Middle && <div className="w-screen flex flex-row h-full">
         {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-svh" />}

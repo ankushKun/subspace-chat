@@ -38,6 +38,7 @@ export class MessageManager {
             method: "POST",
             body,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.SendMessage },
@@ -57,6 +58,7 @@ export class MessageManager {
             method: "POST",
             body: { messageId, content },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateMessage },
@@ -76,6 +78,7 @@ export class MessageManager {
             method: "POST",
             body: { messageId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DeleteMessage },

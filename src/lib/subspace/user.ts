@@ -48,6 +48,7 @@ export class User {
             method: "POST",
             body: { pfp },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateProfile },
@@ -100,6 +101,7 @@ export class User {
             method: "POST",
             body: { userId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DelegateUser },
@@ -119,6 +121,7 @@ export class User {
         const res = await aofetch(path, {
             method: "POST",
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UndelegateUser },
@@ -156,6 +159,7 @@ export class User {
             method: "POST",
             body: { serverId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.JoinServer },
@@ -177,6 +181,7 @@ export class User {
             method: "POST",
             body: { serverId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.LeaveServer },

@@ -17,6 +17,7 @@ export class ChannelManager {
             method: "POST",
             body,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.CreateChannel },
@@ -46,6 +47,7 @@ export class ChannelManager {
             method: "POST",
             body,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateChannel },
@@ -65,6 +67,7 @@ export class ChannelManager {
             method: "POST",
             body: { channelId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DeleteChannel },
@@ -92,6 +95,7 @@ export class ChannelManager {
             method: "POST",
             body: data,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
             ]

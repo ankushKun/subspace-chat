@@ -12,6 +12,7 @@ import type { SpawnProcessArgs } from "node_modules/@permaweb/aoconnect/dist/lib
 import { User } from "./user";
 import { ServerManager } from "./server";
 import { Logger } from "@/lib/utils";
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";
 
 export class Subspace {
     connectionManager: ConnectionManager;
@@ -20,7 +21,8 @@ export class Subspace {
 
 
     constructor() {
-        this.connectionManager = new ConnectionManager();
+        const [strategy, jwk] = useWallet(state => [state.connectionStrategy, state.jwk])
+        this.connectionManager = new ConnectionManager(strategy == ConnectionStrategies.ScannedJWK ? jwk : null);
         this.user = new User(this.connectionManager);
         this.server = new ServerManager(this.connectionManager);
     }
@@ -30,9 +32,11 @@ export class ConnectionManager {
     private cuIndex: number = 0
     ao: any
     ario = ARIO.mainnet()
+    jwk: JWKInterface | null = null
 
-    constructor() {
+    constructor(jwk?: JWKInterface) {
         this.cuIndex = 0;
+        this.jwk = jwk || null;
         this.ao = connect({ MODE: "legacy", CU_URL: this.getCuUrl() })
     }
 
@@ -44,13 +48,14 @@ export class ConnectionManager {
 
     getAo() { return this.ao }
     getCuUrl() { return Constants.CuEndpoints[this.cuIndex] }
+    setJwk(jwk: JWKInterface) { this.jwk = jwk }
 
-    getAoSigner(jwk?: JWKInterface) {
-        if (jwk) {
+    getAoSigner() {
+        if (this.jwk) {
             const newSigner = async (create: any, createDataItem = (buf: any) => new DataItem(buf)) => {
                 const { data, tags, target, anchor } = await create({ alg: 'rsa-v1_5-sha256', passthrough: true });
 
-                const arweaveSigner = new ArweaveSigner(jwk);
+                const arweaveSigner = new ArweaveSigner(this.jwk);
                 const dataItem = createData(data, arweaveSigner, { tags, target, anchor });
                 await dataItem.sign(arweaveSigner);
 

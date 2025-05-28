@@ -17,6 +17,7 @@ export class CategoryManager {
             method: "POST",
             body,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.CreateCategory },
@@ -44,6 +45,7 @@ export class CategoryManager {
             method: "POST",
             body,
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateCategory },
@@ -63,6 +65,7 @@ export class CategoryManager {
             method: "POST",
             body: { categoryId },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DeleteCategory },

@@ -46,6 +46,7 @@ export class ServerManager {
             method: "POST",
             body: { name, icon },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateServer },
@@ -83,7 +84,7 @@ export class ServerManager {
         const path = `${serverId}/`
         const res = await aofetch(path, {
             method: "GET",
-            AO: this.connectionManager.getAo()
+            AO: this.connectionManager.getAo(),
         })
         if (res.status == 200) {
             return res.json as ServerDetailsResponse;
@@ -97,7 +98,7 @@ export class ServerManager {
         const res = await aofetch(path, {
             method: "GET",
             body: { userId },
-            AO: this.connectionManager.getAo()
+            AO: this.connectionManager.getAo(),
         })
         if (res.status == 200) {
             return res.json as ServerMember;
@@ -127,6 +128,7 @@ export class ServerManager {
             method: "POST",
             body: { nickname },
             AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateMember },

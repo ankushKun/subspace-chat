@@ -249,24 +249,24 @@ export default function App() {
   )
 
   return (
-    <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip !overflow-clip">
+    <div className="flex flex-row items-start justify-start h-screen overflow-x-hidden">
       <title>{title}</title>
       <>
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" onServerJoined={showWelcome} />
-        {connected && <div className="flex flex-col h-svh">{activeServerId ? (
-          <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={showWelcome} />
+        {connected && <div className="flex flex-col h-full overflow-hidden">{activeServerId ? (
+          <ChannelList className="w-[350px] min-w-[350px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         ) : (
-          <DMList className="w-[350px] min-w-[350px] max-w-[350px]" />
+          <DMList className="w-[350px] min-w-[350px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         )}
           <UserProfile />
         </div>}
       </>
       {connected && address ? (
-        <MessageList className="grow h-svh" />
+        <MessageList className="grow h-full overflow-hidden" />
       ) : (
         <LoginPrompt />
       )}
-      {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
+      {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-full flex-shrink-0 overflow-y-auto overflow-x-hidden" />}
 
       {/* Welcome Popup */}
       {welcomeData && (
@@ -295,9 +295,10 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
   const [screen, setScreen] = useState<Screens>(Screens.Left)
   const handlers = useSwipeable({
     // onSwiped: (eventData) => console.log("User Swiped!", eventData),
-    // preventScrollOnSwipe: true,
-    swipeDuration: 1500,
+    preventScrollOnSwipe: false,
+    swipeDuration: 1000,
     trackMouse: true,
+    delta: 50,
     onSwipedLeft: () => {
       if (screen === Screens.Right) return
       if (!connected || !activeServerId || !activeChannelId) return
@@ -321,22 +322,22 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
   }, [activeChannelId])
 
   return (
-    <div className="h-svh flex w-screen p-0 m-0" {...handlers}>
-      {screen === Screens.Left && <div className="flex flex-row h-full grow">
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" onServerJoined={onServerJoined} />
-        {connected ? <div className="flex flex-col h-svh w-full grow">{activeServerId ? (
-          <ChannelList className="grow w-full" />
+    <div className="h-screen flex w-screen p-0 m-0 overflow-hidden" {...handlers}>
+      {screen === Screens.Left && <div className="flex flex-row h-full grow overflow-hidden">
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={onServerJoined} />
+        {connected ? <div className="flex flex-col h-full w-full grow overflow-hidden">{activeServerId ? (
+          <ChannelList className="grow w-full overflow-y-auto overflow-x-hidden" />
         ) : (
-          <DMList className="grow w-full overflow-clip" />
+          <DMList className="grow w-full overflow-y-auto overflow-x-hidden" />
         )}
           <UserProfile />
         </div> : <LoginPrompt />}
       </div>}
-      {screen === Screens.Middle && <div className="w-screen flex flex-row h-full">
-        {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-svh" />}
+      {screen === Screens.Middle && <div className="w-screen flex flex-row h-full overflow-hidden">
+        {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-full overflow-hidden" />}
       </div>}
-      {screen === Screens.Right && <div className="w-screen grow overflow-clip">
-        {connected && activeServerId && <MemberList className="grow w-full h-svh overflow-clip" />}
+      {screen === Screens.Right && <div className="w-screen grow overflow-hidden">
+        {connected && activeServerId && <MemberList className="grow w-full h-full overflow-y-auto overflow-x-hidden" />}
       </div>}
 
     </div>

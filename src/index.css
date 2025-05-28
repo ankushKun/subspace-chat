@@ -264,6 +264,63 @@ html {
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+
+  /* Mobile-specific improvements */
+  @media (max-width: 768px) {
+
+    html,
+    body {
+      /* Prevent overscroll bounce on iOS */
+      overscroll-behavior: none;
+      /* Enable momentum scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
+      /* Prevent zoom on input focus */
+      touch-action: manipulation;
+      /* Prevent pull-to-refresh */
+      overscroll-behavior-y: none;
+    }
+
+    /* Fix viewport height issues on mobile browsers */
+    .h-screen {
+      height: 100vh;
+      height: 100dvh;
+      /* Use dynamic viewport height when supported */
+    }
+
+    /* Improve touch scrolling performance */
+    .overflow-y-auto,
+    .overflow-auto {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      /* Ensure smooth scrolling on mobile */
+      scroll-behavior: smooth;
+    }
+
+    /* Prevent horizontal scrolling on mobile */
+    .overflow-x-hidden {
+      overscroll-behavior-x: none;
+    }
+
+    /* Improve input handling on mobile */
+    input,
+    textarea {
+      /* Prevent zoom on focus */
+      font-size: 16px;
+      transform: translateZ(0);
+      /* Force hardware acceleration */
+    }
+
+    /* Optimize scrollable containers */
+    .scrollbar-thin {
+      scrollbar-width: none;
+      /* Hide scrollbars on mobile */
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+      display: none;
+      /* Hide scrollbars on mobile webkit */
+    }
+  }
 }
 
 /* Shimmer animation for skeleton loaders */

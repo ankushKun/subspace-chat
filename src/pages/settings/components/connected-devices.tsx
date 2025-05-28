@@ -23,7 +23,8 @@ interface ConnectedDevice {
 
 export default function ConnectedDevices() {
     // address will be the main account address, originalAddress will be the local device address in case using scanned jwk
-    const { originalAddress, address, connected, connectionStrategy, actions: walletActions } = useWallet()
+    const { address, originalAddress, connected, connectionStrategy, actions: walletActions } = useWallet()
+    console.log(address, originalAddress)
     const subspace = useSubspace()
     const [devices, setDevices] = useState<ConnectedDevice[]>([])
     const [delegationDetails, setDelegationDetails] = useState<DelegationDetails | null>(null)
@@ -39,87 +40,93 @@ export default function ConnectedDevices() {
 
     // Function to refresh delegation status and update UI
     const refreshDelegationStatus = async () => {
-        // For scanned JWK: address = main account, originalAddress = local device
-        // For other strategies: address = current account, originalAddress may not exist
-        const mainAccountAddress = address || originalAddress
-        const currentDeviceAddress = connectionStrategy === ConnectionStrategies.ScannedJWK ? originalAddress : address
-
-        if (!mainAccountAddress) return
+        if (!address) return
 
         try {
-            // Always get delegation details using the main account address
-            const details = await subspace.user.getDelegationDetails({ userId: address })
-            setDelegationDetails(details)
-
-            // Build devices list based on delegation info
             const devicesList: ConnectedDevice[] = []
 
-            if (details) {
-                if (details.isDelegatee) {
-                    // Current user is on mobile (delegated device)
-                    // Show mobile as current, desktop as other device
-                    devicesList.push({
-                        id: 'current',
-                        name: 'Mobile PWA',
-                        type: 'mobile',
-                        lastActive: 'Active now',
-                        isCurrent: true,
-                        address: currentDeviceAddress || mainAccountAddress
-                    })
-
-                    // Show the original (desktop) device
-                    devicesList.push({
-                        id: 'original',
-                        name: 'Subspace Desktop',
-                        type: 'desktop',
-                        lastActive: 'Connected',
-                        isCurrent: false,
-                        address: details.originalId
-                    })
-                } else if (details.delegatedId) {
-                    // Current user is on desktop (original device) and has a mobile device connected
-                    // Show desktop as current, mobile as other device
-                    devicesList.push({
-                        id: 'current',
-                        name: 'Subspace Desktop',
-                        type: 'desktop',
-                        lastActive: 'Active now',
-                        isCurrent: true,
-                        address: currentDeviceAddress || mainAccountAddress
-                    })
-
-                    // Show the delegated (mobile) device
-                    devicesList.push({
-                        id: 'delegated',
-                        name: 'Mobile PWA',
-                        type: 'mobile',
-                        lastActive: 'Connected',
-                        isCurrent: false,
-                        address: details.delegatedId
-                    })
-                } else {
-                    // No delegation, just show current device
-                    const currentDeviceType = connectionStrategy === ConnectionStrategies.ScannedJWK ? 'mobile' : 'desktop'
-                    devicesList.push({
-                        id: 'current',
-                        name: currentDeviceType === 'mobile' ? 'Mobile PWA' : 'Subspace Desktop',
-                        type: currentDeviceType,
-                        lastActive: 'Active now',
-                        isCurrent: true,
-                        address: currentDeviceAddress || mainAccountAddress
-                    })
-                }
-            } else {
-                // No delegation details, just show current device
-                const currentDeviceType = connectionStrategy === ConnectionStrategies.ScannedJWK ? 'mobile' : 'desktop'
+            // Rule 1: If originalAddress != address and both exist, account is delegated on mobile
+            if (originalAddress && originalAddress !== address) {
+                // This is a delegated account used on mobile
+                // Show desktop (main account) and mobile (delegated account)
                 devicesList.push({
-                    id: 'current',
-                    name: currentDeviceType === 'mobile' ? 'Mobile PWA' : 'Subspace Desktop',
-                    type: currentDeviceType,
+                    id: 'desktop',
+                    name: 'Subspace Desktop',
+                    type: 'desktop',
+                    lastActive: 'Connected',
+                    isCurrent: false,
+                    address: address // main account address
+                })
+
+                devicesList.push({
+                    id: 'mobile',
+                    name: 'Mobile PWA',
+                    type: 'mobile',
                     lastActive: 'Active now',
                     isCurrent: true,
-                    address: currentDeviceAddress || mainAccountAddress
+                    address: originalAddress // delegated address
                 })
+
+                // Set delegation details for UI state
+                setDelegationDetails({
+                    isDelegatee: true,
+                    originalId: address,
+                    delegatedId: originalAddress
+                })
+            } else {
+                // Rule 2: originalAddress doesn't exist, fetch delegation details
+                const details = await subspace.user.getDelegationDetails({ userId: address })
+                setDelegationDetails(details)
+
+                // Always show current device first
+                devicesList.push({
+                    id: 'current',
+                    name: isMobileDevice ? 'Mobile PWA' : 'Subspace Desktop',
+                    type: isMobileDevice ? 'mobile' : 'desktop',
+                    lastActive: 'Active now',
+                    isCurrent: true,
+                    address: address
+                })
+
+                // Show the other device if delegation exists
+                if (details) {
+                    if (details.isDelegatee && !isMobileDevice) {
+                        // Current device is desktop but it's actually a delegated account
+                        // This shouldn't happen in normal flow, but handle it
+                        devicesList[0].address = details.delegatedId || address
+
+                        // Add the original desktop device
+                        devicesList.push({
+                            id: 'original',
+                            name: 'Subspace Desktop',
+                            type: 'desktop',
+                            lastActive: 'Connected',
+                            isCurrent: false,
+                            address: details.originalId
+                        })
+                    } else if (details.delegatedId && !isMobileDevice) {
+                        // Current is desktop (main account), add the delegated mobile
+                        devicesList.push({
+                            id: 'delegated',
+                            name: 'Mobile PWA',
+                            type: 'mobile',
+                            lastActive: 'Connected',
+                            isCurrent: false,
+                            address: details.delegatedId
+                        })
+                    } else if (details.isDelegatee && isMobileDevice) {
+                        // Current device is mobile and it's delegated
+                        // Add the original desktop device
+                        devicesList.push({
+                            id: 'original',
+                            name: 'Subspace Desktop',
+                            type: 'desktop',
+                            lastActive: 'Connected',
+                            isCurrent: false,
+                            address: details.originalId
+                        })
+                    }
+                }
             }
 
             setDevices(devicesList)
@@ -129,15 +136,35 @@ export default function ConnectedDevices() {
         }
     }
 
+    // Check delegation details and update wallet state (similar to main app logic)
+    useEffect(() => {
+        console.log("connectionStrategy", connectionStrategy, connected, address)
+        if (!connected || !address) return
+        (async () => {
+            if ((connectionStrategy === ConnectionStrategies.ScannedJWK) && address) {
+                const delegationDetails = await subspace.user.getDelegationDetails({ userId: address })
+                console.log("Delegation details in settings:", delegationDetails)
+                // If the scanned address has a delegation and we should be using the delegated address
+                if (delegationDetails && delegationDetails.isDelegatee && delegationDetails.originalId) {
+                    // This means the scanned address is the delegatedId and we should use the originalId
+                    walletActions.updateAddress(delegationDetails.originalId)
+                }
+                if (!delegationDetails?.delegatedId) {
+                    walletActions.disconnect()
+                    toast.error("Account disconnected, please scan the QR code again")
+                }
+            }
+        })()
+    }, [connected, connectionStrategy, address, subspace, walletActions])
+
     // Fetch delegation details when component mounts or address changes
     useEffect(() => {
         refreshDelegationStatus()
-    }, [address, originalAddress, connectionStrategy, subspace])
+    }, [address, originalAddress, connectionStrategy, subspace, isMobileDevice])
 
     // QR Code rotation effect
     useEffect(() => {
         if (!delegateJWK) return
-        console.log("delegateJWK", delegateJWK)
 
         const interval = setInterval(() => {
             const keys = Object.keys(delegateJWK)
@@ -166,7 +193,7 @@ export default function ConnectedDevices() {
 
         // Use the main account address for delegation (the one that owns/delegates)
         // For scanned JWK: address = main account, originalAddress = local device
-        const delegatorAddress = address || originalAddress
+        const delegatorAddress = address
         if (!delegatorAddress) return
 
         const performDelegation = async () => {
@@ -174,6 +201,9 @@ export default function ConnectedDevices() {
                 const success = await subspace.user.delegateUser({ userId: delegateAddress })
                 if (success) {
                     toast.success("Mobile device added successfully")
+                    if (process.env.NODE_ENV === "development") {
+                        console.log(JSON.stringify(delegateJWK))
+                    }
                     // Refresh delegation details and update UI
                     await refreshDelegationStatus()
                     // Don't clear QR generation state - let user close it manually
@@ -191,7 +221,7 @@ export default function ConnectedDevices() {
         }
 
         performDelegation()
-    }, [delegateAddress, originalAddress, address, subspace])
+    }, [delegateAddress, address, subspace])
 
     const getDeviceIcon = (type: string, isCurrent: boolean) => {
         const iconClass = cn(
@@ -233,16 +263,15 @@ export default function ConnectedDevices() {
     }
 
     const handleDisconnectCurrentDevice = async () => {
-        if (!delegationDetails?.isDelegatee) return
+        // Only allow disconnecting current device if it's a delegated mobile device
+        if (!(originalAddress && originalAddress !== address)) return
 
         setIsRemoving(true)
         try {
             const success = await subspace.user.undelegateUser()
             if (success) {
                 toast.success("Device disconnected successfully")
-                // Refresh delegation details before logging out
-                await refreshDelegationStatus()
-                // Since we're disconnecting the current device, log out after a delay
+                // Since we're disconnecting the current delegated device, log out after a delay
                 setTimeout(() => {
                     walletActions.disconnect()
                 }, 1500)
@@ -283,7 +312,7 @@ export default function ConnectedDevices() {
         return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`
     }
 
-    if (!connected || !(address || originalAddress)) {
+    if (!connected || !(address)) {
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
@@ -299,8 +328,8 @@ export default function ConnectedDevices() {
 
     // For scanned JWK: address = main account, originalAddress = local device
     // For other strategies: address = current account, originalAddress may not exist
-    const mainAccountAddress = address || originalAddress
-    const currentDeviceAddress = connectionStrategy === ConnectionStrategies.ScannedJWK ? originalAddress : address
+    const mainAccountAddress = address
+    const currentDeviceAddress = address
 
     return (
         <div className="space-y-8">
@@ -320,16 +349,16 @@ export default function ConnectedDevices() {
                     <span className="text-sm font-medium text-foreground">Connected as</span>
                 </div>
                 <div className="text-sm text-muted-foreground font-mono">
-                    {shortenAddress(mainAccountAddress)}
+                    {shortenAddress(address)}
                 </div>
-                {connectionStrategy === ConnectionStrategies.ScannedJWK && currentDeviceAddress && (
+                {originalAddress && originalAddress !== address && (
                     <div className="text-xs text-muted-foreground mt-1">
-                        Device address: {shortenAddress(currentDeviceAddress)}
+                        Device address: {shortenAddress(originalAddress)}
                     </div>
                 )}
-                {delegationDetails?.isDelegatee && (
+                {originalAddress && originalAddress !== address && (
                     <div className="text-xs text-muted-foreground mt-1">
-                        Delegated from: {shortenAddress(delegationDetails.originalId)}
+                        Delegated from: {shortenAddress(address)}
                     </div>
                 )}
             </div>
@@ -338,7 +367,7 @@ export default function ConnectedDevices() {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-medium text-foreground">Your Devices</h3>
-                    {connectionStrategy !== ConnectionStrategies.ScannedJWK && !delegateJWK && (
+                    {!(originalAddress && originalAddress !== address) && !delegateJWK && (
                         <Button
                             onClick={handleConnectNewDevice}
                             disabled={isConnecting}
@@ -393,7 +422,7 @@ export default function ConnectedDevices() {
                                 </div>
 
                                 {/* Actions */}
-                                {device.isCurrent && delegationDetails?.isDelegatee ? (
+                                {device.isCurrent && (originalAddress && originalAddress !== address) ? (
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -403,7 +432,7 @@ export default function ConnectedDevices() {
                                     >
                                         {isRemoving ? "Disconnecting..." : "Logout"}
                                     </Button>
-                                ) : !device.isCurrent ? (
+                                ) : !device.isCurrent && device.type === 'mobile' ? (
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -435,18 +464,7 @@ export default function ConnectedDevices() {
                         </div>
                         <p className="text-sm text-muted-foreground">
                             Scan this QR code with the Subspace mobile app to connect your device. Once connected, you can close this QR code.
-                            {/* {delegationDetails?.delegatedId === delegateAddress
-                                ? "Your device has been successfully connected. You can now close this QR code."
-                                : "Scan this QR code with the Subspace mobile app to connect your device"
-                            } */}
                         </p>
-                        {/* {delegationDetails?.delegatedId === delegateAddress && (
-                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                                <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                                    ✓ Device successfully connected and ready to use!
-                                </p>
-                            </div>
-                        )} */}
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -463,7 +481,7 @@ export default function ConnectedDevices() {
             )}
 
             {/* Connect New Device Section - Only show when not generating QR */}
-            {!delegateJWK && connectionStrategy !== ConnectionStrategies.ScannedJWK && (
+            {!delegateJWK && !(originalAddress && originalAddress !== address) && (
                 <div className="p-6 rounded-xl border border-dashed border-border/50 bg-muted/20">
                     <div className="text-center space-y-4">
                         <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto">

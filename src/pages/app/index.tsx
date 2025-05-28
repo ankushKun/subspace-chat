@@ -4,7 +4,7 @@ import MemberList from "./components/member-list"
 import MessageList from "./components/message-list"
 import useSubspace, { useMessages, useProfile, useNotifications } from "@/hooks/subspace"
 import { useEffect, useState } from "react"
-import { useWallet } from "@/hooks/use-wallet"
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
 import DMList from "./components/dm-list"
@@ -15,6 +15,7 @@ import { useSwipeable } from 'react-swipeable';
 import WelcomePopup from "@/components/welcome-popup"
 import { useLocation, useNavigate } from "react-router"
 import { useWelcomePopup, type WelcomePopupData } from "@/hooks/use-welcome-popup"
+import { toast } from "sonner"
 
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
   const { showWelcomePopup, welcomeData, showWelcome, hideWelcome } = useWelcomePopup()
 
   const subspace = useSubspace()
-  const { connected, address } = useWallet()
+  const { connected, address, connectionStrategy, actions: walletActions } = useWallet()
   const { actions: serverActions, activeServerId, activeChannelId, servers, serversJoined } = useServer()
   const { actions: profileActions } = useProfile()
   const { actions: messagesActions } = useMessages()
@@ -50,6 +51,26 @@ export default function App() {
       navigate('/app', { replace: true })
     }
   }, [location.search, connected, navigate, showWelcome])
+
+  useEffect(() => {
+    console.log("connectionStrategy", connectionStrategy, connected, address)
+    if (!connected || !address) return
+    (async () => {
+      if ((connectionStrategy === ConnectionStrategies.ScannedJWK) && address) {
+        const delegationDetails = await subspace.user.getDelegationDetails({ userId: address })
+        console.log(delegationDetails)
+        // If the scanned address has a delegation and we should be using the delegated address
+        if (delegationDetails && delegationDetails.isDelegatee && delegationDetails.originalId) {
+          // This means the scanned address is the delegatedId and we should use the originalId
+          walletActions.updateAddress(delegationDetails.originalId)
+        }
+        if (!delegationDetails?.delegatedId) {
+          walletActions.disconnect()
+          toast.error("Account disconnected, please scan the QR code again")
+        }
+      }
+    })()
+  }, [connected, connectionStrategy, address])
 
   useEffect(() => {
     if (!connected || !address) {

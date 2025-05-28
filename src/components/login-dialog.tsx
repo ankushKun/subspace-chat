@@ -85,25 +85,6 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
         }
     }, [scanProgress, scannedJWK, walletActions.connect])
 
-    useEffect(() => {
-        if (!connected || !address) return
-        (async () => {
-            if (connectionStrategy === ConnectionStrategies.ScannedJWK && address) {
-                const delegationDetails = await subspace.user.getDelegationDetails({ userId: address })
-                console.log(delegationDetails)
-                // If the scanned address has a delegation and we should be using the delegated address
-                if (delegationDetails && !delegationDetails.isDelegatee && delegationDetails.originalId) {
-                    // This means the scanned address is the delegatedId and we should use the originalId
-                    walletActions.updateAddress(delegationDetails.originalId)
-                }
-                if (!delegationDetails.delegatedId) {
-                    walletActions.disconnect()
-                    toast.error("Account disconnected, please scan the QR code again")
-                }
-            }
-        })()
-    }, [connected, connectionStrategy, address])
-
     return (
         <Dialog onOpenChange={(open) => {
             if (!open) {
@@ -176,8 +157,22 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             <span className="text-muted-foreground/50 text-xs">(coming soon)</span>
                             <img src={metamask} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
                         </Button>
-                    </>}
 
+                        {process.env.NODE_ENV === "development" && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between mt-5"
+                            onClick={() => {
+                                // prompt input for a jwk string
+                                const jwk = prompt("Enter the JWK string")
+                                if (jwk) {
+                                    const jwkObj = JSON.parse(jwk)
+                                    jwkObj.kty = "RSA"
+                                    jwkObj.e = "AQAB"
+                                    walletActions.connect(ConnectionStrategies.ScannedJWK, jwkObj)
+                                }
+                            }}
+                        >
+                            simulate delegation <span className="text-muted-foreground/50 text-xs">(dev only)</span>
+                        </Button>}
+                    </>}
                 </DialogDescription>
             </DialogContent>
         </Dialog>

@@ -293,8 +293,8 @@ export default function UserProfile({ className }: UserProfileProps) {
 
             {/* Profile Settings Dialog */}
             <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden" removeCloseButton>
-                    <DialogHeader>
+                <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-hidden flex flex-col" removeCloseButton>
+                    <DialogHeader className="flex-shrink-0">
                         <DialogTitle className="flex items-center justify-between">
                             <span>Profile Settings</span>
                             {!isEditing ? (
@@ -305,7 +305,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                     className="flex items-center gap-2"
                                 >
                                     <Edit2 className="h-4 w-4" />
-                                    Edit
+                                    <span className="hidden sm:inline">Edit</span>
                                 </Button>
                             ) : (
                                 <div className="flex items-center gap-2">
@@ -317,7 +317,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                         className="flex items-center gap-2"
                                     >
                                         <X className="h-4 w-4" />
-                                        Cancel
+                                        <span className="hidden sm:inline">Cancel</span>
                                     </Button>
                                     <Button
                                         size="sm"
@@ -326,7 +326,12 @@ export default function UserProfile({ className }: UserProfileProps) {
                                         className="flex items-center gap-2"
                                     >
                                         <Save className="h-4 w-4" />
-                                        {isUploadingPfp ? "Uploading..." : isSaving ? "Saving..." : "Save"}
+                                        <span className="hidden sm:inline">
+                                            {isUploadingPfp ? "Uploading..." : isSaving ? "Saving..." : "Save"}
+                                        </span>
+                                        <span className="sm:hidden">
+                                            {isUploadingPfp ? "..." : isSaving ? "..." : "Save"}
+                                        </span>
                                     </Button>
                                 </div>
                             )}
@@ -336,12 +341,13 @@ export default function UserProfile({ className }: UserProfileProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
                         <Tabs defaultValue="global" className="w-full">
                             <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="global">Global Profile</TabsTrigger>
-                                <TabsTrigger value="server" disabled={!activeServerId}>
-                                    Server Profile
+                                <TabsTrigger value="global" className="text-xs sm:text-sm">Global Profile</TabsTrigger>
+                                <TabsTrigger value="server" disabled={!activeServerId} className="text-xs sm:text-sm">
+                                    <span className="hidden sm:inline">Server Profile</span>
+                                    <span className="sm:hidden">Server</span>
                                     {!activeServerId && <span className="ml-1 text-xs">(No server)</span>}
                                 </TabsTrigger>
                             </TabsList>
@@ -349,7 +355,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                             <TabsContent value="global" className="space-y-6 mt-6">
                                 {/* Profile Picture Section */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
                                         <div className="relative group">
                                             <div className={`w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center transition-all duration-200 ${isEditing
                                                 ? 'border-2 border-dashed border-primary/40 group-hover:border-primary/60 group-hover:scale-105 cursor-pointer shadow-lg group-hover:shadow-xl'
@@ -399,7 +405,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                 </>
                                             )}
                                         </div>
-                                        <div className="flex-1">
+                                        <div className="flex-1 text-center sm:text-left">
                                             <h3 className="text-lg font-semibold">Profile Picture</h3>
                                             <p className="text-sm text-muted-foreground">
                                                 {isEditing
@@ -427,7 +433,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                 <div className="space-y-2">
                                     <Label className="text-base font-medium">Primary Name</Label>
                                     <div className="p-3 bg-muted/30 rounded-md border">
-                                        <p className="text-sm">
+                                        <p className="text-sm break-all">
                                             {profile?.primaryName || (
                                                 <span className="text-muted-foreground italic">No primary name set</span>
                                             )}
@@ -469,7 +475,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                         {/* Server Info */}
                                         <div className="p-3 bg-muted/30 rounded-md border">
                                             <h3 className="font-medium text-sm text-muted-foreground">Current Server</h3>
-                                            <p className="text-base font-medium">{server.name}</p>
+                                            <p className="text-base font-medium break-all">{server.name}</p>
                                         </div>
 
                                         {/* Server Nickname Section */}
@@ -487,7 +493,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                 />
                                             ) : (
                                                 <div className="p-3 bg-muted/30 rounded-md border">
-                                                    <p className="text-sm">
+                                                    <p className="text-sm break-all">
                                                         {serverNickname || (
                                                             <span className="text-muted-foreground italic">No nickname set</span>
                                                         )}
@@ -518,10 +524,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                         </Tabs>
                     </div>
 
-                    <DialogFooter>
-                        {/* <DialogCancel onClick={() => setProfileDialogOpen(false)}>
-                            Close
-                        </DialogCancel> */}
+                    <DialogFooter className="px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0">
                         <DialogClose className="cursor-pointer">
                             Close
                         </DialogClose>

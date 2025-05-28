@@ -14,6 +14,7 @@ export enum ConnectionStrategies {
 
 interface WalletState {
     address: string;
+    originalAddress: string;
     connected: boolean;
     connectionStrategy: ConnectionStrategies | null;
     wanderInstance: WanderConnect | null // only exists if connectionStrategy is WanderConnect
@@ -33,6 +34,7 @@ interface WalletActions {
 export const useWallet = create<WalletState>()(persist((set, get) => ({
     // state
     address: "",
+    originalAddress: "",
     connected: false,
     connectionStrategy: null,
     wanderInstance: null,
@@ -40,7 +42,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
 
     actions: {
         setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
-        updateAddress: (address: string) => set({ address }),
+        updateAddress: (address: string) => set((state) => ({ address, originalAddress: state.address })),
 
         connect: async (strategy: ConnectionStrategies, jwk?: JWKInterface) => {
 

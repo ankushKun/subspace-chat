@@ -12,6 +12,7 @@ import type { JWKInterface } from "arweave/web/lib/wallet";
 import { toast } from "sonner";
 import { Progress } from "./ui/progress";
 import { useIsMobileDevice } from "@/hooks/use-mobile"
+import useSubspace from "@/hooks/subspace"
 
 const totalScanSteps = 7;
 
@@ -19,8 +20,9 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
     const [scanning, setScanning] = useState(false)
     const [scannedJWK, setScannedJWK] = useState<Record<string, any>>({})
     const [scanProgress, setScanProgress] = useState(0)
-    const { connect } = useWallet((state) => state.actions)
+    const { address, actions: walletActions, connected, connectionStrategy } = useWallet()
     const isMobileDevice = useIsMobileDevice()
+    const subspace = useSubspace()
 
     function handleScan(detectedCodes: IDetectedBarcode[]) {
         const raw = detectedCodes[0]?.rawValue
@@ -58,7 +60,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
             if (allKeysPresent) {
                 console.log("All required keys are present, connecting...")
                 try {
-                    connect(ConnectionStrategies.ScannedJWK, completeJWK)
+                    walletActions.connect(ConnectionStrategies.ScannedJWK, completeJWK)
                     toast.success("Wallet connected successfully!")
                     // Reset state after successful connection
                     setScanning(false)
@@ -81,7 +83,26 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                 setScanProgress(0)
             }
         }
-    }, [scanProgress, scannedJWK, connect])
+    }, [scanProgress, scannedJWK, walletActions.connect])
+
+    useEffect(() => {
+        if (!connected || !address) return
+        (async () => {
+            if (connectionStrategy === ConnectionStrategies.ScannedJWK && address) {
+                const delegationDetails = await subspace.user.getDelegationDetails({ userId: address })
+                console.log(delegationDetails)
+                // If the scanned address has a delegation and we should be using the delegated address
+                if (delegationDetails && !delegationDetails.isDelegatee && delegationDetails.originalId) {
+                    // This means the scanned address is the delegatedId and we should use the originalId
+                    walletActions.updateAddress(delegationDetails.originalId)
+                }
+                if (!delegationDetails.delegatedId) {
+                    walletActions.disconnect()
+                    toast.error("Account disconnected, please scan the QR code again")
+                }
+            }
+        })()
+    }, [connected, connectionStrategy, address])
 
     return (
         <Dialog onOpenChange={(open) => {
@@ -131,14 +152,14 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                         </Button>
                     </> : <>
                         {window && window.arweaveWallet && <Button variant="ghost" className="text-start group justify-start border border-border/50 h-12"
-                            onClick={() => connect(ConnectionStrategies.ArWallet)}
+                            onClick={() => walletActions.connect(ConnectionStrategies.ArWallet)}
                         >
                             <div>Arweave Wallet</div>
                             <span className="text-muted-foreground/50">(wallet extension)</span>
                             <img src={arweave} className="w-8 h-8 p-0.5 ml-auto aspect-square opacity-60 group-hover:opacity-100 transition-opacity duration-200 invert dark:invert-0" />
                         </Button>}
                         <Button variant="ghost" className="text-start justify-start border border-border/50 h-12"
-                            onClick={() => connect(ConnectionStrategies.WanderConnect)}
+                            onClick={() => walletActions.connect(ConnectionStrategies.WanderConnect)}
                         >
                             <div>Wander Connect</div>
                             <span className="text-muted-foreground/50">(web2 auth)</span>

@@ -318,11 +318,12 @@ app.get("/check-delegation", function(req, res)
 
     -- Check if this ID is a delegatee
     if Delegations[userId] then
-        return res:json({
+        res:json({
             isDelegatee = true,
             originalId = Delegations[userId],
             delegatedId = userId
         })
+        return
     end
 
     -- Check if this ID is a delegator
@@ -335,15 +336,16 @@ app.get("/check-delegation", function(req, res)
     end
 
     if delegatedId then
-        return res:json({
+        res:json({
             isDelegatee = false,
             originalId = convertedId,
             delegatedId = delegatedId
         })
+        return
     end
 
     -- No delegation found
-    return res:json({
+    res:json({
         isDelegatee = false,
         originalId = convertedId,
         delegatedId = nil

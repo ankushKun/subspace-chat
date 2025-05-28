@@ -7,6 +7,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils";
 import UserProfile from "./user-profile";
 import InboxComponent from "@/components/inbox";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type DirectMessage = {
     userId: string;
@@ -99,6 +100,7 @@ const DMItem = ({
 
 export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
     const [searchQuery, setSearchQuery] = useState("")
+    const isMobile = useIsMobile()
 
     // Mock DMs data - replace with real data from your state management
     const mockDMs: DirectMessage[] = [
@@ -150,7 +152,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                     <h2 className="text-lg font-semibold text-foreground">
                         Direct Messages
                     </h2>
-                    <InboxComponent className="relative ml-auto" />
+                    {isMobile && <InboxComponent className="relative ml-auto" />}
                 </div>
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-border to-transparent absolute bottom-0" />
             </div>

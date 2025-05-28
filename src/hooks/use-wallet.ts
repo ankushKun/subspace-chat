@@ -108,41 +108,37 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                         if (state.connected && state.connectionStrategy !== ConnectionStrategies.WanderConnect)
                             state.actions.disconnect()
                         if (state.wanderInstance) {
-                            state.wanderInstance.open()
-                            return state
+                            state.wanderInstance.destroy()
                         }
-                        else {
-                            const wander = new WanderConnect({
-                                clientId: "FREE_TRIAL",
-                                button: {
-                                    position: "static",
-                                    theme: "dark"
-                                },
-                                onAuth: (auth) => {
-                                    if (!!auth) {
-                                        console.log(window.arweaveWallet)
-                                        window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY"]).then(() => {
-                                            window.arweaveWallet.getActiveAddress().then((address) => {
-                                                set((state) => {
-                                                    return {
-                                                        address: address,
-                                                        connected: true,
-                                                        connectionStrategy: ConnectionStrategies.WanderConnect,
-                                                        wanderInstance: wander,
-                                                        jwk: null
-                                                    }
-                                                })
-                                            })
-                                        })
-                                    }
-                                }
-                            })
 
-                            wander.open();
-                            return {
-                                wanderInstance: wander
+                        const wander = new WanderConnect({
+                            clientId: "FREE_TRIAL",
+                            button: {
+                                position: "static",
+                                theme: "dark"
+                            },
+                            onAuth: (auth) => {
+                                if (!!auth) {
+                                    window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY"]).then(() => {
+                                        window.arweaveWallet.getActiveAddress().then((address) => {
+                                            set((state) => {
+                                                return {
+                                                    address: address,
+                                                    connected: true,
+                                                    connectionStrategy: ConnectionStrategies.WanderConnect,
+                                                    wanderInstance: wander,
+                                                    jwk: null
+                                                }
+                                            })
+                                            wander.close();
+                                        })
+                                    })
+                                }
                             }
-                        }
+                        })
+                        wander.open();
+                        return { wanderInstance: wander }
+
                     })
                     break;
                 }

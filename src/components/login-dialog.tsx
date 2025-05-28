@@ -20,7 +20,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
     const [scanning, setScanning] = useState(false)
     const [scannedJWK, setScannedJWK] = useState<Record<string, any>>({})
     const [scanProgress, setScanProgress] = useState(0)
-    const { address, actions: walletActions, connected, connectionStrategy } = useWallet()
+    const { address, actions: walletActions, connected, connectionStrategy, wanderInstance } = useWallet()
     const isMobileDevice = useIsMobileDevice()
     const subspace = useSubspace()
 
@@ -140,7 +140,10 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             <img src={arweave} className="w-8 h-8 p-0.5 ml-auto aspect-square opacity-60 group-hover:opacity-100 transition-opacity duration-200 invert dark:invert-0" />
                         </Button>}
                         <Button variant="ghost" className="text-start justify-start border border-border/50 h-12"
-                            onClick={() => walletActions.connect(ConnectionStrategies.WanderConnect)}
+                            onClick={() => {
+                                if (wanderInstance) wanderInstance.open()
+                                else walletActions.connect(ConnectionStrategies.WanderConnect)
+                            }}
                         >
                             <div>Wander Connect</div>
                             <span className="text-muted-foreground/50">(web2 auth)</span>

@@ -17,6 +17,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import InboxComponent from "@/components/inbox"
 import NoChannel from "./no-channel"
+import { useIsMobile, useIsMobileDevice } from "@/hooks/use-mobile"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
     channelName?: string;
@@ -644,6 +645,7 @@ const MessageListSkeleton = () => {
 
 interface MessageInputRef {
     focus: () => void;
+    blur: () => void;
 }
 
 const MessageInput = React.forwardRef<MessageInputRef, {
@@ -666,16 +668,31 @@ const MessageInput = React.forwardRef<MessageInputRef, {
     const mentionsInputRef = useRef<any>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
     const { profiles } = useProfile()
+    const isMobile = useIsMobile()
+    const isMobileDevice = useIsMobileDevice()
 
-    // Expose focus method to parent component
+    // Expose focus and blur methods to parent component
     React.useImperativeHandle(ref, () => ({
         focus: () => {
+            // Don't autofocus on mobile devices
+            if (isMobile || isMobileDevice) return
+
             // Focus the MentionsInput by finding its textarea element
             const mentionsContainer = mentionsInputRef.current
             if (mentionsContainer) {
                 const textarea = mentionsContainer.querySelector('textarea')
                 if (textarea) {
                     textarea.focus()
+                }
+            }
+        },
+        blur: () => {
+            // Blur the MentionsInput by finding its textarea element
+            const mentionsContainer = mentionsInputRef.current
+            if (mentionsContainer) {
+                const textarea = mentionsContainer.querySelector('textarea')
+                if (textarea) {
+                    textarea.blur()
                 }
             }
         }
@@ -1063,7 +1080,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         {/* Text input */}
                         <div className="flex relative items-center min-h-[20px] z-0 grow" ref={mentionsInputRef}>
                             <MentionsInput
-                                autoFocus
+                                autoFocus={!isMobile && !isMobileDevice}
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
                                 onKeyDown={handleKeyPress}
@@ -1297,12 +1314,17 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     const subspace = useSubspace()
     const [replyingTo, setReplyingTo] = useState<Message | null>(null)
     const { address } = useWallet()
+    const isMobile = useIsMobile()
+    const isMobileDevice = useIsMobileDevice()
 
     // State for editing messages
     const [editingMessage, setEditingMessage] = useState<Message | null>(null)
     const [editedContent, setEditedContent] = useState("")
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [isDeletingMessage, setIsDeletingMessage] = useState(false)
+
+    // Mobile-specific state for viewport height handling
+    const [viewportHeight, setViewportHeight] = useState<number | null>(null)
 
     // Track previous message count to detect first-time loading
     const prevMessageCountRef = useRef<number>(0)
@@ -1375,6 +1397,66 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             }, 200)
         }
     }, [loadingMessages, messagesInChannel.length])
+
+    // Mobile-specific: Handle scroll to blur input
+    useEffect(() => {
+        if (!isMobile && !isMobileDevice) return
+
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        const handleScroll = () => {
+            // Blur the message input when scrolling on mobile
+            messageInputRef.current?.blur()
+        }
+
+        container.addEventListener('scroll', handleScroll, { passive: true })
+        return () => container.removeEventListener('scroll', handleScroll)
+    }, [isMobile, isMobileDevice])
+
+    // Mobile-specific: Handle viewport height changes for keyboard
+    useEffect(() => {
+        if (!isMobile && !isMobileDevice) return
+
+        const handleResize = () => {
+            // Use visualViewport if available (better for mobile keyboards)
+            if (window.visualViewport) {
+                const newHeight = window.visualViewport.height
+                console.log('🔍 Visual viewport height:', newHeight)
+                setViewportHeight(newHeight)
+            } else {
+                const newHeight = window.innerHeight
+                console.log('🔍 Window inner height:', newHeight)
+                setViewportHeight(newHeight)
+            }
+        }
+
+        const handleVisualViewportChange = () => {
+            if (window.visualViewport) {
+                const newHeight = window.visualViewport.height
+                console.log('🔍 Visual viewport change:', newHeight)
+                setViewportHeight(newHeight)
+            }
+        }
+
+        // Set initial viewport height
+        handleResize()
+
+        // Listen for viewport changes
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleVisualViewportChange)
+        } else {
+            window.addEventListener('resize', handleResize)
+        }
+
+        return () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
+            } else {
+                window.removeEventListener('resize', handleResize)
+            }
+        }
+    }, [isMobile, isMobileDevice])
 
     // Get current channel info
     const currentChannel = useMemo(() => {
@@ -1563,12 +1645,26 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             <div
                 {...props}
                 className={cn(
-                    "flex flex-col h-full relative",
-                    "bg-gradient-to-b from-background via-background/98 to-background/95",
+                    "flex flex-col relative",
+                    // Conditionally apply h-full only when not on mobile with keyboard
+                    (isMobile || isMobileDevice) && viewportHeight ? "" : "h-full",
+                    "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                     // Subtle pattern overlay
                     "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                     props.className
                 )}
+                style={{
+                    // Use viewport height on mobile to handle keyboard properly
+                    ...(isMobile || isMobileDevice) && viewportHeight ? (() => {
+                        console.log('🔍 Applying height to no-channel container:', viewportHeight)
+                        return {
+                            height: `${viewportHeight}px`,
+                            maxHeight: `${viewportHeight}px`,
+                            overflow: 'hidden'
+                        }
+                    })() : {},
+                    ...props.style
+                }}
             >
                 {/* Ambient glow at top */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
@@ -1585,12 +1681,26 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
         <div
             {...props}
             className={cn(
-                "flex flex-col h-full relative",
+                "flex flex-col relative",
+                // Conditionally apply h-full only when not on mobile with keyboard
+                (isMobile || isMobileDevice) && viewportHeight ? "" : "h-full",
                 "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                 props.className
             )}
+            style={{
+                // Use viewport height on mobile to handle keyboard properly
+                ...(isMobile || isMobileDevice) && viewportHeight ? (() => {
+                    console.log('🔍 Applying height to main container:', viewportHeight)
+                    return {
+                        height: `${viewportHeight}px`,
+                        maxHeight: `${viewportHeight}px`,
+                        overflow: 'hidden'
+                    }
+                })() : {},
+                ...props.style
+            }}
         >
             {/* Ambient glow at top */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
@@ -1605,7 +1715,17 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             {/* Messages container */}
             <div
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
+                className={cn(
+                    "flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
+                    // On mobile with keyboard, ensure we don't exceed container bounds
+                    (isMobile || isMobileDevice) && viewportHeight && "max-h-full"
+                )}
+                style={{
+                    // Additional mobile constraints
+                    ...(isMobile || isMobileDevice) && viewportHeight ? {
+                        maxHeight: 'calc(100% - 120px)', // Account for header and input
+                    } : {}
+                }}
             >
                 {loadingMessages && individualMessages.length === 0 ? (
                     <>

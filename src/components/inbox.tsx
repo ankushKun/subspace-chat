@@ -110,7 +110,6 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
                 const result = await subspace.user.getNotifications({ userId: address });
 
                 if (result && Array.isArray(result)) {
-                    console.log(result);
                     // Mark new notifications as unread (read: 0)
                     const newNotifications = result.map(notification => ({
                         ...notification,

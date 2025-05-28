@@ -1,14 +1,13 @@
-import { useParams, useNavigate } from "react-router"
 import { useEffect, useState } from "react"
+import { useParams, useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
-import { Loader2, Users, ArrowLeft, CheckCircle, AlertCircle } from "lucide-react"
-import { toast } from "sonner"
-import useSubspace from "@/hooks/subspace"
+import { ArrowLeft, AlertCircle, Users, Shield, Zap, CheckCircle, Loader2 } from "lucide-react"
 import { useWallet } from "@/hooks/use-wallet"
+import useSubspace from "@/hooks/subspace"
 import { useServer } from "@/hooks/subspace/server"
 import type { ServerDetailsResponse } from "@/types/subspace"
+import { toast } from "sonner"
 import LoginDialog from "@/components/login-dialog"
-import { updateMetaTags, resetMetaTags } from "@/utils/meta"
 
 export default function Invite() {
     const { invite } = useParams()
@@ -34,48 +33,7 @@ export default function Invite() {
         }
 
         fetchServerInfo()
-
-        // Set initial meta tags for invite
-        updateMetaTags({
-            title: `Join Server - Subspace`,
-            description: `You've been invited to join a server on Subspace, the intergalactic communication app built on the Permaweb.`,
-            url: window.location.href,
-            type: 'website',
-            siteName: 'Subspace',
-            image: `${window.location.origin}/invite-og-default.svg`,
-            imageAlt: 'Subspace Server Invite',
-            imageWidth: '1200',
-            imageHeight: '630'
-        })
-
-        // Cleanup function to reset meta tags when component unmounts
-        return () => {
-            resetMetaTags()
-        }
     }, [invite])
-
-    // Update meta tags when server info is loaded
-    useEffect(() => {
-        if (serverInfo && invite) {
-            const serverName = serverInfo.name || `Server ${invite.substring(0, 8)}...`
-            const memberText = serverInfo.member_count === 1 ? 'member' : 'members'
-            const serverImage = serverInfo.icon
-                ? `https://arweave.net/${serverInfo.icon}`
-                : `${window.location.origin}/invite-og-default.svg`
-
-            updateMetaTags({
-                title: `Join ${serverName} - Subspace`,
-                description: `You've been invited to join "${serverName}" on Subspace. ${serverInfo.member_count} ${memberText} • Decentralized communication on the Permaweb`,
-                image: serverImage,
-                url: window.location.href,
-                type: 'website',
-                siteName: 'Subspace',
-                imageAlt: `${serverName} server on Subspace`,
-                imageWidth: serverInfo.icon ? '400' : '1200',
-                imageHeight: serverInfo.icon ? '400' : '630'
-            })
-        }
-    }, [serverInfo, invite])
 
     const fetchServerInfo = async () => {
         if (!invite) return

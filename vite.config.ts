@@ -17,7 +17,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), nodePolyfills(), VitePWA({
     registerType: 'autoUpdate',
     injectRegister: 'auto',
-    includeAssets: ['/icon-192.png', '/icon-512.png', '/icon-192-maskable.png', '/icon-512-maskable.png', '/apple-touch-icon.png', '/favicon.ico', '/notification.wav'],
+    includeAssets: ['/s.png', '/icon-192.png', '/icon-512.png', '/icon-192-maskable.png', '/icon-512-maskable.png', '/apple-touch-icon.png', '/favicon.ico', '/notification.wav'],
     devOptions: {
       enabled: true,
     },
@@ -98,6 +98,10 @@ export default defineConfig({
           sizes: '192x192',
           type: 'image/png',
           purpose: 'maskable',
+        }, {
+          src: './s.png',
+          sizes: '800x800',
+          type: 'image/png',
         }
       ],
     }

@@ -1,5 +1,5 @@
 import { useServer } from "@/hooks/subspace/server"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import useSubspace, { useProfile, useNotifications } from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { type Profile, type Server } from "@/types/subspace"
@@ -226,6 +226,11 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
     const [joinDialogOpen, setJoinDialogOpen] = useState(false)
     const [popoverOpen, setPopoverOpen] = useState(false)
 
+    // Server preview state
+    const [isLoadingServerDetails, setIsLoadingServerDetails] = useState(false)
+    const [serverDetails, setServerDetails] = useState<any>(null)
+    const [serverDetailsError, setServerDetailsError] = useState("")
+
     // Create server state
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [serverName, setServerName] = useState("")
@@ -237,6 +242,52 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
     const { address } = useWallet()
     const { actions: serverActions, serversJoined } = useServer()
 
+    // Debounced server details fetching
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (joinInput.trim() && getInputValidation().isValid) {
+                fetchServerDetails()
+            } else {
+                setServerDetails(null)
+                setServerDetailsError("")
+            }
+        }, 500) // 500ms debounce
+
+        return () => clearTimeout(timeoutId)
+    }, [joinInput])
+
+    const fetchServerDetails = async () => {
+        if (!joinInput.trim()) return
+
+        // Extract server ID from input
+        let serverId = joinInput.trim()
+        if (serverId.includes('/')) {
+            const parts = serverId.split('/')
+            serverId = parts[parts.length - 1]
+        }
+
+        setIsLoadingServerDetails(true)
+        setServerDetailsError("")
+        setServerDetails(null)
+
+        try {
+            const details = await subspace.server.getServerDetails({ serverId })
+            if (details) {
+                setServerDetails(details)
+                setServerDetailsError("")
+            } else {
+                setServerDetailsError("Server not found or invite is invalid")
+                setServerDetails(null)
+            }
+        } catch (error) {
+            console.error("Error fetching server details:", error)
+            setServerDetailsError("Failed to load server information")
+            setServerDetails(null)
+        } finally {
+            setIsLoadingServerDetails(false)
+        }
+    }
+
     const handleJoinServer = async () => {
         if (!joinInput.trim()) {
             setJoinError("Please enter a server ID or invite link")
@@ -245,6 +296,11 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
 
         if (!address) {
             setJoinError("Please connect your wallet first")
+            return
+        }
+
+        if (!serverDetails) {
+            setJoinError("Server details not loaded. Please wait for the server to load.")
             return
         }
 
@@ -259,19 +315,6 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
             if (serverId.includes('/')) {
                 const parts = serverId.split('/')
                 serverId = parts[parts.length - 1]
-            }
-
-            // Validate server ID length (must be exactly 43 characters)
-            if (serverId.length !== 43) {
-                setJoinError("Server ID must be exactly 43 characters long")
-                return
-            }
-
-            // Validate server ID format (alphanumeric and some special characters)
-            const serverIdRegex = /^[A-Za-z0-9_-]+$/
-            if (!serverIdRegex.test(serverId)) {
-                setJoinError("Invalid server ID format")
-                return
             }
 
             // Check if user is already in this server
@@ -290,38 +333,20 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                     serverActions.setServersJoined(address, [...currentServers, serverId])
                 }
 
-                // Fetch server details if not already cached
-                try {
-                    const serverDetails = await subspace.server.getServerDetails({ serverId })
-                    if (serverDetails) {
-                        // Transform ServerDetailsResponse to Server by adding serverId
-                        const server: Server = {
-                            serverId,
-                            ...serverDetails
-                        }
-                        serverActions.addServer(server)
+                // Use the already fetched server details
+                const server: Server = {
+                    serverId,
+                    ...serverDetails
+                }
+                serverActions.addServer(server)
 
-                        // Show welcome popup if callback provided
-                        if (onServerJoined) {
-                            onServerJoined({
-                                serverId,
-                                serverName: serverDetails.name || `Server ${serverId.substring(0, 8)}...`,
-                                memberCount: serverDetails.member_count || 0
-                            })
-                        }
-                    }
-                } catch (error) {
-                    console.warn("Failed to fetch server details:", error)
-                    // Don't show error to user as the join was successful
-
-                    // Show welcome popup with basic info if callback provided
-                    if (onServerJoined) {
-                        onServerJoined({
-                            serverId,
-                            serverName: `Server ${serverId.substring(0, 8)}...`,
-                            memberCount: 0
-                        })
-                    }
+                // Show welcome popup if callback provided
+                if (onServerJoined) {
+                    onServerJoined({
+                        serverId,
+                        serverName: serverDetails.name || `Server ${serverId.substring(0, 8)}...`,
+                        memberCount: serverDetails.member_count || 0
+                    })
                 }
 
                 // Reset form and close dialog on success
@@ -593,11 +618,22 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
     }
 
     const inputValidation = getInputValidation()
-    const isValidForSubmission = inputValidation.isValid
+    const isValidForSubmission = inputValidation.isValid && serverDetails && !isLoadingServerDetails
 
     // Create server validation
     const isValidServerName = serverName.trim().length > 0
     const isValidForCreation = isValidServerName
+
+    // Reset state when dialog opens/closes
+    useEffect(() => {
+        if (!joinDialogOpen) {
+            setJoinInput("")
+            setJoinError("")
+            setServerDetails(null)
+            setServerDetailsError("")
+            setIsLoadingServerDetails(false)
+        }
+    }, [joinDialogOpen])
 
     return (
         <div className="relative group mb-3">
@@ -675,8 +711,8 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                             </div>
                                         </Button>
                                     </AlertDialogTrigger>
-                                    <AlertDialogContent className="max-w-md p-0">
-                                        <div className="relative overflow-hidden">
+                                    <AlertDialogContent className="max-w-md w-[95vw] sm:w-full p-0 max-h-[95vh] overflow-hidden flex flex-col">
+                                        <div className="relative overflow-hidden flex-shrink-0">
                                             {/* Header with gradient */}
                                             <AlertDialogHeader className="relative px-6 pt-6 pb-4">
                                                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-blue-500/5 rounded-t-lg" />
@@ -694,7 +730,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                             </AlertDialogHeader>
 
                                             <AlertDialogDescription asChild>
-                                                <div className="px-6 space-y-4 mt-4">
+                                                <div className="px-4 sm:px-6 space-y-4 mt-4 overflow-y-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
                                                     <div className="space-y-4">
                                                         <label className="text-sm font-medium text-foreground">
                                                             Server ID or Invite Link
@@ -735,12 +771,32 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                                         </div>
 
                                                         {/* Real-time validation feedback */}
-                                                        {isValidInput && !inputValidation.isValid && !joinError && (
+                                                        {isValidInput && !inputValidation.isValid && !joinError && !serverDetailsError && (
                                                             <p className="text-sm text-yellow-600 flex items-center gap-2">
                                                                 <div className="w-4 h-4 rounded-full bg-yellow-500/10 flex items-center justify-center">
                                                                     <div className="w-2 h-2 rounded-full bg-yellow-500" />
                                                                 </div>
                                                                 {inputValidation.message}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Server loading state */}
+                                                        {inputValidation.isValid && isLoadingServerDetails && (
+                                                            <p className="text-sm text-blue-600 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                                </div>
+                                                                Loading server details...
+                                                            </p>
+                                                        )}
+
+                                                        {/* Server details error */}
+                                                        {serverDetailsError && (
+                                                            <p className="text-sm text-red-500 flex items-center gap-2">
+                                                                <div className="w-4 h-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                                                                </div>
+                                                                {serverDetailsError}
                                                             </p>
                                                         )}
 
@@ -753,7 +809,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                                             </p>
                                                         )}
 
-                                                        {inputValidation.isValid && (
+                                                        {inputValidation.isValid && !isLoadingServerDetails && !serverDetailsError && !serverDetails && (
                                                             <p className="text-sm text-green-600 flex items-center gap-2">
                                                                 <div className="w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center">
                                                                     <div className="w-2 h-2 rounded-full bg-green-500" />
@@ -763,8 +819,69 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                                         )}
                                                     </div>
 
+                                                    {/* Server Preview */}
+                                                    {serverDetails && (
+                                                        <div className="p-4 bg-gradient-to-r from-blue-500/5 via-transparent to-blue-500/5 rounded-lg border border-blue-500/20">
+                                                            <h4 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-green-500" />
+                                                                Server Preview
+                                                            </h4>
+                                                            <div className="flex items-center gap-3">
+                                                                {/* Server Icon */}
+                                                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
+                                                                    {serverDetails.icon ? (
+                                                                        <img
+                                                                            src={`https://arweave.net/${serverDetails.icon}`}
+                                                                            alt={serverDetails.name || 'Server'}
+                                                                            className="w-full h-full object-cover"
+                                                                        />
+                                                                    ) : (
+                                                                        <span className="text-lg font-bold text-primary">
+                                                                            {(serverDetails.name || 'S').charAt(0).toUpperCase()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Server Info */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <h5 className="font-semibold text-foreground truncate">
+                                                                        {serverDetails.name || `Server ${joinInput.split('/').pop()?.substring(0, 8)}...`}
+                                                                    </h5>
+                                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                                                        <Users className="w-3 h-3" />
+                                                                        <span>
+                                                                            {serverDetails.member_count} {serverDetails.member_count === 1 ? 'member' : 'members'}
+                                                                        </span>
+                                                                        <div className="w-1 h-1 rounded-full bg-green-500" />
+                                                                        <span>Online</span>
+                                                                    </div>
+                                                                    {serverDetails.description && (
+                                                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                                                            {serverDetails.description}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Already member check */}
+                                                            {(() => {
+                                                                const extractedServerId = joinInput.split('/').pop()
+                                                                return address && extractedServerId && serversJoined[address]?.includes(extractedServerId) ? (
+                                                                    <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                                                                        <p className="text-xs text-yellow-600 flex items-center gap-2">
+                                                                            <div className="w-3 h-3 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                                                                                <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                                                                            </div>
+                                                                            You're already a member of this server
+                                                                        </p>
+                                                                    </div>
+                                                                ) : null
+                                                            })()}
+                                                        </div>
+                                                    )}
+
                                                     {/* Help text */}
-                                                    <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                                                    {!serverDetails && <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
                                                         <h4 className="text-sm font-medium text-foreground mb-2">How to join:</h4>
                                                         <ul className="text-xs text-muted-foreground space-y-1">
                                                             <li className="flex items-start gap-2">
@@ -809,11 +926,11 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                                                 </div>
                                                             </button>)}
                                                         </div>
-                                                    </div>
+                                                    </div>}
                                                 </div>
                                             </AlertDialogDescription>
 
-                                            <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
+                                            <AlertDialogFooter className="px-4 sm:px-6 pb-6 pt-4 gap-3 flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm">
                                                 <AlertDialogCancel
                                                     disabled={isJoining}
                                                     onClick={() => setJoinDialogOpen(false)}
@@ -875,10 +992,10 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                             </div>
                                         </Button>
                                     </AlertDialogTrigger>
-                                    <AlertDialogContent className="max-w-lg p-0">
-                                        <div className="relative overflow-hidden">
+                                    <AlertDialogContent className="max-w-lg w-[95vw] sm:w-full p-0 max-h-[90vh] overflow-hidden flex flex-col">
+                                        <div className="relative overflow-hidden flex-shrink-0">
                                             {/* Header with gradient */}
-                                            <AlertDialogHeader className="relative px-6 pt-6 pb-4">
+                                            <AlertDialogHeader className="relative px-4 sm:px-6 pt-6 pb-4">
                                                 <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-transparent to-green-500/5 rounded-t-lg" />
                                                 <AlertDialogTitle className="text-xl font-bold flex items-center gap-3 relative">
                                                     <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
@@ -894,10 +1011,10 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                             </AlertDialogHeader>
 
                                             <AlertDialogDescription asChild>
-                                                <div className="px-6 space-y-6 mt-4">
-                                                    <div className="flex gap-4">
+                                                <div className="px-4 sm:px-6 space-y-6 mt-4 overflow-y-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                                                    <div className="flex flex-col sm:flex-row gap-4">
                                                         {/* Server Icon Upload */}
-                                                        <div className="w-1/3">
+                                                        <div className="w-full sm:w-1/3">
                                                             <FileDropzone
                                                                 onFileChange={setServerIcon}
                                                                 label="Server Icon"
@@ -975,7 +1092,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                                                 </div>
                                             </AlertDialogDescription>
 
-                                            <AlertDialogFooter className="px-6 pb-6 pt-4 gap-3">
+                                            <AlertDialogFooter className="px-4 sm:px-6 pb-6 pt-4 gap-3 flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm">
                                                 <AlertDialogCancel disabled={isCreating}>
                                                     Cancel
                                                 </AlertDialogCancel>

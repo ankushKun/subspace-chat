@@ -13,6 +13,7 @@ import { FileDropzone } from "@/components/ui/file-dropzone"
 import { toast } from "sonner"
 import { uploadFileAR } from "@/lib/utils"
 import { usePWA } from "@/hooks/use-pwa"
+import type { WelcomePopupData } from "@/hooks/use-welcome-popup"
 
 const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -217,7 +218,7 @@ const sampleInvites = [
     "subspace.ar.io/#/invite/wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8"
 ]
 
-const AddServerButton = () => {
+const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePopupData) => void }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [joinInput, setJoinInput] = useState("")
     const [isJoining, setIsJoining] = useState(false)
@@ -299,10 +300,28 @@ const AddServerButton = () => {
                             ...serverDetails
                         }
                         serverActions.addServer(server)
+
+                        // Show welcome popup if callback provided
+                        if (onServerJoined) {
+                            onServerJoined({
+                                serverId,
+                                serverName: serverDetails.name || `Server ${serverId.substring(0, 8)}...`,
+                                memberCount: serverDetails.member_count || 0
+                            })
+                        }
                     }
                 } catch (error) {
                     console.warn("Failed to fetch server details:", error)
                     // Don't show error to user as the join was successful
+
+                    // Show welcome popup with basic info if callback provided
+                    if (onServerJoined) {
+                        onServerJoined({
+                            serverId,
+                            serverName: `Server ${serverId.substring(0, 8)}...`,
+                            memberCount: 0
+                        })
+                    }
                 }
 
                 // Reset form and close dialog on success
@@ -503,6 +522,15 @@ const AddServerButton = () => {
 
                         // Set as active server
                         serverActions.setActiveServerId(serverId)
+
+                        // Show welcome popup if callback provided
+                        if (onServerJoined) {
+                            onServerJoined({
+                                serverId,
+                                serverName: serverDetails.name || `Server ${serverId.substring(0, 8)}...`,
+                                memberCount: serverDetails.member_count || 0
+                            })
+                        }
                     }
                 } catch (error) {
                     console.warn("Failed to fetch server details:", error)
@@ -513,6 +541,14 @@ const AddServerButton = () => {
                 setServerIcon(null)
                 setCreateDialogOpen(false)
                 setCreateError("")
+
+                if (onServerJoined) {
+                    onServerJoined({
+                        serverId,
+                        serverName: `Server ${serverId.substring(0, 8)}...`,
+                        memberCount: 0
+                    })
+                }
             } else {
                 setCreateError("Failed to create server. Please try again.")
             }
@@ -626,7 +662,6 @@ const AddServerButton = () => {
                                                 setJoinInput("")
                                                 setJoinError("")
                                                 setJoinDialogOpen(true)
-                                                setPopoverOpen(false)
                                             }}
                                         >
                                             <div className="flex items-center gap-3 relative z-10">
@@ -826,7 +861,7 @@ const AddServerButton = () => {
                                                 setServerName("")
                                                 setServerIcon(null)
                                                 setCreateError("")
-                                                setPopoverOpen(false)
+                                                // Don't close popover automatically
                                             }}
                                         >
                                             <div className="flex items-center gap-3 relative z-10">
@@ -1049,11 +1084,12 @@ const InstallPWAButton = () => {
     )
 }
 
-export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) {
+export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> & { onServerJoined?: (data: WelcomePopupData) => void }) {
     const { address } = useWallet()
     const { servers, actions, activeServerId, serversJoined, loadingServers } = useServer()
     const { isInstallable, isInstalled, showInstallPrompt } = usePWA()
     const profiles = useProfile(state => state.profiles)
+    const { onServerJoined, ...divProps } = props
 
     const myProfile: Profile = address ? profiles[address] : null
     const myServers = myProfile?.serversJoined ? myProfile?.serversJoined : []
@@ -1061,14 +1097,15 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
 
     return (
         <div
-            {...props}
+            {...divProps}
             className={cn(
                 "flex flex-col w-[72px] h-full py-4 pb-2 px-3 relative z-10",
                 "bg-gradient-to-b from-background via-background/95 to-background/90",
                 "border-r border-border/50 backdrop-blur-sm",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
                 // Subtle pattern overlay
-                "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_50%)] before:pointer-events-none"
+                "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_50%)] before:pointer-events-none",
+                props.className
             )}
         >
             {/* Ambient glow at top */}
@@ -1153,7 +1190,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement>) 
                 })()}
             </div>
 
-            <AddServerButton />
+            <AddServerButton onServerJoined={onServerJoined} />
             <div className="grow" />
 
             {isInstallable && !isInstalled && <InstallPWAButton />}

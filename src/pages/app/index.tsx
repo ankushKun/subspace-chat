@@ -12,10 +12,15 @@ import type { Profile, Server } from "@/types/subspace"
 import UserProfile from "./components/user-profile"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useSwipeable } from 'react-swipeable';
+import WelcomePopup from "@/components/welcome-popup"
+import { useLocation, useNavigate } from "react-router"
+import { useWelcomePopup, type WelcomePopupData } from "@/hooks/use-welcome-popup"
 
 
 export default function App() {
   const [title, setTitle] = useState("Subspace")
+  const { showWelcomePopup, welcomeData, showWelcome, hideWelcome } = useWelcomePopup()
+
   const subspace = useSubspace()
   const { connected, address } = useWallet()
   const { actions: serverActions, activeServerId, activeChannelId, servers, serversJoined } = useServer()
@@ -23,6 +28,28 @@ export default function App() {
   const { actions: messagesActions } = useMessages()
   const { actions: notificationActions } = useNotifications()
   const isMobile = useIsMobile()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Check for welcome popup parameters on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search)
+    const welcome = urlParams.get('welcome')
+    const serverId = urlParams.get('serverId')
+    const serverName = urlParams.get('serverName')
+    const memberCount = urlParams.get('memberCount')
+
+    if (welcome === 'true' && serverId && serverName && connected) {
+      showWelcome({
+        serverName: decodeURIComponent(serverName),
+        serverId,
+        memberCount: parseInt(memberCount || '0', 10)
+      })
+
+      // Clean up URL parameters
+      navigate('/app', { replace: true })
+    }
+  }, [location.search, connected, navigate, showWelcome])
 
   useEffect(() => {
     if (!connected || !address) {
@@ -171,13 +198,25 @@ export default function App() {
     return () => clearInterval(interval)
   }, [activeServerId, activeChannelId])
 
-  if (isMobile) return <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} />
+  if (isMobile) return (
+    <>
+      <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} onServerJoined={showWelcome} />
+      {/* Welcome Popup for Mobile */}
+      {welcomeData && (
+        <WelcomePopup
+          isOpen={showWelcomePopup}
+          onClose={hideWelcome}
+          data={welcomeData}
+        />
+      )}
+    </>
+  )
 
   return (
     <div className="flex flex-row items-start justify-start h-svh !overflow-x-clip !overflow-clip">
       <title>{title}</title>
       <>
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" onServerJoined={showWelcome} />
         {connected && <div className="flex flex-col h-svh">{activeServerId ? (
           <ChannelList className="w-[350px] min-w-[350px] max-w-[350px]" />
         ) : (
@@ -192,6 +231,15 @@ export default function App() {
         <LoginPrompt />
       )}
       {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-svh" />}
+
+      {/* Welcome Popup */}
+      {welcomeData && (
+        <WelcomePopup
+          isOpen={showWelcomePopup}
+          onClose={hideWelcome}
+          data={welcomeData}
+        />
+      )}
     </div>
   )
 }
@@ -202,7 +250,12 @@ enum Screens {
   Right = "right"
 }
 
-function MobileLayout({ connected, activeServerId, activeChannelId }: { connected: boolean, activeServerId: string | null, activeChannelId: number | null }) {
+function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoined }: {
+  connected: boolean,
+  activeServerId: string | null,
+  activeChannelId: number | null,
+  onServerJoined: (data: WelcomePopupData) => void
+}) {
   const [screen, setScreen] = useState<Screens>(Screens.Left)
   const handlers = useSwipeable({
     // onSwiped: (eventData) => console.log("User Swiped!", eventData),
@@ -234,7 +287,7 @@ function MobileLayout({ connected, activeServerId, activeChannelId }: { connecte
   return (
     <div className="h-svh flex w-screen p-0 m-0" {...handlers}>
       {screen === Screens.Left && <div className="flex flex-row h-full grow">
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" />
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-svh" onServerJoined={onServerJoined} />
         {connected ? <div className="flex flex-col h-svh w-full grow">{activeServerId ? (
           <ChannelList className="grow w-full" />
         ) : (

@@ -1,5 +1,5 @@
 import { useServer } from "@/hooks/subspace/server"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronRight, Hash, Volume2, Lock, Settings, Plus, Link, LogOut, Trash2, Edit, Code, Loader2, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -14,10 +14,11 @@ import { useWallet } from "@/hooks/use-wallet"
 import { Constants } from "@/lib/constants"
 import UserProfile from "./user-profile"
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { Screens } from ".."
 
 // Components are now defined inline within the main component for better state access
 
-export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>) {
+export default function ChannelList({ setScreen, ...props }: React.HTMLAttributes<HTMLDivElement> & { setScreen?: Dispatch<SetStateAction<Screens>> }) {
     const { servers, activeServerId, activeChannelId, actions } = useServer()
     const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set())
     const subspace = useSubspace()
@@ -1089,7 +1090,7 @@ export default function ChannelList(props: React.HTMLAttributes<HTMLDivElement>)
                                                                                                         : "text-muted-foreground hover:text-foreground",
                                                                                                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
                                                                                                 )}
-                                                                                                onClick={() => actions.setActiveChannelId(channel.channelId)}
+                                                                                                onClick={() => { actions.setActiveChannelId(channel.channelId); setScreen(Screens.Middle) }}
                                                                                                 onContextMenu={(e) => {
                                                                                                     if (isServerOwner) {
                                                                                                         e.preventDefault()

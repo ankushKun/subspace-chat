@@ -301,7 +301,7 @@ export default function App() {
   )
 }
 
-enum Screens {
+export enum Screens {
   Left = "left",
   Middle = "middle",
   Right = "right"
@@ -347,7 +347,7 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
       {screen === Screens.Left && <div className="flex flex-row h-full grow overflow-hidden">
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={onServerJoined} />
         {connected ? <div className="flex flex-col h-full w-full grow overflow-hidden">{activeServerId ? (
-          <ChannelList className="grow w-full overflow-y-auto overflow-x-hidden" />
+          <ChannelList setScreen={setScreen} className="grow w-full overflow-y-auto overflow-x-hidden" />
         ) : (
           <DMList className="grow w-full overflow-y-auto overflow-x-hidden" />
         )}

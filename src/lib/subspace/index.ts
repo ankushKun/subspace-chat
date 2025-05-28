@@ -19,12 +19,24 @@ export class Subspace {
     user: User;
     server: ServerManager;
 
-
     constructor() {
-        const [strategy, jwk] = useWallet(state => [state.connectionStrategy, state.jwk])
-        this.connectionManager = new ConnectionManager(strategy == ConnectionStrategies.ScannedJWK ? jwk : null);
+        this.connectionManager = new ConnectionManager();
         this.user = new User(this.connectionManager);
         this.server = new ServerManager(this.connectionManager);
+
+        // Initialize with current wallet state
+        this.updateWalletConnection();
+    }
+
+    // Method to get current wallet state
+    private getWalletState() {
+        return useWallet.getState();
+    }
+
+    // Method to update connection manager when wallet changes
+    updateWalletConnection() {
+        const { connectionStrategy, jwk } = this.getWalletState();
+        this.connectionManager.updateWallet(connectionStrategy === ConnectionStrategies.ScannedJWK ? jwk : null);
     }
 }
 
@@ -34,10 +46,33 @@ export class ConnectionManager {
     ario = ARIO.mainnet()
     jwk: JWKInterface | null = null
 
-    constructor(jwk?: JWKInterface) {
+    constructor() {
         this.cuIndex = 0;
-        this.jwk = jwk || null;
+        this.jwk = null;
         this.ao = connect({ MODE: "legacy", CU_URL: this.getCuUrl() })
+
+        // Initialize with current wallet state
+        const walletState = useWallet.getState();
+        if (walletState.connectionStrategy === ConnectionStrategies.ScannedJWK && walletState.jwk) {
+            this.jwk = walletState.jwk;
+        }
+
+        // Subscribe to wallet state changes
+        this.subscribeToWalletChanges();
+    }
+
+    private subscribeToWalletChanges() {
+        // Subscribe to Zustand store changes
+        useWallet.subscribe((state) => {
+            const newJwk = state.connectionStrategy === ConnectionStrategies.ScannedJWK ? state.jwk : null;
+            if (newJwk !== this.jwk) {
+                this.updateWallet(newJwk);
+            }
+        });
+    }
+
+    updateWallet(jwk: JWKInterface | null) {
+        this.jwk = jwk;
     }
 
     switchCu() {

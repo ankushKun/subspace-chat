@@ -8,6 +8,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import type { ServerDetailsResponse } from "@/types/subspace"
 import LoginDialog from "@/components/login-dialog"
+import { updateMetaTags, resetMetaTags } from "@/utils/meta"
 
 export default function Invite() {
     const { invite } = useParams()
@@ -33,7 +34,48 @@ export default function Invite() {
         }
 
         fetchServerInfo()
+
+        // Set initial meta tags for invite
+        updateMetaTags({
+            title: `Join Server - Subspace`,
+            description: `You've been invited to join a server on Subspace, the intergalactic communication app built on the Permaweb.`,
+            url: window.location.href,
+            type: 'website',
+            siteName: 'Subspace',
+            image: `${window.location.origin}/invite-og-default.svg`,
+            imageAlt: 'Subspace Server Invite',
+            imageWidth: '1200',
+            imageHeight: '630'
+        })
+
+        // Cleanup function to reset meta tags when component unmounts
+        return () => {
+            resetMetaTags()
+        }
     }, [invite])
+
+    // Update meta tags when server info is loaded
+    useEffect(() => {
+        if (serverInfo && invite) {
+            const serverName = serverInfo.name || `Server ${invite.substring(0, 8)}...`
+            const memberText = serverInfo.member_count === 1 ? 'member' : 'members'
+            const serverImage = serverInfo.icon
+                ? `https://arweave.net/${serverInfo.icon}`
+                : `${window.location.origin}/invite-og-default.svg`
+
+            updateMetaTags({
+                title: `Join ${serverName} - Subspace`,
+                description: `You've been invited to join "${serverName}" on Subspace. ${serverInfo.member_count} ${memberText} • Decentralized communication on the Permaweb`,
+                image: serverImage,
+                url: window.location.href,
+                type: 'website',
+                siteName: 'Subspace',
+                imageAlt: `${serverName} server on Subspace`,
+                imageWidth: serverInfo.icon ? '400' : '1200',
+                imageHeight: serverInfo.icon ? '400' : '630'
+            })
+        }
+    }, [serverInfo, invite])
 
     const fetchServerInfo = async () => {
         if (!invite) return
@@ -112,7 +154,7 @@ export default function Invite() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-background/90 relative overflow-hidden p-4">
-            <title>Subspace | Join Server</title>
+            <title>{serverInfo ? `Join ${getDisplayName()} - Subspace` : 'Join Server - Subspace'}</title>
 
             {/* Background decorative elements */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(120,119,198,0.1),transparent_50%)] pointer-events-none" />

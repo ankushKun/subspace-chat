@@ -111,5 +111,5 @@ export default defineConfig({
     __VERSION__: JSON.stringify(packageJson.version),
     __AOXPRESS_SRC__: JSON.stringify(aoxpressSource),
     __SERVER_SRC__: JSON.stringify(serverSource),
-  },
+  }
 })

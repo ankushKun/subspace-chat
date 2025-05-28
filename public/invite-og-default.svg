@@ -1,0 +1,42 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#17181c;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a1b20;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#17181c;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7877c6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5a59a6;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="glow1" cx="30%" cy="20%" r="50%">
+      <stop offset="0%" style="stop-color:rgba(120,119,198,0.1);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:transparent;stop-opacity:0" />
+    </radialGradient>
+    <radialGradient id="glow2" cx="70%" cy="80%" r="50%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.05);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:transparent;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)" rx="16"/>
+  
+  <!-- Glow effects -->
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+  
+  <!-- Server Icon -->
+  <rect x="120" y="215" width="200" height="200" fill="url(#iconGrad)" rx="32"/>
+  <text x="220" y="340" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="80" font-weight="bold">S</text>
+  
+  <!-- Content -->
+  <text x="380" y="250" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-size="24">You're invited to join</text>
+  <text x="380" y="320" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="64" font-weight="bold">Subspace Server</text>
+  <text x="380" y="370" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-size="28">Join the community • Decentralized chat</text>
+  
+  <!-- Subspace Branding -->
+  <rect x="380" y="420" width="48" height="48" fill="url(#iconGrad)" rx="12"/>
+  <text x="404" y="450" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="bold">S</text>
+  <text x="448" y="450" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="600">Subspace</text>
+</svg> 

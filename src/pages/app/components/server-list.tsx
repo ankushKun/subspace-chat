@@ -1147,7 +1147,38 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
 
 const InstallPWAButton = () => {
     const [isHovered, setIsHovered] = useState(false)
-    const { showInstallPrompt } = usePWA()
+    const { showInstallPrompt, isInstallable, isInstalled, debugInfo } = usePWA()
+
+    // Don't show the button if the app is already installed
+    if (isInstalled) {
+        return null
+    }
+
+    const handleInstallClick = async () => {
+        console.log('Install button clicked, isInstallable:', isInstallable)
+        console.log('Debug info:', debugInfo)
+
+        if (!isInstallable) {
+            // Show debug information to help troubleshoot
+            toast.error("Install not available", {
+                description: `Debug: SW=${debugInfo.hasServiceWorker}, Manifest=${debugInfo.hasManifest}, Secure=${debugInfo.isSecure}`,
+                richColors: true,
+                style: {
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+                    backdropFilter: "blur(8px)"
+                },
+                className: "font-medium",
+                duration: 5000
+            })
+            return
+        }
+
+        await showInstallPrompt()
+    }
 
     return (
         <div className="relative group mb-3">
@@ -1168,11 +1199,13 @@ const InstallPWAButton = () => {
                     className={cn(
                         "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
-                        "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-primary hover:to-primary/80 hover:shadow-md hover:shadow-primary/20"
+                        "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-primary hover:to-primary/80 hover:shadow-md hover:shadow-primary/20",
+                        !isInstallable && "opacity-50 cursor-not-allowed"
                     )}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
-                    onClick={showInstallPrompt}
+                    onClick={handleInstallClick}
+                    disabled={!isInstallable}
                 >
                     <Download className={cn(
                         "w-5 h-5 transition-all duration-300",
@@ -1191,8 +1224,15 @@ const InstallPWAButton = () => {
                     <div className="bg-popover text-popover-foreground text-sm px-3 py-2 rounded-lg shadow-xl border border-border whitespace-nowrap">
                         <div className="flex items-center gap-2">
                             <Download className="w-3 h-3 text-primary" />
-                            <span className="font-medium">Install App</span>
+                            <span className="font-medium">
+                                {isInstallable ? "Install App" : "Install Unavailable"}
+                            </span>
                         </div>
+                        {!isInstallable && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                                Check console for details
+                            </div>
+                        )}
                         <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-transparent border-l-popover" />
                     </div>
                 </div>
@@ -1204,7 +1244,6 @@ const InstallPWAButton = () => {
 export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> & { onServerJoined?: (data: WelcomePopupData) => void }) {
     const { address } = useWallet()
     const { servers, actions, activeServerId, serversJoined, loadingServers } = useServer()
-    const { isInstallable, isInstalled, showInstallPrompt } = usePWA()
     const profiles = useProfile(state => state.profiles)
     const { onServerJoined, ...divProps } = props
 
@@ -1310,7 +1349,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
             <AddServerButton onServerJoined={onServerJoined} />
             <div className="grow" />
 
-            {isInstallable && !isInstalled && <InstallPWAButton />}
+            <InstallPWAButton />
 
             {/* @ts-ignore */}
             <div className="h-5 text-xs text-muted-foreground/40 mx-auto text-center">v{__VERSION__}</div>

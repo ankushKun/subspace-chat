@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Debug Tool</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .success {
+            background: #2d5a2d;
+        }
+
+        .error {
+            background: #5a2d2d;
+        }
+
+        .warning {
+            background: #5a5a2d;
+        }
+
+        .info {
+            background: #2d2d5a;
+        }
+
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        pre {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PWA Installation Debug Tool</h1>
+
+    <div id="status"></div>
+
+    <button id="checkCriteria">Check PWA Criteria</button>
+    <button id="installBtn" disabled>Install PWA</button>
+    <button id="clearStorage">Clear Storage</button>
+
+    <h2>Debug Information</h2>
+    <pre id="debugInfo"></pre>
+
+    <h2>Console Logs</h2>
+    <div id="logs"></div>
+
+    <script>
+        let deferredPrompt = null;
+        const statusDiv = document.getElementById('status');
+        const debugInfo = document.getElementById('debugInfo');
+        const installBtn = document.getElementById('installBtn');
+        const logsDiv = document.getElementById('logs');
+
+        // Capture console logs
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        function addLog(type, ...args) {
+            const logDiv = document.createElement('div');
+            logDiv.className = `status ${type}`;
+            logDiv.textContent = `[${type.toUpperCase()}] ${args.join(' ')}`;
+            logsDiv.appendChild(logDiv);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        console.log = (...args) => {
+            originalLog(...args);
+            addLog('info', ...args);
+        };
+
+        console.warn = (...args) => {
+            originalWarn(...args);
+            addLog('warning', ...args);
+        };
+
+        console.error = (...args) => {
+            originalError(...args);
+            addLog('error', ...args);
+        };
+
+        function addStatus(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = message;
+            statusDiv.appendChild(div);
+        }
+
+        async function checkPWACriteria() {
+            statusDiv.innerHTML = '';
+            const debug = {};
+
+            // Check HTTPS
+            debug.isSecure = window.isSecureContext;
+            debug.protocol = window.location.protocol;
+            addStatus(`HTTPS: ${debug.isSecure ? 'Yes' : 'No'} (${debug.protocol})`, debug.isSecure ? 'success' : 'error');
+
+            // Check Service Worker
+            debug.hasServiceWorker = 'serviceWorker' in navigator;
+            addStatus(`Service Worker Support: ${debug.hasServiceWorker ? 'Yes' : 'No'}`, debug.hasServiceWorker ? 'success' : 'error');
+
+            if (debug.hasServiceWorker) {
+                try {
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    debug.swRegistered = !!registration;
+                    debug.swActive = !!(registration && registration.active);
+                    addStatus(`Service Worker Registered: ${debug.swRegistered ? 'Yes' : 'No'}`, debug.swRegistered ? 'success' : 'warning');
+                    if (registration) {
+                        addStatus(`Service Worker Active: ${debug.swActive ? 'Yes' : 'No'}`, debug.swActive ? 'success' : 'warning');
+                        addStatus(`SW Scope: ${registration.scope}`, 'info');
+                    }
+                } catch (error) {
+                    debug.swError = error.message;
+                    addStatus(`Service Worker Error: ${error.message}`, 'error');
+                }
+            }
+
+            // Check Manifest
+            const manifestLink = document.querySelector('link[rel="manifest"]');
+            debug.hasManifestLink = !!manifestLink;
+            addStatus(`Manifest Link: ${debug.hasManifestLink ? 'Yes' : 'No'}`, debug.hasManifestLink ? 'success' : 'error');
+
+            if (manifestLink) {
+                try {
+                    const response = await fetch(manifestLink.href);
+                    const manifest = await response.json();
+                    debug.manifest = manifest;
+
+                    const requiredFields = ['name', 'short_name', 'start_url', 'display', 'icons'];
+                    const missingFields = requiredFields.filter(field => !manifest[field]);
+
+                    addStatus(`Manifest Loaded: Yes`, 'success');
+                    addStatus(`Manifest URL: ${manifestLink.href}`, 'info');
+
+                    if (missingFields.length === 0) {
+                        addStatus(`Required Fields: All present`, 'success');
+                    } else {
+                        addStatus(`Missing Fields: ${missingFields.join(', ')}`, 'error');
+                    }
+
+                    // Check icons
+                    if (manifest.icons && manifest.icons.length > 0) {
+                        const hasRequiredSizes = manifest.icons.some(icon =>
+                            icon.sizes && (icon.sizes.includes('192x192') || icon.sizes.includes('512x512'))
+                        );
+                        addStatus(`Required Icon Sizes: ${hasRequiredSizes ? 'Yes' : 'No'}`, hasRequiredSizes ? 'success' : 'error');
+
+                        // Test icon loading
+                        for (const icon of manifest.icons) {
+                            try {
+                                const iconResponse = await fetch(icon.src);
+                                addStatus(`Icon ${icon.sizes}: ${iconResponse.ok ? 'OK' : 'Failed'}`, iconResponse.ok ? 'success' : 'error');
+                            } catch (error) {
+                                addStatus(`Icon ${icon.sizes}: Failed to load`, 'error');
+                            }
+                        }
+                    } else {
+                        addStatus(`Icons: None found`, 'error');
+                    }
+
+                } catch (error) {
+                    debug.manifestError = error.message;
+                    addStatus(`Manifest Error: ${error.message}`, 'error');
+                }
+            }
+
+            // Check if already installed
+            debug.isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+            debug.isIOSStandalone = (window.navigator).standalone === true;
+            debug.isInstalled = debug.isStandalone || debug.isIOSStandalone;
+            addStatus(`Already Installed: ${debug.isInstalled ? 'Yes' : 'No'}`, debug.isInstalled ? 'warning' : 'success');
+
+            // Check beforeinstallprompt availability
+            debug.deferredPromptAvailable = !!deferredPrompt;
+            addStatus(`Install Prompt Available: ${debug.deferredPromptAvailable ? 'Yes' : 'No'}`, debug.deferredPromptAvailable ? 'success' : 'warning');
+
+            // Browser info
+            debug.userAgent = navigator.userAgent;
+            debug.browser = getBrowserInfo();
+            addStatus(`Browser: ${debug.browser}`, 'info');
+
+            debugInfo.textContent = JSON.stringify(debug, null, 2);
+        }
+
+        function getBrowserInfo() {
+            const ua = navigator.userAgent;
+            if (ua.includes('Chrome') && !ua.includes('Edg')) return 'Chrome';
+            if (ua.includes('Firefox')) return 'Firefox';
+            if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari';
+            if (ua.includes('Edg')) return 'Edge';
+            return 'Unknown';
+        }
+
+        // Listen for beforeinstallprompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('beforeinstallprompt event fired');
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.disabled = false;
+            addStatus('Install prompt is now available!', 'success');
+        });
+
+        // Listen for appinstalled
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA was installed');
+            addStatus('PWA was installed successfully!', 'success');
+            deferredPrompt = null;
+            installBtn.disabled = true;
+        });
+
+        // Install button handler
+        installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) {
+                addStatus('No install prompt available', 'error');
+                return;
+            }
+
+            try {
+                await deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                addStatus(`User choice: ${outcome}`, outcome === 'accepted' ? 'success' : 'warning');
+
+                deferredPrompt = null;
+                installBtn.disabled = true;
+            } catch (error) {
+                addStatus(`Install error: ${error.message}`, 'error');
+            }
+        });
+
+        // Clear storage button
+        document.getElementById('clearStorage').addEventListener('click', async () => {
+            try {
+                // Clear all caches
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+
+                // Clear localStorage and sessionStorage
+                localStorage.clear();
+                sessionStorage.clear();
+
+                addStatus('Storage cleared successfully', 'success');
+            } catch (error) {
+                addStatus(`Clear storage error: ${error.message}`, 'error');
+            }
+        });
+
+        // Check criteria button
+        document.getElementById('checkCriteria').addEventListener('click', checkPWACriteria);
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkPWACriteria, 1000);
+        });
+    </script>
+</body>
+
+</html>

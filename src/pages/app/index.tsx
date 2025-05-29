@@ -33,6 +33,29 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  // Auto-collapse member list based on window width
+  useEffect(() => {
+    const handleResize = () => {
+      const windowWidth = window.innerWidth
+      // Auto-hide member list when window is smaller than 1200px
+      // Auto-show when window is larger than 1280px (with some hysteresis to prevent flickering)
+      if (windowWidth < 1200) {
+        setShowMemberList(false)
+      } else if (windowWidth > 1280) {
+        setShowMemberList(true)
+      }
+    }
+
+    // Set initial state based on current window size
+    handleResize()
+
+    // Add event listener
+    window.addEventListener('resize', handleResize)
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   // Check for welcome popup parameters on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search)

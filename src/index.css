@@ -270,10 +270,11 @@ html {
 
     html,
     body {
-      /* Enable momentum scrolling on iOS */
-      -webkit-overflow-scrolling: touch;
-      /* Prevent zoom on input focus */
-      touch-action: manipulation;
+      /* Remove deprecated -webkit-overflow-scrolling */
+      /* Use overscroll-behavior instead for iOS 13+ */
+      overscroll-behavior: auto;
+      /* Allow natural touch scrolling */
+      touch-action: pan-y pinch-zoom;
     }
 
     /* Fix viewport height issues on mobile browsers */
@@ -286,8 +287,9 @@ html {
     /* Improve touch scrolling performance */
     .overflow-y-auto,
     .overflow-auto {
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: contain;
+      /* Remove deprecated -webkit-overflow-scrolling: touch */
+      /* Use modern overscroll behavior instead */
+      overscroll-behavior-y: auto;
       /* Ensure smooth scrolling on mobile */
       scroll-behavior: smooth;
     }
@@ -326,6 +328,41 @@ html {
     .scrollbar-thin::-webkit-scrollbar {
       display: none;
       /* Hide scrollbars on mobile webkit */
+    }
+
+    /* Additional iOS scrolling improvements */
+    * {
+      /* Ensure smooth momentum scrolling on iOS */
+      scroll-behavior: smooth;
+    }
+
+    /* Fix for iOS Safari elastic scrolling */
+    body {
+      /* Allow pull-to-refresh but may have slight page bounce */
+      overscroll-behavior-y: auto;
+    }
+
+    /* Ensure scrollable elements work properly on iOS */
+    [style*="overflow: auto"],
+    [style*="overflow-y: auto"],
+    .overflow-auto,
+    .overflow-y-auto {
+      /* Modern approach for iOS momentum scrolling */
+      overscroll-behavior: auto;
+      /* Improve scrolling performance */
+      will-change: scroll-position;
+    }
+
+    /* Fix for iOS scrolling with positioned elements */
+    .fixed,
+    .absolute,
+    .relative,
+    [style*="position: fixed"],
+    [style*="position: absolute"],
+    [style*="position: relative"] {
+      /* Ensure transform doesn't interfere with scrolling */
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
     }
   }
 }
@@ -395,9 +432,8 @@ html {
     line-height: 1.5 !important;
     /* Improve tap targets */
     min-height: 44px;
-    /* Better mobile scrolling */
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    /* Better mobile scrolling - use modern approach */
+    overscroll-behavior: auto;
   }
 
   /* Hide scrollbars on mobile for mentions input */

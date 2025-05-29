@@ -270,14 +270,10 @@ html {
 
     html,
     body {
-      /* Prevent overscroll bounce on iOS */
-      overscroll-behavior: none;
       /* Enable momentum scrolling on iOS */
       -webkit-overflow-scrolling: touch;
       /* Prevent zoom on input focus */
       touch-action: manipulation;
-      /* Prevent pull-to-refresh */
-      overscroll-behavior-y: none;
     }
 
     /* Fix viewport height issues on mobile browsers */
@@ -302,12 +298,23 @@ html {
     }
 
     /* Improve input handling on mobile */
-    input,
-    textarea {
+    input:not(.mentions-input input):not(.mentions-input textarea),
+    textarea:not(.mentions-input textarea) {
       /* Prevent zoom on focus */
-      font-size: 16px;
+      /* font-size: 16px; */
       transform: translateZ(0);
       /* Force hardware acceleration */
+    }
+
+    /* Special handling for mentions input on mobile */
+    .mentions-input textarea,
+    .mentions-input input {
+      /* Prevent zoom while maintaining design font size */
+      /* font-size: max(16px, 14px); */
+      transform: translateZ(0);
+      /* Force hardware acceleration */
+      -webkit-text-size-adjust: 100%;
+      /* Prevent text size adjustment */
     }
 
     /* Optimize scrollable containers */
@@ -367,6 +374,47 @@ html {
 
 .mentions-input textarea::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Mobile-specific improvements for mentions input */
+@media (max-width: 768px) {
+  .mentions-input {
+    /* Ensure proper touch handling */
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .mentions-input textarea,
+  .mentions-input input {
+    /* Better mobile touch handling */
+    -webkit-user-select: text;
+    user-select: text;
+    /* Prevent unwanted zooming while maintaining 14px design */
+    /* font-size: max(16px, 14px) !important; */
+    /* Ensure consistent line height */
+    line-height: 1.5 !important;
+    /* Improve tap targets */
+    min-height: 44px;
+    /* Better mobile scrolling */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Hide scrollbars on mobile for mentions input */
+  .mentions-input textarea::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mentions-input textarea {
+    scrollbar-width: none;
+  }
+
+  /* Ensure suggestions are properly sized on mobile */
+  .mentions-input .mentions__suggestions__list {
+    min-width: 280px !important;
+    max-width: calc(100vw - 32px) !important;
+    /* font-size: 14px !important; */
+  }
 }
 
 /* Mention highlight styling */

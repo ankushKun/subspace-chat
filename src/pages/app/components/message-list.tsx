@@ -1007,7 +1007,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
         <div className="relative">
             {/* Reply indicator */}
             {replyingTo && (
-                <div className="mx-4 p-3 -mb-4 bg-muted/30 rounded-t-lg border border-border/50 border-b-0">
+                <div className="mx-3 sm:mx-4 p-2 sm:p-3 -mb-3 sm:-mb-4 bg-muted/30 rounded-t-lg border border-border/50 border-b-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                             <Reply className="w-4 h-4 text-muted-foreground" />
@@ -1032,7 +1032,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
             )}
 
             {/* Main input container */}
-            <div className="p-4">
+            <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-3 sm:pt-4">
                 <div className={cn(
                     "relative flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
                     "hover:border-border focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/10",
@@ -1041,7 +1041,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                 )}>
                     {/* Attachment previews */}
                     {attachments.length > 0 && (
-                        <div className="p-3 border-b border-border/30">
+                        <div className="p-2 sm:p-3 border-b border-border/30">
                             <div className="flex flex-wrap gap-2">
                                 {attachments.map((attachment, index) => (
                                     <div key={index} className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
@@ -1062,7 +1062,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-center justify-center grow gap-3 p-3 relative z-10">
+                    <div className="flex items-center justify-center grow gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-3 relative z-10">
                         {/* Left actions */}
                         <div className="flex items-center gap-1">
                             <Button
@@ -1080,7 +1080,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         {/* Text input */}
                         <div className="flex relative items-center min-h-[20px] z-0 grow" ref={mentionsInputRef}>
                             <MentionsInput
-                                autoFocus={!isMobile && !isMobileDevice}
+                                autoFocus={!isMobile}
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
                                 onKeyDown={handleKeyPress}
@@ -1094,7 +1094,6 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                 style={{
                                     control: {
                                         backgroundColor: 'transparent',
-                                        fontSize: '14px',
                                         fontWeight: 'normal',
                                         border: 'none',
                                         outline: 'none',
@@ -1135,11 +1134,11 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                         },
                                         input: {
                                             padding: '0',
+                                            fontSize: '14px !important',
                                             border: 'none',
                                             outline: 'none',
                                             backgroundColor: 'transparent',
                                             color: 'var(--foreground)',
-                                            fontSize: '14px',
                                             fontFamily: 'inherit',
                                             lineHeight: '1.5',
                                             minHeight: '20px',
@@ -1173,7 +1172,6 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                             outline: 'none',
                                             backgroundColor: 'transparent',
                                             color: 'hsl(var(--foreground))',
-                                            fontSize: '14px',
                                             fontFamily: 'inherit',
                                             lineHeight: '1.5',
                                             minHeight: '20px',
@@ -1188,7 +1186,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                             backgroundColor: 'var(--background)',
                                             border: '1px solid var(--border)',
                                             borderRadius: '16px',
-                                            fontSize: '14px',
+                                            // fontSize: '14px',
                                             boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.05)',
                                             maxHeight: '280px',
                                             minWidth: '320px',
@@ -1232,7 +1230,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                         padding: '1px 0px',
                                         borderRadius: '3px',
                                         fontWeight: '500',
-                                        fontSize: '14px',
+                                        // fontSize: '14px',
                                     }}
                                     renderSuggestion={renderMemberSuggestion}
                                 />
@@ -1253,7 +1251,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                         padding: '1px 0px',
                                         borderRadius: '3px',
                                         fontWeight: '500',
-                                        fontSize: '14px',
+                                        // fontSize: '14px',
                                     }}
                                     renderSuggestion={renderChannelSuggestion}
                                 />
@@ -1322,9 +1320,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     const [editedContent, setEditedContent] = useState("")
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [isDeletingMessage, setIsDeletingMessage] = useState(false)
-
-    // Mobile-specific state for viewport height handling
-    const [viewportHeight, setViewportHeight] = useState<number | null>(null)
 
     // Track previous message count to detect first-time loading
     const prevMessageCountRef = useRef<number>(0)
@@ -1412,50 +1407,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
         container.addEventListener('scroll', handleScroll, { passive: true })
         return () => container.removeEventListener('scroll', handleScroll)
-    }, [isMobile, isMobileDevice])
-
-    // Mobile-specific: Handle viewport height changes for keyboard
-    useEffect(() => {
-        if (!isMobile && !isMobileDevice) return
-
-        const handleResize = () => {
-            // Use visualViewport if available (better for mobile keyboards)
-            if (window.visualViewport) {
-                const newHeight = window.visualViewport.height
-                console.log('🔍 Visual viewport height:', newHeight)
-                setViewportHeight(newHeight)
-            } else {
-                const newHeight = window.innerHeight
-                console.log('🔍 Window inner height:', newHeight)
-                setViewportHeight(newHeight)
-            }
-        }
-
-        const handleVisualViewportChange = () => {
-            if (window.visualViewport) {
-                const newHeight = window.visualViewport.height
-                console.log('🔍 Visual viewport change:', newHeight)
-                setViewportHeight(newHeight)
-            }
-        }
-
-        // Set initial viewport height
-        handleResize()
-
-        // Listen for viewport changes
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', handleVisualViewportChange)
-        } else {
-            window.addEventListener('resize', handleResize)
-        }
-
-        return () => {
-            if (window.visualViewport) {
-                window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
-            } else {
-                window.removeEventListener('resize', handleResize)
-            }
-        }
     }, [isMobile, isMobileDevice])
 
     // Get current channel info
@@ -1645,24 +1596,13 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             <div
                 {...props}
                 className={cn(
-                    "flex flex-col relative",
-                    // Conditionally apply h-full only when not on mobile with keyboard
-                    (isMobile || isMobileDevice) && viewportHeight ? "" : "h-full",
+                    "flex flex-col h-full relative",
                     "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                     // Subtle pattern overlay
                     "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                     props.className
                 )}
                 style={{
-                    // Use viewport height on mobile to handle keyboard properly
-                    ...(isMobile || isMobileDevice) && viewportHeight ? (() => {
-                        console.log('🔍 Applying height to no-channel container:', viewportHeight)
-                        return {
-                            height: `${viewportHeight}px`,
-                            maxHeight: `${viewportHeight}px`,
-                            overflow: 'hidden'
-                        }
-                    })() : {},
                     ...props.style
                 }}
             >
@@ -1677,29 +1617,23 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
         )
     }
 
+    const viewportHeight = useMemo(() => {
+        return window.innerHeight
+    }, [])
+
     return (
         <div
             {...props}
             className={cn(
-                "flex flex-col relative",
-                // Conditionally apply h-full only when not on mobile with keyboard
-                (isMobile || isMobileDevice) && viewportHeight ? "" : "h-full",
+                "flex flex-col h-full relative overflow-clip",
                 "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                 props.className
             )}
             style={{
-                // Use viewport height on mobile to handle keyboard properly
-                ...(isMobile || isMobileDevice) && viewportHeight ? (() => {
-                    console.log('🔍 Applying height to main container:', viewportHeight)
-                    return {
-                        height: `${viewportHeight}px`,
-                        maxHeight: `${viewportHeight}px`,
-                        overflow: 'hidden'
-                    }
-                })() : {},
-                ...props.style
+                ...props.style,
+                maxHeight: `${viewportHeight}px !important`
             }}
         >
             {/* Ambient glow at top */}
@@ -1715,17 +1649,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             {/* Messages container */}
             <div
                 ref={messagesContainerRef}
-                className={cn(
-                    "flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
-                    // On mobile with keyboard, ensure we don't exceed container bounds
-                    (isMobile || isMobileDevice) && viewportHeight && "max-h-full"
-                )}
-                style={{
-                    // Additional mobile constraints
-                    ...(isMobile || isMobileDevice) && viewportHeight ? {
-                        maxHeight: 'calc(100% - 120px)', // Account for header and input
-                    } : {}
-                }}
+                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
             >
                 {loadingMessages && individualMessages.length === 0 ? (
                     <>
@@ -1760,7 +1684,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                     </div>
                 )}
             </div>
-
             {/* Message input */}
             <MessageInput
                 ref={messageInputRef}

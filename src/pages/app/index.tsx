@@ -3,7 +3,7 @@ import ChannelList from "./components/channel-list"
 import MemberList from "./components/member-list"
 import MessageList from "./components/message-list"
 import useSubspace, { useMessages, useProfile, useNotifications } from "@/hooks/subspace"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
@@ -342,8 +342,12 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
     if (activeChannelId) setScreen(Screens.Middle)
   }, [activeChannelId])
 
+  const viewportHeight = useMemo(() => {
+    return window.innerHeight
+  }, [])
+
   return (
-    <div className="h-screen flex w-screen p-0 m-0 overflow-hidden" {...handlers}>
+    <div className="h-screen flex w-screen p-0 m-0 overflow-clip" {...handlers} style={{ maxHeight: viewportHeight }}>
       {screen === Screens.Left && <div className="flex flex-row h-full grow overflow-hidden">
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={onServerJoined} />
         {connected ? <div className="flex flex-col h-full w-full grow overflow-hidden">{activeServerId ? (
@@ -354,8 +358,8 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
           <UserProfile />
         </div> : <LoginPrompt />}
       </div>}
-      {screen === Screens.Middle && <div className="w-screen flex flex-row h-full overflow-hidden">
-        {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-full overflow-hidden" />}
+      {screen === Screens.Middle && <div className="w-screen flex flex-row">
+        {connected && activeServerId && !!activeChannelId && <MessageList className="grow h-full" />}
       </div>}
       {screen === Screens.Right && <div className="w-screen grow overflow-hidden">
         {connected && activeServerId && <MemberList className="grow w-full h-full overflow-y-auto overflow-x-hidden" />}

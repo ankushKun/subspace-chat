@@ -19,12 +19,16 @@ import InboxComponent from "@/components/inbox"
 import NoChannel from "./no-channel"
 import { useIsMobile, useIsMobileDevice } from "@/hooks/use-mobile"
 
-const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
+const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
     channelDescription?: string;
     memberCount?: number;
+    onToggleMemberList?: () => void;
+    showMemberList?: boolean;
 }) => {
     const [isNotificationMuted, setIsNotificationMuted] = useState(false)
+    const { activeServerId } = useServer()
+    const isMobile = useIsMobile()
 
     return (
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
@@ -78,13 +82,22 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount }: {
 
                 <InboxComponent className="h-8 w-8 p-0 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" />
 
-                {/* <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 px-2 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                >
-                    <Users className="w-4 h-4" />
-                </Button> */}
+                {!isMobile && activeServerId && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={onToggleMemberList}
+                        className={cn(
+                            "h-8 w-8 p-0 hover:bg-muted/50 transition-colors",
+                            showMemberList
+                                ? "text-primary hover:text-primary"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                        title={showMemberList ? "Hide member list" : "Show member list"}
+                    >
+                        <Users className="w-4 h-4" />
+                    </Button>
+                )}
             </div>
         </div>
     )
@@ -1303,7 +1316,11 @@ const MessageInput = React.forwardRef<MessageInputRef, {
     )
 })
 
-export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>) {
+export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> & {
+    onToggleMemberList?: () => void;
+    showMemberList?: boolean;
+}) {
+    const { onToggleMemberList, showMemberList, ...htmlProps } = props
     const { messages, actions: messageActions, loadingMessages } = useMessages()
     const { activeServerId, activeChannelId, servers } = useServer()
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1599,16 +1616,16 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
     if (!hasActiveChannel) {
         return (
             <div
-                {...props}
+                {...htmlProps}
                 className={cn(
                     "flex flex-col h-full relative",
                     "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                     // Subtle pattern overlay
                     "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
-                    props.className
+                    htmlProps.className
                 )}
                 style={{
-                    ...props.style
+                    ...htmlProps.style
                 }}
             >
                 {/* Ambient glow at top */}
@@ -1624,16 +1641,16 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
 
     return (
         <div
-            {...props}
+            {...htmlProps}
             className={cn(
                 "flex flex-col h-full relative overflow-clip",
                 "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
-                props.className
+                htmlProps.className
             )}
             style={{
-                ...props.style,
+                ...htmlProps.style,
                 maxHeight: `${viewportHeight}px !important`
             }}
         >
@@ -1645,6 +1662,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
                 channelName={currentChannel?.name}
                 // channelDescription="A place to hangout with intellects and like minded people! 🧠"
                 memberCount={currentServer?.member_count}
+                onToggleMemberList={onToggleMemberList}
+                showMemberList={showMemberList}
             />
 
             {/* Messages container */}

@@ -21,6 +21,7 @@ import { toast } from "sonner"
 export default function App() {
   const [title, setTitle] = useState("Subspace")
   const { showWelcomePopup, welcomeData, showWelcome, hideWelcome } = useWelcomePopup()
+  const [showMemberList, setShowMemberList] = useState(true)
 
   const subspace = useSubspace()
   const { connected, address, connectionStrategy, actions: walletActions } = useWallet()
@@ -310,20 +311,24 @@ export default function App() {
       <title>{title}</title>
       <>
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={showWelcome} />
-        {connected && <div className="flex flex-col h-full overflow-hidden">{activeServerId ? (
-          <ChannelList className="w-[350px] min-w-[350px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
+        {connected && <div className="hidden sm:flex flex-col h-full overflow-hidden min-w-0">{activeServerId ? (
+          <ChannelList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         ) : (
-          <DMList className="w-[350px] min-w-[350px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
+          <DMList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         )}
           <UserProfile />
         </div>}
       </>
       {connected && address ? (
-        <MessageList className="grow h-full overflow-hidden" />
+        <MessageList
+          className="grow h-full overflow-hidden min-w-0"
+          onToggleMemberList={() => setShowMemberList(!showMemberList)}
+          showMemberList={showMemberList}
+        />
       ) : (
         <LoginPrompt />
       )}
-      {connected && activeServerId && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-full flex-shrink-0 overflow-y-auto overflow-x-hidden" />}
+      {connected && activeServerId && showMemberList && <MemberList className="w-[269px] min-w-[269px] max-w-[269px] h-full flex-shrink-0 overflow-y-auto overflow-x-hidden hidden md:flex" />}
 
       {/* Welcome Popup */}
       {welcomeData && (

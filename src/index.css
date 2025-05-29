@@ -272,8 +272,8 @@ html {
     body {
       /* Remove deprecated -webkit-overflow-scrolling */
       /* Use overscroll-behavior instead for iOS 13+ */
-      overscroll-behavior: auto;
-      /* Allow natural touch scrolling */
+      overscroll-behavior: contain;
+      /* Prevent pull-to-refresh while allowing touch scrolling */
       touch-action: pan-y pinch-zoom;
     }
 
@@ -289,9 +289,13 @@ html {
     .overflow-auto {
       /* Remove deprecated -webkit-overflow-scrolling: touch */
       /* Use modern overscroll behavior instead */
-      overscroll-behavior-y: auto;
+      overscroll-behavior-y: contain;
+      /* Prevent pull-to-refresh on scrollable containers */
+      overscroll-behavior-x: none;
       /* Ensure smooth scrolling on mobile */
       scroll-behavior: smooth;
+      /* Optimize touch handling */
+      touch-action: pan-y;
     }
 
     /* Prevent horizontal scrolling on mobile */
@@ -336,10 +340,10 @@ html {
       scroll-behavior: smooth;
     }
 
-    /* Fix for iOS Safari elastic scrolling */
+    /* Fix for iOS Safari elastic scrolling - disable pull-to-refresh */
     body {
-      /* Allow pull-to-refresh but may have slight page bounce */
-      overscroll-behavior-y: auto;
+      /* Prevent pull-to-refresh that interferes with message scrolling */
+      overscroll-behavior-y: contain;
     }
 
     /* Ensure scrollable elements work properly on iOS */
@@ -348,9 +352,15 @@ html {
     .overflow-auto,
     .overflow-y-auto {
       /* Modern approach for iOS momentum scrolling */
-      overscroll-behavior: auto;
+      overscroll-behavior: contain;
+      /* Disable pull-to-refresh on scrollable containers */
+      overscroll-behavior-y: contain;
       /* Improve scrolling performance */
       will-change: scroll-position;
+      /* Optimize touch handling for message scrolling */
+      touch-action: pan-y;
+      /* Force hardware acceleration */
+      transform: translateZ(0);
     }
 
     /* Fix for iOS scrolling with positioned elements */
@@ -363,6 +373,28 @@ html {
       /* Ensure transform doesn't interfere with scrolling */
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
+    }
+
+    /* Specific optimizations for message scrolling containers */
+    .flex-1.overflow-y-auto {
+      /* Disable pull-to-refresh completely for message containers */
+      overscroll-behavior: none;
+      overscroll-behavior-y: none;
+      /* Optimize touch scrolling */
+      -webkit-overflow-scrolling: auto;
+      /* Prevent any elastic bounce behavior */
+      touch-action: pan-y;
+      /* Ensure hardware acceleration */
+      will-change: scroll-position;
+      transform: translateZ(0);
+    }
+
+    /* Additional fix for any scrollable containers within messages */
+    .scrollbar-thin.overflow-y-auto {
+      overscroll-behavior: none;
+      overscroll-behavior-y: none;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: auto;
     }
   }
 }

@@ -1590,6 +1590,11 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
         }
     }
 
+    // Calculate viewport height - MUST be before any early returns to avoid hooks error
+    const viewportHeight = useMemo(() => {
+        return window.innerHeight
+    }, [])
+
     // If no channel is selected, show the no channel state
     if (!hasActiveChannel) {
         return (
@@ -1616,10 +1621,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement>)
             </div>
         )
     }
-
-    const viewportHeight = useMemo(() => {
-        return window.innerHeight
-    }, [])
 
     return (
         <div

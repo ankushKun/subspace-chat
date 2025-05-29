@@ -10,6 +10,7 @@ import NotFound from '@/pages/404'
 import Settings from '@/pages/settings'
 import { Toaster } from 'sonner'
 import Invite from './pages/invite'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 function Main() {
   const { connect } = useWallet((state) => state.actions)
@@ -32,18 +33,20 @@ function Main() {
   }, [strategy, jwk])
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="subspace-theme">
-      <Toaster theme={theme} />
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<SubspaceLanding />} />
-          <Route path="/app" element={<App />} />
-          <Route path="/app/settings" element={<Settings />} />
-          <Route path="/invite/:invite?" element={<Invite />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </HashRouter>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="dark" storageKey="subspace-theme">
+        <Toaster theme={theme} />
+        <HashRouter>
+          <Routes>
+            <Route path="/" element={<SubspaceLanding />} />
+            <Route path="/app" element={<App />} />
+            <Route path="/app/settings" element={<Settings />} />
+            <Route path="/invite/:invite?" element={<Invite />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </HashRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

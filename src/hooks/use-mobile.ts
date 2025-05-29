@@ -19,5 +19,14 @@ export function useIsMobile() {
 }
 
 export function useIsMobileDevice() {
-  return /iPad|iPhone|iPod|Android|Opera Mini/i.test(navigator.userAgent)
+  const [isMobileDevice, setIsMobileDevice] = React.useState<boolean>(false)
+
+  React.useEffect(() => {
+    // Check if we're in browser environment
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      setIsMobileDevice(/iPad|iPhone|iPod|Android|Opera Mini/i.test(navigator.userAgent))
+    }
+  }, [])
+
+  return isMobileDevice
 }

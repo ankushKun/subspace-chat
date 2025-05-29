@@ -51,9 +51,14 @@ export class User {
     }
 
     async getPrimaryName({ userId }: { userId: string }) {
-        const res = await this.connectionManager.ario.getPrimaryName({ address: userId })
-        if (res && res.name) {
-            return res.name
+        try {
+            const res = await this.connectionManager.ario.getPrimaryName({ address: userId })
+            if (res && res.name) {
+                return res.name
+            }
+        } catch (e) {
+            console.log('[getPrimaryName] Error:', e)
+            return null;
         }
         return null;
     }

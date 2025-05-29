@@ -150,7 +150,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
             if (success) {
                 // Update local state
                 const { serversJoined } = useServer.getState()
-                const currentServers = serversJoined[address] || []
+                const currentServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
                 const updatedServers = currentServers.filter(id => id !== server.serverId)
                 actions.setServersJoined(address, updatedServers)
                 actions.removeServer(server.serverId)

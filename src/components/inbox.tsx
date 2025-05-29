@@ -73,7 +73,7 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
     const currentUserNotifications = notificationActions.getCurrentUserNotifications();
 
     // Get joined servers for current user
-    const joinedServers = address ? serversJoined[address] || [] : [];
+    const joinedServers = address ? (Array.isArray(serversJoined[address]) ? serversJoined[address] : []) : [];
 
     // Filter notifications to only show those from joined servers
     const filteredNotifications = currentUserNotifications.filter(notification =>

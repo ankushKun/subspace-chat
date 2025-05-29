@@ -88,19 +88,51 @@ export default function App() {
         serverActions.setActiveServerId(null)
         serverActions.setLoadingServers(true)
         const profile = await subspace.user.getProfile({ userId: address })
-        if (!profile?.serversJoined) {
-          profile.serversJoined = []
+
+        // Handle case where profile doesn't exist or serversJoined is not properly formatted
+        let userServers: string[] = []
+
+        if (profile) {
+          if (profile.serversJoined) {
+            if (Array.isArray(profile.serversJoined)) {
+              // Already an array
+              userServers = profile.serversJoined
+            } else if (typeof profile.serversJoined === 'string') {
+              try {
+                // Try to parse as JSON string
+                const parsed = JSON.parse(profile.serversJoined)
+                if (Array.isArray(parsed)) {
+                  userServers = parsed
+                } else {
+                  console.warn('serversJoined is not an array after parsing, defaulting to empty array')
+                  userServers = []
+                }
+              } catch (parseError) {
+                console.error('Failed to parse serversJoined as JSON:', parseError)
+                userServers = []
+              }
+            } else {
+              console.warn('serversJoined is not a string or array, defaulting to empty array')
+              userServers = []
+            }
+          } else {
+            userServers = []
+          }
+
+          // Ensure profile.serversJoined is always an array for consistency
+          profile.serversJoined = userServers
         } else {
-          const servers = JSON.parse(profile.serversJoined as any) as string[]
-          profile.serversJoined = servers
+          console.log('No profile found for user, defaulting to empty servers list')
+          userServers = []
         }
-        console.log(`servers found for user: ${profile.serversJoined.length}`)
-        serverActions.setServersJoined(address, profile.serversJoined)
+
+        console.log(`servers found for user: ${userServers.length}`)
+        serverActions.setServersJoined(address, userServers)
 
         // Update notification counts with joined servers
-        notificationActions.updateUnreadCounts(profile.serversJoined)
+        notificationActions.updateUnreadCounts(userServers)
 
-        for (const serverId of profile.serversJoined) {
+        for (const serverId of userServers) {
           try {
             const details = await subspace.server.getServerDetails({ serverId })
             if (details) {
@@ -124,6 +156,9 @@ export default function App() {
         serverActions.setLoadingServers(false)
       } catch (error) {
         console.error('Error loading user servers:', error)
+        serverActions.setLoadingServers(false)
+        // Set empty servers list on error to prevent further issues
+        serverActions.setServersJoined(address, [])
       }
     })()
   }, [connected, address])
@@ -131,7 +166,8 @@ export default function App() {
   // Update notification counts when joined servers change
   useEffect(() => {
     if (address && serversJoined[address]) {
-      notificationActions.updateUnreadCounts(serversJoined[address])
+      const userServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
+      notificationActions.updateUnreadCounts(userServers)
     }
   }, [address, serversJoined])
 

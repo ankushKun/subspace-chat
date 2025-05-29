@@ -102,7 +102,7 @@ db:exec([[
         userId TEXT PRIMARY KEY,
         username TEXT DEFAULT "",
         pfp TEXT DEFAULT "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo",
-        serversJoined TEXT DEFAULT "{}"
+        serversJoined TEXT DEFAULT "[]"
     );
 
     CREATE TABLE IF NOT EXISTS notifications (
@@ -148,7 +148,7 @@ end
 
 function UpdateProfile(userId, username, pfp)
     local profile = GetProfile(userId)
-    local serversJoined = "{}"
+    local serversJoined = "[]"
 
     -- Preserve serversJoined from existing profile
     if profile and profile.serversJoined then
@@ -248,7 +248,7 @@ app.post("/delegate", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "{}") or {}
+    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
     for _, server in ipairs(serversJoined) do
         ao.send({
             Target = server,
@@ -298,7 +298,7 @@ app.post("/undelegate", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "{}") or {}
+    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
     for _, server in ipairs(serversJoined) do
         ao.send({
             Target = server,
@@ -401,7 +401,7 @@ app.post("/join-server", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "{}") or {}
+    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
 
     -- Convert to array if it's not already
     if type(serversJoined) ~= "table" then
@@ -463,7 +463,7 @@ app.post("/leave-server", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "{}") or {}
+    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
 
     -- Convert to array if it's not already
     if type(serversJoined) ~= "table" then

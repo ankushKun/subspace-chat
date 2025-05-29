@@ -20,6 +20,23 @@ export class User {
 
         if (res.status == 200) {
             const profile = res.json as Profile;
+
+            // Ensure serversJoined is always a string array
+            if (profile.serversJoined) {
+                if (typeof profile.serversJoined === 'string') {
+                    try {
+                        const parsed = JSON.parse(profile.serversJoined);
+                        profile.serversJoined = Array.isArray(parsed) ? parsed : [];
+                    } catch {
+                        profile.serversJoined = [];
+                    }
+                } else if (!Array.isArray(profile.serversJoined)) {
+                    profile.serversJoined = [];
+                }
+            } else {
+                profile.serversJoined = [];
+            }
+
             try {
                 const primaryName = await this.getPrimaryName({ userId })
                 profile.primaryName = primaryName;

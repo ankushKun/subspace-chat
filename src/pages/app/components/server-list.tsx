@@ -318,7 +318,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
             }
 
             // Check if user is already in this server
-            const currentServers = serversJoined[address] || []
+            const currentServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
             if (currentServers.includes(serverId)) {
                 setJoinError("You are already a member of this server")
                 return
@@ -530,7 +530,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                 }
 
                 // Update the local state to include the new server
-                const currentServers = serversJoined[address] || []
+                const currentServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
                 if (!currentServers.includes(serverId)) {
                     serverActions.setServersJoined(address, [...currentServers, serverId])
                 }
@@ -1376,7 +1376,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
                 {/* Skeleton loaders for servers being loaded */}
                 {(() => {
                     // Get the list of server IDs that should be loaded
-                    const expectedServerIds = serversJoined[address] || [];
+                    const expectedServerIds = Array.isArray(serversJoined[address]) ? serversJoined[address] : [];
 
                     // Count how many servers have actually been loaded (have data in servers object)
                     const loadedServersCount = expectedServerIds.filter(serverId => servers[serverId]).length;

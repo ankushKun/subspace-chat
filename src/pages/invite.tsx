@@ -23,7 +23,7 @@ export default function Invite() {
     const [hasJoined, setHasJoined] = useState(false)
 
     // Check if user has already joined this server
-    const isAlreadyMember = connected && address && invite && serversJoined[address]?.includes(invite)
+    const isAlreadyMember = connected && address && invite && Array.isArray(serversJoined[address]) && serversJoined[address].includes(invite)
 
     useEffect(() => {
         if (!invite) {
@@ -65,7 +65,7 @@ export default function Invite() {
 
             if (success) {
                 // Update local state
-                const currentServers = serversJoined[address] || []
+                const currentServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
                 if (!currentServers.includes(invite)) {
                     serverActions.setServersJoined(address, [...currentServers, invite])
                 }

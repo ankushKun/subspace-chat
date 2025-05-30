@@ -1816,8 +1816,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
                                         <div data-message-id={message.messageId}>
                                             <MessageItem
                                                 message={message}
-                                                showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
-                                                isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
+                                                showAvatar={index == 0 || shouldShowDateDivider || individualMessages[index - 1]?.authorId != message.authorId}
+                                                isGrouped={index > 0 && !shouldShowDateDivider && individualMessages[index - 1]?.authorId == message.authorId}
                                                 onReply={() => handleReply(message)}
                                                 onEdit={() => handleEdit(message)}
                                                 onDelete={() => handleDelete(message)}

@@ -6,6 +6,8 @@
 html {
   background: #17181c;
   width: 100vw;
+  white-space: normal;
+  white-space-collapse: normal;
 }
 
 @font-face {

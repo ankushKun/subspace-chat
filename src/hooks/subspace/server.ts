@@ -55,7 +55,7 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
         setLoadingServerMembers: (loading: boolean) => set({ loadingServerMembers: loading }),
         setLoadingServerChannels: (loading: boolean) => set({ loadingServerChannels: loading }),
 
-        setActiveServerId: (serverId: string) => set({ activeServerId: serverId }),
+        setActiveServerId: (serverId: string) => set({ activeServerId: serverId, activeChannelId: 0 }),
         setActiveChannelId: (channelId: number) => set({ activeChannelId: channelId }),
 
         setServersJoined(userId: string, servers: string[]) {

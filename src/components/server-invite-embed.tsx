@@ -195,16 +195,16 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
     if (isLoading) {
         return (
             <div className={cn(
-                "bg-gradient-to-r from-muted/30 to-muted/10 border border-border/50 rounded-lg p-4 my-2 max-w-md",
+                "bg-gradient-to-r from-muted/30 to-muted/10 border border-border/50 rounded-lg p-3 sm:p-4 my-2 w-fit max-w-sm",
                 className
             )}>
-                <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-muted rounded-lg animate-pulse" />
-                    <div className="flex-1">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-12 h-12 bg-muted rounded-lg animate-pulse flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
                         <div className="w-32 h-4 bg-muted rounded animate-pulse mb-2" />
                         <div className="w-24 h-3 bg-muted rounded animate-pulse" />
                     </div>
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0" />
                 </div>
             </div>
         )
@@ -213,14 +213,14 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
     if (error || !serverDetails) {
         return (
             <div className={cn(
-                "bg-gradient-to-r from-red-500/5 to-red-400/5 border border-red-500/20 rounded-lg p-4 my-2 max-w-md",
+                "bg-gradient-to-r from-red-500/5 to-red-400/5 border border-red-500/20 rounded-lg p-3 sm:p-4 my-2 w-fit max-w-sm",
                 className
             )}>
-                <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
                         <ExternalLink className="w-6 h-6 text-red-500" />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground">Invalid Invite</h3>
                         <p className="text-sm text-muted-foreground">{error}</p>
                     </div>
@@ -232,10 +232,10 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
     return (
         <>
             <div className={cn(
-                "bg-gradient-to-r from-blue-500/5 to-blue-400/5 border border-blue-500/20 rounded-lg p-4 my-2 max-w-md",
+                "bg-gradient-to-r from-blue-500/5 to-blue-400/5 border border-blue-500/20 rounded-lg p-3 sm:p-4 my-2 w-fit max-w-sm",
                 className
             )}>
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2 sm:gap-3">
                     {/* Server Icon */}
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                         {serverDetails.icon ? (
@@ -255,14 +255,14 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-foreground truncate">
+                                <h3 className="font-semibold text-foreground truncate text-sm sm:text-base">
                                     {serverDetails.name || `Server ${serverId.substring(0, 8)}...`}
                                 </h3>
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                    <Users className="w-3 h-3" />
-                                    <span>{serverDetails.member_count || 0} members</span>
-                                    <div className="w-1 h-1 rounded-full bg-green-500" />
-                                    <span>Online</span>
+                                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mt-1">
+                                    <Users className="w-3 h-3 flex-shrink-0" />
+                                    <span className="flex-shrink-0">{serverDetails.member_count || 0} members</span>
+                                    <div className="w-1 h-1 rounded-full bg-green-500 flex-shrink-0" />
+                                    <span className="flex-shrink-0">Online</span>
                                 </div>
                                 {serverDetails.description && (
                                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -277,7 +277,7 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
                                 onClick={handleJoinServer}
                                 disabled={isJoining || isAlreadyMember}
                                 className={cn(
-                                    "ml-2 min-w-[70px] transition-all duration-200",
+                                    "ml-2 min-w-[60px] sm:min-w-[70px] transition-all duration-200 flex-shrink-0 text-xs sm:text-sm h-7 sm:h-8",
                                     isAlreadyMember
                                         ? "bg-green-500 hover:bg-green-500 text-white cursor-default"
                                         : "bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -288,7 +288,8 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
                                 ) : isAlreadyMember ? (
                                     <>
                                         <CheckCircle className="w-3 h-3 mr-1" />
-                                        Joined
+                                        <span className="hidden sm:inline">Joined</span>
+                                        <span className="sm:hidden">✓</span>
                                     </>
                                 ) : (
                                     "Join"

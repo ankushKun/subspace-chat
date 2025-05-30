@@ -462,7 +462,7 @@ function LoginPrompt() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.05),transparent_50%)] pointer-events-none" />
 
       {/* Main content */}
-      <div className="flex flex-col items-center justify-center space-y-8 p-8 max-w-md mx-auto text-center relative z-10">
+      <div className="flex flex-col items-center justify-center space-y-8 p-8 max-w-md mx-auto text-center relative z-10 animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
         {/* Icon */}
         <div className="relative">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center backdrop-blur-sm border border-primary/20 shadow-lg">

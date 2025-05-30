@@ -579,21 +579,71 @@ const MessageGroup = ({ messages, onReply, onEdit, onDelete }: {
     )
 }
 
-
-
 const EmptyChannelState = ({ channelName }: { channelName?: string }) => {
     return (
-        <div className="flex flex-col items-center justify-center h-full text-center p-8">
-            <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
-                <Hash className="w-8 h-8 text-muted-foreground/50" />
+        <div className="flex flex-col items-center justify-center h-full text-center p-8 relative">
+            {/* Ambient background effects */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {/* Primary glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
+                {/* Secondary glows */}
+                <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/8 rounded-full blur-2xl animate-pulse delay-1000" />
+                <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-primary/3 rounded-full blur-2xl animate-pulse delay-2000" />
+                {/* Subtle pattern overlay */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_75%,rgba(255,255,255,0.01)_0%,transparent_50%)]" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-                Welcome to #{channelName || 'this channel'}!
-            </h3>
-            <p className="text-muted-foreground max-w-md">
-                This is the beginning of the #{channelName || 'channel'} channel.
-                Start the conversation by sending a message.
-            </p>
+
+            {/* Content */}
+            <div className="relative z-10 space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
+                {/* Icon container with enhanced styling */}
+                <div className="relative group">
+                    {/* Icon glow */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500 scale-110" />
+
+                    {/* Main icon container */}
+                    <div className="relative w-24 h-24 rounded-3xl bg-gradient-to-br from-background via-background/90 to-background/80 border border-border/50 shadow-2xl shadow-primary/10 flex items-center justify-center group-hover:scale-105 transition-all duration-300">
+                        {/* Inner glow */}
+                        <div className="absolute inset-2 rounded-2xl bg-gradient-to-br from-primary/10 via-transparent to-primary/5 opacity-80" />
+
+                        {/* Hash icon with gradient */}
+                        <Hash className="w-10 h-10 text-primary relative z-10 drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
+
+                        {/* Subtle inner shadow for depth */}
+                        <div className="absolute inset-0 rounded-3xl shadow-inner shadow-black/5" />
+                    </div>
+                </div>
+
+                {/* Welcome text with enhanced typography */}
+                <div className="space-y-3">
+                    <h3 className="text-2xl font-bold bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent leading-tight">
+                        Welcome to #{channelName || 'this channel'}!
+                    </h3>
+
+                    <div className="space-y-2">
+                        <p className="text-muted-foreground/80 text-base leading-relaxed max-w-md mx-auto">
+                            This is the beginning of the{' '}
+                            <span className="font-semibold text-primary/80">
+                                #{channelName || 'channel'}
+                            </span>{' '}
+                            channel.
+                        </p>
+                        <p className="text-muted-foreground/60 text-sm leading-relaxed max-w-sm mx-auto">
+                            Start the conversation by sending your first message below.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Decorative elements */}
+                <div className="flex items-center justify-center space-x-3 opacity-30">
+                    <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary/60 to-primary/40 animate-pulse" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary/40 to-primary/20 animate-pulse delay-150" />
+                    <div className="w-1 h-1 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 animate-pulse delay-300" />
+                </div>
+            </div>
+
+            {/* Bottom ambient light */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-64 h-24 bg-gradient-to-t from-primary/3 via-primary/1 to-transparent rounded-full blur-2xl" />
         </div>
     )
 }

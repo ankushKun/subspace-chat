@@ -61,14 +61,14 @@ export function LinkWarningDialog({
                     {/* Link details */}
                     <div className="space-y-3">
                         <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                            <div>
+                            {/* <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                                     Link Text
                                 </p>
                                 <p className="text-sm font-mono bg-background border rounded px-2 py-1 break-all">
                                     {children}
                                 </p>
-                            </div>
+                            </div> */}
                             <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                                     Destination URL

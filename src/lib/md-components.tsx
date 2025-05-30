@@ -85,10 +85,10 @@ export const mdComponents: Components = {
         if (href && isSubspaceInviteLink(href)) {
             // console.log('Rendering Subspace invite link:', href);
             return (
-                <div className="my-2">
+                <div className="mt-2 w-fit">
                     {/* Clickable link */}
                     <span
-                        className="text-blue-500 hover:underline cursor-pointer"
+                        className="text-blue-500 hover:underline cursor-pointer whitespace-normal overflow-hidden"
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -113,7 +113,7 @@ export const mdComponents: Components = {
 
         // Handle regular links with security dialog
         return (
-            <div className="my-2">
+            <div className="my-2 w-full overflow-hidden">
                 {/* Clickable link with security dialog */}
                 <LinkWarningDialog
                     href={href}

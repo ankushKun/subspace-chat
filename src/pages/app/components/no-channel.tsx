@@ -22,7 +22,7 @@ export default function NoChannel({ serverName }: { serverName?: string }) {
             </div>
 
             {/* Main content */}
-            <div className="relative z-10 max-w-2xl mx-auto">
+            <div className="relative z-10 max-w-2xl mx-auto animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
                 {/* Icon container with enhanced styling */}
                 <div className="relative mb-10 group">
                     <div className="w-28 h-28 rounded-3xl bg-gradient-to-br from-primary/15 via-primary/8 to-primary/3 flex items-center justify-center mx-auto border border-primary/8 shadow-2xl shadow-primary/10 group-hover:shadow-primary/20 transition-all duration-700 group-hover:scale-110 backdrop-blur-sm relative overflow-hidden">

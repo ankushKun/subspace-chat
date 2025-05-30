@@ -676,7 +676,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
 
                 {/* DM Content Area - placeholder for future DM list */}
                 <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
+                    <div className="text-center text-muted-foreground animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
                         <Hash className="w-12 h-12 mx-auto mb-2 opacity-30" />
                         <p className="text-sm">Direct Messages</p>
                         <p className="text-xs mt-1">Coming soon...</p>
@@ -702,7 +702,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
                 )}
             >
                 <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center">
+                    <div className="text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
                         <Hash className="w-12 h-12 mx-auto mb-2 opacity-30" />
                         <p className="text-sm">Server not found</p>
                     </div>

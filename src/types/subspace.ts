@@ -11,6 +11,15 @@ export type Channel = {
     categoryId: number | null
 }
 
+export type ReplyToMessage = {
+    messageId: number
+    content: string
+    authorId: string
+    timestamp: number
+    edited: number
+    attachments: string
+}
+
 export type Message = {
     messageId: number
     content: string
@@ -21,6 +30,7 @@ export type Message = {
     edited: number
     attachments: string
     replyTo: number | null
+    replyToMessage?: ReplyToMessage
 }
 
 export type Member = {

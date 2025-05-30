@@ -775,25 +775,76 @@ app.get("/get-messages", function(req, res)
         end
     end
 
-    local query = "SELECT * FROM messages WHERE channelId = ?"
+    local query = [[
+        SELECT
+            m.messageId,
+            m.content,
+            m.channelId,
+            m.authorId,
+            m.messageTxId,
+            m.timestamp,
+            m.edited,
+            m.attachments,
+            m.replyTo,
+            rm.messageId as replyToMessageId,
+            rm.content as replyToContent,
+            rm.authorId as replyToAuthorId,
+            rm.timestamp as replyToTimestamp,
+            rm.edited as replyToEdited,
+            rm.attachments as replyToAttachments
+        FROM messages m
+        LEFT JOIN messages rm ON m.replyTo = rm.messageId
+        WHERE m.channelId = ?
+    ]]
     local params = { channelId }
 
     if before then
         before = tonumber(before)
-        query = query .. " AND messageId < ?"
+        query = query .. " AND m.messageId < ?"
         table.insert(params, before)
     end
 
     if after then
         after = tonumber(after)
-        query = query .. " AND messageId > ?"
+        query = query .. " AND m.messageId > ?"
         table.insert(params, after)
     end
 
-    query = query .. " ORDER BY messageId DESC LIMIT ?"
+    query = query .. " ORDER BY m.messageId DESC LIMIT ?"
     table.insert(params, limit)
 
-    local messages = SQLRead(query, table.unpack(params))
+    local raw_messages = SQLRead(query, table.unpack(params))
+
+    -- Restructure the response to include replied-to message as nested object
+    local messages = {}
+    for i, row in ipairs(raw_messages) do
+        local message = {
+            messageId = row.messageId,
+            content = row.content,
+            channelId = row.channelId,
+            authorId = row.authorId,
+            messageTxId = row.messageTxId,
+            timestamp = row.timestamp,
+            edited = row.edited,
+            attachments = row.attachments,
+            replyTo = row.replyTo
+        }
+
+        -- If this message is a reply and we have the replied-to message data
+        if row.replyTo and row.replyToMessageId then
+            message.replyToMessage = {
+                messageId = row.replyToMessageId,
+                content = row.replyToContent,
+                authorId = row.replyToAuthorId,
+                timestamp = row.replyToTimestamp,
+                edited = row.replyToEdited,
+                attachments = row.replyToAttachments
+            }
+        end
+
+        table.insert(messages, message)
+    end
+
     res:json(messages)
 end)
 
@@ -807,7 +858,7 @@ app.post("/send-message", function(req, res)
     local attachments = VarOrNil(req.body.attachments) or "[]"
     local replyTo = VarOrNil(req.body.replyTo)
 
-    print(attachments)
+    -- print(attachments)
 
     -- check if author is a member of the server
     local profile = GetProfile(authorId)
@@ -823,6 +874,23 @@ app.post("/send-message", function(req, res)
     local mentions = {}
     for name, address in content:gmatch("@%[([^%]]+)%]%(([^%)]+)%)") do
         mentions[name] = address
+    end
+
+    -- if replyTo is not nil, check if it is a valid messageId
+    if replyTo then
+        replyTo = tonumber(replyTo)
+        local message = SQLRead("SELECT * FROM messages WHERE messageId = ?", replyTo)
+        if not message or #message == 0 then
+            res:status(404):json({
+                error = "Reply to message not found"
+            })
+            return
+        else
+            -- the message is mentioning the author of the replied to message
+            local replyAuthorId = message[1].authorId
+            -- add the message to the mentions
+            mentions[replyAuthorId] = replyAuthorId
+        end
     end
 
     -- check if channel exists

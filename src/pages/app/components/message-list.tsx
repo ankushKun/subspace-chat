@@ -174,7 +174,7 @@ const MessageTimestamp = ({ timestamp }: { timestamp: number }) => {
     }
 
     return (
-        <span className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+        <span className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
             {formatTime(timestamp)}
         </span>
     )
@@ -311,17 +311,13 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
     )
 }
 
-const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAttributes<HTMLDivElement> & {
-    replyToId: number;
-    messages: Record<number, Message>;
+const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttributes<HTMLDivElement> & {
+    replyToMessage: Message['replyToMessage'];
     onJumpToMessage?: (messageId: number) => void;
 }) => {
     const { profiles } = useProfile()
 
-    // Find the original message
-    const originalMessage = messages[replyToId]
-
-    if (!originalMessage) {
+    if (!replyToMessage) {
         return (
             <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
                 <CornerLeftDown className="w-3 h-3" />
@@ -330,19 +326,19 @@ const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAt
         )
     }
 
-    const authorProfile = profiles[originalMessage.authorId]
-    const displayName = authorProfile?.primaryName || shortenAddress(originalMessage.authorId)
+    const authorProfile = profiles[replyToMessage.authorId]
+    const displayName = authorProfile?.primaryName || shortenAddress(replyToMessage.authorId)
 
     // Truncate content for preview
-    const previewContent = originalMessage.content.length > 50
-        ? originalMessage.content.substring(0, 50) + "..."
-        : originalMessage.content
+    const previewContent = replyToMessage.content.length > 50
+        ? replyToMessage.content.substring(0, 50) + "..."
+        : replyToMessage.content
 
     return (
         <div
             {...props}
             className={cn("flex items-start gap-2 border-muted-foreground/30 hover:border-primary/50 transition-all duration-200 cursor-pointer rounded-r-md hover:bg-muted/30 py-1.5 -my-1 group/reply", props.className)}
-            onClick={() => onJumpToMessage?.(replyToId)}
+            onClick={() => onJumpToMessage?.(replyToMessage.messageId)}
             title="Click to jump to original message"
         >
             <CornerLeftDown className="w-3 h-3 text-muted-foreground/50 group-hover/reply:text-primary/70 mt-0.5 flex-shrink-0 transition-colors" />
@@ -367,16 +363,13 @@ const ReplyPreview = ({ replyToId, messages, onJumpToMessage, ...props }: HTMLAt
                     <UserMention
                         side="top"
                         align="start"
-                        userId={originalMessage.authorId}
+                        userId={replyToMessage.authorId}
                         renderer={(text) => (
                             <span className="text-xs font-medium text-foreground/70 group-hover/reply:text-primary flex-shrink-0 hover:underline">
                                 {text}
                             </span>
                         )}
                     />
-                    {/* <span className="text-xs text-muted-foreground/80 group-hover/reply:text-muted-foreground truncate">
-                        {displayName}
-                    </span> */}
                     <span className="text-xs text-muted-foreground/60 group-hover/reply:text-muted-foreground truncate">
                         {previewContent}
                     </span>
@@ -399,7 +392,6 @@ const MessageItem = ({
     onSaveEdit,
     onCancelEdit,
     isSavingEdit = false,
-    allMessages = {},
     onJumpToMessage
 }: {
     message: Message;
@@ -414,7 +406,6 @@ const MessageItem = ({
     onSaveEdit?: () => void;
     onCancelEdit?: () => void;
     isSavingEdit?: boolean;
-    allMessages?: Record<number, Message>;
     onJumpToMessage?: (messageId: number) => void;
 }) => {
     const { profiles } = useProfile()
@@ -444,12 +435,20 @@ const MessageItem = ({
         return false
     }, [message.content, address])
 
+    // Check if this message is replying to the current user
+    const isReplyToCurrentUser = useMemo(() => {
+        return !!(address && message.replyToMessage && message.replyToMessage.authorId === address)
+    }, [address, message.replyToMessage])
+
+    // Message should be highlighted if user is mentioned OR if it's a reply to their message
+    const shouldHighlightMessage = isCurrentUserMentioned || isReplyToCurrentUser
+
     return (
         <div
             className={cn(
                 "group relative hover:bg-accent/30 transition-colors duration-150",
                 isGrouped ? "py-0.5" : "pt-2 pb-1",
-                isCurrentUserMentioned && "bg-yellow-400/8 hover:bg-yellow-400/12 border-l-2 border-yellow-500/70 pl-2 -ml-2"
+                shouldHighlightMessage && "bg-yellow-400/8 hover:bg-yellow-400/12 border-l-2 border-yellow-500/70 pl-2"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -458,19 +457,18 @@ const MessageItem = ({
             {message.replyTo && (
                 <div className="relative left-7 h-6">
                     <ReplyPreview
-                        replyToId={message.replyTo}
-                        messages={allMessages}
+                        replyToMessage={message.replyToMessage}
                         onJumpToMessage={onJumpToMessage}
                     />
                 </div>
             )}
             <div className="flex gap-1">
                 {/* Avatar or timestamp spacer */}
-                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-16 flex-shrink-0 flex justify-center cursor-pointer">
+                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-14 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {showAvatar || message.replyTo ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
-                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-150 !text-xs text-center">
+                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-150 !text-[11px] mt-1 h-fit text-center">
                             <MessageTimestamp timestamp={message.timestamp} />
                         </div>
                     )}
@@ -1769,7 +1767,6 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
                                         onSaveEdit={handleSaveEdit}
                                         onCancelEdit={handleCancelEdit}
                                         isSavingEdit={isSavingEdit}
-                                        allMessages={messages[activeServerId]?.[activeChannelId] || {}}
                                         onJumpToMessage={handleJumpToMessage}
                                     />
                                 </div>

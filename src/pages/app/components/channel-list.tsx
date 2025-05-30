@@ -15,6 +15,8 @@ import { Constants } from "@/lib/constants"
 import UserProfile from "./user-profile"
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Screens } from ".."
+import { FileDropzone } from "@/components/ui/file-dropzone"
+import { uploadFileAR } from "@/lib/utils"
 
 // Components are now defined inline within the main component for better state access
 
@@ -63,6 +65,12 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
     // Server header state
     const [leaveServerOpen, setLeaveServerOpen] = useState(false)
     const [isLeavingServer, setIsLeavingServer] = useState(false)
+
+    // Edit server state
+    const [editServerOpen, setEditServerOpen] = useState(false)
+    const [serverName, setServerName] = useState("")
+    const [serverIcon, setServerIcon] = useState<File | null>(null)
+    const [isEditingServer, setIsEditingServer] = useState(false)
 
     const handleCopyInvite = () => {
         if (!server) return
@@ -643,6 +651,80 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
         }
     }
 
+    const handleEditServer = async () => {
+        if (!activeServerId || !serverName.trim()) {
+            toast.error("Please enter a server name")
+            return
+        }
+
+        setIsEditingServer(true)
+        try {
+            let iconId = server?.icon || ""
+
+            // Upload new icon if provided
+            if (serverIcon) {
+                toast.loading("Uploading server icon...", {
+                    richColors: true,
+                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                })
+
+                try {
+                    const uploadedIconId = await uploadFileAR(serverIcon)
+                    if (uploadedIconId) {
+                        iconId = uploadedIconId
+                        toast.dismiss()
+                    } else {
+                        toast.dismiss()
+                        toast.error("Failed to upload server icon")
+                        return
+                    }
+                } catch (error) {
+                    console.error("Error uploading icon:", error)
+                    toast.dismiss()
+                    toast.error("Failed to upload server icon")
+                    return
+                }
+            }
+
+            toast.loading("Updating server details...", {
+                richColors: true,
+                style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+            })
+
+            const success = await subspace.server.updateServer({
+                serverId: activeServerId,
+                name: serverName.trim(),
+                icon: iconId
+            })
+
+            toast.dismiss()
+
+            if (success) {
+                toast.success("Server details updated successfully", {
+                    richColors: true,
+                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                })
+
+                // Refresh server data
+                const updatedServer = await subspace.server.getServerDetails({ serverId: activeServerId })
+                if (updatedServer) {
+                    actions.updateServer(activeServerId, updatedServer as Server)
+                }
+
+                setEditServerOpen(false)
+                setServerName("")
+                setServerIcon(null)
+            } else {
+                toast.error("Failed to update server details")
+            }
+        } catch (error) {
+            console.error("Error updating server:", error)
+            toast.error("Failed to update server details")
+        } finally {
+            setIsEditingServer(false)
+        }
+    }
+
     // Initialize dialog states when opening
     useEffect(() => {
         if (editCategoryOpen && selectedCategory) {
@@ -655,6 +737,14 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
             setEditChannelName(selectedChannel.name)
         }
     }, [editChannelOpen, selectedChannel])
+
+    // Initialize edit server dialog when opened
+    useEffect(() => {
+        if (editServerOpen && server) {
+            setServerName(server.name)
+            setServerIcon(null)
+        }
+    }, [editServerOpen, server])
 
     // Show DMs when no server is selected
     if (activeServerId === null) {
@@ -792,6 +882,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
                         {/* Edit Server Details - Only for owner */}
                         {isServerOwner && (
                             <DropdownMenuItem
+                                onClick={() => setEditServerOpen(true)}
                                 className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md transition-colors"
                             >
                                 <Edit className="h-4 w-4 text-muted-foreground" />
@@ -1501,6 +1592,107 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog >
+
+            {/* Edit Server Dialog */}
+            <AlertDialog open={editServerOpen} onOpenChange={setEditServerOpen}>
+                <AlertDialogContent className="max-w-lg w-[95vw] sm:w-full">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <Edit className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                                <div>Edit Server Details</div>
+                                <div className="text-sm font-normal text-muted-foreground mt-1">
+                                    Update your server's name and icon
+                                </div>
+                            </div>
+                        </AlertDialogTitle>
+                    </AlertDialogHeader>
+
+                    <AlertDialogDescription asChild>
+                        <div className="space-y-6">
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                {/* Server Icon Upload */}
+                                <div className="w-full sm:w-1/3">
+                                    <FileDropzone
+                                        onFileChange={setServerIcon}
+                                        label="Server Icon"
+                                        currentFile={server?.icon}
+                                        placeholder="Upload new icon"
+                                        accept={{ 'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp'] }}
+                                        previewType="square"
+                                        maxSize={100 * 1024} // 100KB
+                                    />
+                                </div>
+
+                                {/* Server Details */}
+                                <div className="flex-1 space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">
+                                            Server Name *
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            placeholder="My Awesome Server"
+                                            value={serverName}
+                                            onChange={(e) => setServerName(e.target.value)}
+                                            disabled={isEditingServer}
+                                        />
+                                    </div>
+
+                                    {/* Info about what happens */}
+                                    <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                                        <h4 className="text-sm font-medium text-foreground mb-2">Changes will:</h4>
+                                        <ul className="text-xs text-muted-foreground space-y-1">
+                                            <li className="flex items-start gap-2">
+                                                <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                                                <span>Update the server name for all members</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                                                <span>Replace the server icon if uploaded</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                                                <span>Apply changes immediately on the network</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </AlertDialogDescription>
+
+                    <AlertDialogFooter className="gap-3">
+                        <AlertDialogCancel disabled={isEditingServer}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleEditServer}
+                            disabled={!serverName.trim() || isEditingServer}
+                            className={cn(
+                                "min-w-[120px] transition-all duration-200",
+                                "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70",
+                                "shadow-lg shadow-primary/25 hover:shadow-primary/40",
+                                "disabled:opacity-50 disabled:cursor-not-allowed"
+                            )}
+                        >
+                            {isEditingServer ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Updating...</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <Edit className="w-4 h-4" />
+                                    <span>Update Server</span>
+                                </div>
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div >
     )
 }

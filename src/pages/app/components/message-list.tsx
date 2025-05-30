@@ -134,7 +134,7 @@ const MessageAvatar = ({ authorId, size = "md" }: { authorId: string; size?: "sm
     )
 }
 
-const MessageTimestamp = ({ timestamp }: { timestamp: number }) => {
+const MessageTimestamp = ({ timestamp, className, ...props }: { timestamp: number } & HTMLAttributes<HTMLSpanElement>) => {
     const formatTime = (ts: number) => {
         const date = new Date(ts)
         const now = new Date()
@@ -174,7 +174,7 @@ const MessageTimestamp = ({ timestamp }: { timestamp: number }) => {
     }
 
     return (
-        <span className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+        <span className={cn("text-muted-foreground/60 hover:text-muted-foreground transition-colors", className)} {...props}>
             {formatTime(timestamp)}
         </span>
     )
@@ -448,7 +448,7 @@ const MessageItem = ({
             className={cn(
                 "group relative hover:bg-accent/30 transition-colors duration-150",
                 isGrouped ? "py-0.5" : "pt-2 pb-1",
-                shouldHighlightMessage && "bg-yellow-400/8 hover:bg-yellow-400/12 border-l-2 border-yellow-500/70 pl-2"
+                shouldHighlightMessage && "bg-yellow-400/8 hover:bg-yellow-400/12 border-l-2 border-yellow-500/70"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -465,25 +465,25 @@ const MessageItem = ({
             <div className="flex gap-1">
                 {/* Avatar or timestamp spacer */}
                 <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-14 flex-shrink-0 flex justify-center cursor-pointer h-fit">
-                    {showAvatar || message.replyTo ? (
+                    {(showAvatar || message.replyTo) ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
-                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-150 !text-[11px] mt-1 h-fit text-center">
-                            <MessageTimestamp timestamp={message.timestamp} />
+                        <div data-hovered={isHovered} className="data-[hovered=true]:opacity-100 data-[hovered=false]:opacity-0 transition-opacity duration-150 !text-[11px] mt-1 h-fit text-center">
+                            <MessageTimestamp timestamp={message.timestamp} className="text-[11px]" />
                         </div>
                     )}
                 </div>} />
 
                 {/* Message content */}
                 <div className="flex-1 min-w-0 m-0 my-1 p-0">
-                    {showAvatar && (
+                    {(showAvatar || message.replyTo) && (
                         <div className="flex items-baseline gap-2">
                             <UserMention side="bottom" align="start" userId={message.authorId} renderer={(text) =>
                                 <span className="text-foreground hover:underline cursor-pointer">
                                     {text}
                                 </span>
                             } />
-                            <MessageTimestamp timestamp={message.timestamp} />
+                            <MessageTimestamp timestamp={message.timestamp} className="text-[11px]" />
                             {message.edited === 1 && (
                                 <span className="text-xs text-muted-foreground/80 italic" title="This message has been edited">
                                     (edited)

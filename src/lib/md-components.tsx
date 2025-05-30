@@ -117,7 +117,7 @@ export const mdComponents: Components = {
                 {/* Clickable link with security dialog */}
                 <LinkWarningDialog
                     href={href}
-                    triggerClassName={cn(props.className, "text-blue-500 hover:underline cursor-pointer")}
+                    triggerClassName={cn(props.className, "text-blue-500 hover:underline cursor-pointer whitespace-normal overflow-hidden truncate w-fit max-w-[50vw]")}
                 >
                     {children}
                 </LinkWarningDialog>

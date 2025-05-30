@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UserMention from "@/components/user-mention";
 import ChannelMention from "@/components/channel-mention";
+import { ServerInviteEmbed } from "@/components/server-invite-embed";
 
 // Global store for mentions data (temporary solution)
 let currentMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
@@ -83,23 +84,29 @@ export const mdComponents: Components = {
         if (href && isSubspaceInviteLink(href)) {
             console.log('Rendering Subspace invite link:', href);
             return (
-                <span
-                    className="text-blue-500 hover:underline cursor-pointer"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Subspace invite link clicked:', href);
-                        console.log('JoinDialogContext:', joinDialogContext);
-                        if (joinDialogContext) {
-                            console.log('Calling openJoinDialog with:', href);
-                            joinDialogContext.openJoinDialog(href);
-                        } else {
-                            console.error('JoinServerDialogContext not found - context is null');
-                        }
-                    }}
-                >
-                    {children}
-                </span>
+                <div className="my-2">
+                    {/* Clickable link */}
+                    <span
+                        className="text-blue-500 hover:underline cursor-pointer"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Subspace invite link clicked:', href);
+                            console.log('JoinDialogContext:', joinDialogContext);
+                            if (joinDialogContext) {
+                                console.log('Calling openJoinDialog with:', href);
+                                joinDialogContext.openJoinDialog(href);
+                            } else {
+                                console.error('JoinServerDialogContext not found - context is null');
+                            }
+                        }}
+                    >
+                        {children}
+                    </span>
+
+                    {/* Server invite embed */}
+                    <ServerInviteEmbed inviteUrl={href} />
+                </div>
             );
         }
 

@@ -11,13 +11,14 @@ import { Mention, MentionsInput } from "react-mentions"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeKatex from "rehype-katex"
-import { mdComponents, setCurrentMentions } from "@/lib/md-components"
+import { mdComponents, setCurrentMentions, JoinServerDialogContext } from "@/lib/md-components"
 import UserMention from "@/components/user-mention"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import InboxComponent from "@/components/inbox"
 import NoChannel from "./no-channel"
 import { useIsMobile, useIsMobileDevice } from "@/hooks/use-mobile"
+import { JoinServerDialog } from "@/components/join-server-dialog"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
@@ -1338,11 +1339,24 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [isDeletingMessage, setIsDeletingMessage] = useState(false)
 
+    // State for join server dialog
+    const [joinDialogOpen, setJoinDialogOpen] = useState(false)
+    const [joinDialogInviteLink, setJoinDialogInviteLink] = useState("")
+
     // Track previous message count to detect first-time loading
     const prevMessageCountRef = useRef<number>(0)
 
     // Check if no channel is selected
     const hasActiveChannel = activeChannelId && activeChannelId !== 0
+
+    // Create join dialog context value
+    const joinDialogContext = useMemo(() => ({
+        openJoinDialog: (inviteLink: string) => {
+            console.log('Opening join dialog with invite link:', inviteLink);
+            setJoinDialogInviteLink(inviteLink);
+            setJoinDialogOpen(true);
+        }
+    }), []);
 
     // Get messages for the active channel
     const messagesInChannel = useMemo(() => {
@@ -1615,104 +1629,122 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
     // If no channel is selected, show the no channel state
     if (!hasActiveChannel) {
         return (
+            <JoinServerDialogContext.Provider value={joinDialogContext}>
+                <div
+                    {...htmlProps}
+                    className={cn(
+                        "flex flex-col h-full relative",
+                        "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
+                        // Subtle pattern overlay
+                        "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
+                        htmlProps.className
+                    )}
+                    style={{
+                        ...htmlProps.style
+                    }}
+                >
+                    {/* Ambient glow at top */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
+
+                    <NoChannel serverName={currentServer?.name} />
+
+                    {/* Ambient glow at bottom */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-12 bg-primary/2 rounded-full blur-2xl" />
+
+                    {/* Join Server Dialog */}
+                    <JoinServerDialog
+                        open={joinDialogOpen}
+                        onOpenChange={setJoinDialogOpen}
+                        initialInput={joinDialogInviteLink}
+                    />
+                </div>
+            </JoinServerDialogContext.Provider>
+        )
+    }
+
+    return (
+        <JoinServerDialogContext.Provider value={joinDialogContext}>
             <div
                 {...htmlProps}
                 className={cn(
-                    "flex flex-col h-full relative",
+                    "flex flex-col h-full relative overflow-clip",
                     "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
                     // Subtle pattern overlay
                     "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
                     htmlProps.className
                 )}
                 style={{
-                    ...htmlProps.style
+                    ...htmlProps.style,
+                    maxHeight: `${viewportHeight}px !important`
                 }}
             >
                 {/* Ambient glow at top */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
 
-                <NoChannel serverName={currentServer?.name} />
+                {/* Channel Header */}
+                <ChannelHeader
+                    channelName={currentChannel?.name}
+                    // channelDescription="A place to hangout with intellects and like minded people! 🧠"
+                    memberCount={currentServer?.member_count}
+                    onToggleMemberList={onToggleMemberList}
+                    showMemberList={showMemberList}
+                />
 
-                {/* Ambient glow at bottom */}
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-12 bg-primary/2 rounded-full blur-2xl" />
+                {/* Messages container */}
+                <div
+                    ref={messagesContainerRef}
+                    className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
+                >
+                    {loadingMessages && individualMessages.length === 0 ? (
+                        <>
+                            <MessageListSkeleton />
+                            <div ref={messagesEndRef} />
+                        </>
+                    ) : individualMessages.length === 0 ? (
+                        <EmptyChannelState channelName={currentChannel?.name} />
+                    ) : (
+                        <div className="pt-6">
+                            {individualMessages.map((message, index) => (
+                                <div key={message.messageId} data-message-id={message.messageId}>
+                                    <MessageItem
+                                        message={message}
+                                        showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
+                                        isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
+                                        onReply={() => handleReply(message)}
+                                        onEdit={() => handleEdit(message)}
+                                        onDelete={() => handleDelete(message)}
+                                        isEditing={editingMessage?.messageId === message.messageId}
+                                        editedContent={editedContent}
+                                        onEditContentChange={setEditedContent}
+                                        onSaveEdit={handleSaveEdit}
+                                        onCancelEdit={handleCancelEdit}
+                                        isSavingEdit={isSavingEdit}
+                                        allMessages={messages[activeServerId]?.[activeChannelId] || {}}
+                                        onJumpToMessage={handleJumpToMessage}
+                                    />
+                                </div>
+                            ))}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    )}
+                </div>
+                {/* Message input */}
+                <MessageInput
+                    ref={messageInputRef}
+                    onSendMessage={handleSendMessage}
+                    replyingTo={replyingTo}
+                    onCancelReply={handleCancelReply}
+                    disabled={!activeServerId || !hasActiveChannel}
+                    messagesInChannel={messagesInChannel}
+                />
+
+                {/* Join Server Dialog */}
+                <JoinServerDialog
+                    open={joinDialogOpen}
+                    onOpenChange={setJoinDialogOpen}
+                    initialInput={joinDialogInviteLink}
+                />
             </div>
-        )
-    }
-
-    return (
-        <div
-            {...htmlProps}
-            className={cn(
-                "flex flex-col h-full relative overflow-clip",
-                "bg-gradient-to-b from-background via-background/98 to-background/95 truncate whitespace-normal",
-                // Subtle pattern overlay
-                "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.01)_0%,transparent_50%)] before:pointer-events-none",
-                htmlProps.className
-            )}
-            style={{
-                ...htmlProps.style,
-                maxHeight: `${viewportHeight}px !important`
-            }}
-        >
-            {/* Ambient glow at top */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
-
-            {/* Channel Header */}
-            <ChannelHeader
-                channelName={currentChannel?.name}
-                // channelDescription="A place to hangout with intellects and like minded people! 🧠"
-                memberCount={currentServer?.member_count}
-                onToggleMemberList={onToggleMemberList}
-                showMemberList={showMemberList}
-            />
-
-            {/* Messages container */}
-            <div
-                ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
-            >
-                {loadingMessages && individualMessages.length === 0 ? (
-                    <>
-                        <MessageListSkeleton />
-                        <div ref={messagesEndRef} />
-                    </>
-                ) : individualMessages.length === 0 ? (
-                    <EmptyChannelState channelName={currentChannel?.name} />
-                ) : (
-                    <div className="pt-6">
-                        {individualMessages.map((message, index) => (
-                            <div key={message.messageId} data-message-id={message.messageId}>
-                                <MessageItem
-                                    message={message}
-                                    showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
-                                    isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
-                                    onReply={() => handleReply(message)}
-                                    onEdit={() => handleEdit(message)}
-                                    onDelete={() => handleDelete(message)}
-                                    isEditing={editingMessage?.messageId === message.messageId}
-                                    editedContent={editedContent}
-                                    onEditContentChange={setEditedContent}
-                                    onSaveEdit={handleSaveEdit}
-                                    onCancelEdit={handleCancelEdit}
-                                    isSavingEdit={isSavingEdit}
-                                    allMessages={messages[activeServerId]?.[activeChannelId] || {}}
-                                    onJumpToMessage={handleJumpToMessage}
-                                />
-                            </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-                )}
-            </div>
-            {/* Message input */}
-            <MessageInput
-                ref={messageInputRef}
-                onSendMessage={handleSendMessage}
-                replyingTo={replyingTo}
-                onCancelReply={handleCancelReply}
-                disabled={!activeServerId || !hasActiveChannel}
-                messagesInChannel={messagesInChannel}
-            />
-        </div>
+        </JoinServerDialogContext.Provider>
     )
 }

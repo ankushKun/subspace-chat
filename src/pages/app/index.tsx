@@ -198,21 +198,41 @@ export default function App() {
   useEffect(() => {
     (async () => {
       if (activeServerId) {
-        // fetch members
-        const members = await subspace.server.getServerMembers({ serverId: activeServerId })
-        serverActions.updateServerMembers(activeServerId, members)
-        const profiles = await subspace.user.getBulkProfiles({ userIds: members.map(member => member.userId) })
-        profileActions.setProfiles(profiles.reduce((acc, profile) => {
-          acc[profile.userId] = profile
-          return acc
-        }, {} as Record<string, Profile>))
+        try {
+          // fetch members
+          const members = await subspace.server.getServerMembers({ serverId: activeServerId })
 
-        // fetch users primary names
-        // call getProfile for each member with a delay of 200ms and update state
-        for (const member of members) {
-          const profile = await subspace.user.getProfile({ userId: member.userId })
-          profileActions.updateProfile(member.userId, profile)
-          await new Promise(resolve => setTimeout(resolve, 200))
+          // Ensure members is an array before proceeding
+          if (!Array.isArray(members)) {
+            console.warn('Server members response is not an array:', members)
+            return
+          }
+
+          serverActions.updateServerMembers(activeServerId, members)
+
+          // Only proceed if we have members
+          if (members.length > 0) {
+            const profiles = await subspace.user.getBulkProfiles({ userIds: members.map(member => member.userId) })
+            profileActions.setProfiles(profiles.reduce((acc, profile) => {
+              acc[profile.userId] = profile
+              return acc
+            }, {} as Record<string, Profile>))
+
+            // fetch users primary names
+            // call getProfile for each member with a delay of 200ms and update state
+            for (const member of members) {
+              try {
+                const profile = await subspace.user.getProfile({ userId: member.userId })
+                profileActions.updateProfile(member.userId, profile)
+                await new Promise(resolve => setTimeout(resolve, 200))
+              } catch (profileError) {
+                console.error(`Error fetching profile for user ${member.userId}:`, profileError)
+                // Continue with next member even if one fails
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching server members:', error)
         }
       }
     })()

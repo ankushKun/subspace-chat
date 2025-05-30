@@ -126,7 +126,7 @@ export default function Invite() {
             <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate("/app")}
                 className="absolute top-6 left-6 text-muted-foreground hover:text-foreground"
             >
                 <ArrowLeft className="w-4 h-4 mr-2" />

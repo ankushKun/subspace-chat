@@ -3,7 +3,7 @@ import { useServer } from "@/hooks/subspace/server"
 import React, { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown } from "lucide-react"
+import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
@@ -197,6 +197,26 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     const isServerOwner = currentServer?.owner === address
     const canDelete = message.authorId === address || isServerOwner
 
+    function copyFingerprint() {
+        navigator.clipboard.writeText(message.messageTxId)
+        // toast.success("Fingerprint copied to clipboard")
+        // show the check icon for 1 second
+        const checkIcon = document.getElementById("check-icon")
+        const fingerprintIcon = document.getElementById("fingerprint-icon")
+        if (checkIcon && fingerprintIcon) {
+            checkIcon.classList.remove("opacity-0")
+            checkIcon.classList.add("opacity-100")
+            fingerprintIcon.classList.remove("opacity-100")
+            fingerprintIcon.classList.add("opacity-0")
+            setTimeout(() => {
+                checkIcon.classList.remove("opacity-100")
+                checkIcon.classList.add("opacity-0")
+                fingerprintIcon.classList.remove("opacity-0")
+                fingerprintIcon.classList.add("opacity-100")
+            }, 1000)
+        }
+    }
+
     return (
         <div className="absolute -top-4 right-4 bg-background border border-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center">
             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onReply}>
@@ -210,6 +230,10 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
                     <Edit className="w-4 h-4" />
                 </Button>
             )}
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted relative" onClick={copyFingerprint}>
+                <Fingerprint id="fingerprint-icon" className="w-4 h-4 opacity-100 absolute" />
+                <Check id="check-icon" className="w-4 h-4 opacity-0 absolute" />
+            </Button>
             {canDelete && (
                 <Button
                     size="sm"
@@ -1614,7 +1638,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
             const success = await subspace.server.message.editMessage({
                 serverId: activeServerId,
                 messageId: editingMessage.messageId.toString(),
-                content: editedContent.trim()
+                content: editedContent.trim(),
+                messageTxId: editingMessage.messageTxId
             })
 
             if (success) {
@@ -1671,7 +1696,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
             // Send delete request to server
             const success = await subspace.server.message.deleteMessage({
                 serverId: activeServerId,
-                messageId: message.messageId.toString()
+                messageId: message.messageId.toString(),
+                messageTxId: message.messageTxId
             })
 
             if (success) {

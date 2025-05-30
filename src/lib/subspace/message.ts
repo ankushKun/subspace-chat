@@ -8,6 +8,25 @@ import { Constants } from "../constants";
 export class MessageManager {
     constructor(private connectionManager: ConnectionManager) { }
 
+    async getMessage({ serverId, messageId, messageTxId }: { serverId: string, messageId?: string, messageTxId?: string }): Promise<Message | null> {
+        const path = `${serverId}/get-single-message`
+        const body = {}
+        if (messageId) body['messageId'] = messageId
+        if (messageTxId) body['messageTxId'] = messageTxId
+
+        const res = await aofetch(path, {
+            method: "GET",
+            body,
+            AO: this.connectionManager.getAo()
+        })
+        if (res.status == 200) {
+            return res.json as Message;
+        } else {
+            Logger.error("getMessage", res);
+            return null;
+        }
+    }
+
     async getMessages({ serverId, channelId, limit = 100, before, after }: { serverId: string, channelId: number, limit?: number, before?: number, after?: number }): Promise<Message[] | null> {
         const path = `${serverId}/get-messages`
         const body = { channelId, limit }
@@ -42,6 +61,7 @@ export class MessageManager {
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.SendMessage },
+                { name: "Subspace-Server-ID", value: serverId }
             ]
         })
         if (res.status == 200) {
@@ -52,7 +72,7 @@ export class MessageManager {
         }
     }
 
-    async editMessage({ serverId, messageId, content }: { serverId: string, messageId: string, content: string }): Promise<boolean> {
+    async editMessage({ serverId, messageId, messageTxId = "", content }: { serverId: string, messageId: string, messageTxId: string, content: string }): Promise<boolean> {
         const path = `${serverId}/edit-message`
         const res = await aofetch(path, {
             method: "POST",
@@ -62,6 +82,9 @@ export class MessageManager {
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UpdateMessage },
+                { name: "Subspace-Server-ID", value: serverId },
+                { name: "Subspace-Original-Message-ID", value: messageTxId },
+                { name: "Subspace-Timestamp-Milliseconds", value: `${Date.now()}` }
             ]
         })
         if (res.status == 200) {
@@ -72,7 +95,7 @@ export class MessageManager {
         }
     }
 
-    async deleteMessage({ serverId, messageId }: { serverId: string, messageId: string }): Promise<boolean> {
+    async deleteMessage({ serverId, messageId, messageTxId = "" }: { serverId: string, messageId: string, messageTxId: string }): Promise<boolean> {
         const path = `${serverId}/delete-message`
         const res = await aofetch(path, {
             method: "POST",
@@ -82,6 +105,9 @@ export class MessageManager {
             tags: [
                 ...Constants.CommonTags,
                 { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.DeleteMessage },
+                { name: "Subspace-Server-ID", value: serverId },
+                { name: "Subspace-Original-Message-ID", value: messageTxId },
+                { name: "Subspace-Timestamp-Milliseconds", value: `${Date.now()}` }
             ]
         })
         if (res.status == 200) {

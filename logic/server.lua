@@ -749,6 +749,34 @@ end)
 
 ------------------------------------------------------------------------
 
+app.get("/get-single-message", function(req, res)
+    local messageId = VarOrNil(req.body.messageId)
+    local messageTxId = VarOrNil(req.body.messageTxId)
+
+    if not messageId and not messageTxId then
+        res:status(400):json({
+            error = "Either messageId or messageTxId is required"
+        })
+    end
+
+    local message = nil
+
+    if messageId then
+        message = SQLRead("SELECT * FROM messages WHERE messageId = ?", messageId)
+    elseif messageTxId then
+        message = SQLRead("SELECT * FROM messages WHERE messageTxId = ?", messageTxId)
+    end
+
+    if not message or #message == 0 then
+        res:status(404):json({
+            error = "Message not found"
+        })
+        return
+    end
+
+    res:json(message[1])
+end)
+
 app.get("/get-messages", function(req, res)
     local channelId = req.body.channelId
     local limit = VarOrNil(req.body.limit) or 100

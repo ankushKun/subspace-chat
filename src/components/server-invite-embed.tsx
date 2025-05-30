@@ -38,8 +38,8 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
             const isSubspaceDomain = (urlObj.hostname === 'subspace.ar.io' || urlObj.hostname === 'www.subspace.ar.io');
             const hasInviteHash = urlObj.hash.startsWith('#/invite/');
 
-            console.log('ServerInviteEmbed: Is Subspace domain:', isSubspaceDomain);
-            console.log('ServerInviteEmbed: Has invite hash:', hasInviteHash);
+            // console.log('ServerInviteEmbed: Is Subspace domain:', isSubspaceDomain);
+            // console.log('ServerInviteEmbed: Has invite hash:', hasInviteHash);
 
             return isSubspaceDomain && hasInviteHash;
         } catch {
@@ -49,40 +49,40 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
 
     // Extract server ID from invite URL
     const getServerIdFromUrl = (url: string): string => {
-        console.log('ServerInviteEmbed: Extracting server ID from URL:', url);
+        // console.log('ServerInviteEmbed: Extracting server ID from URL:', url);
 
         if (!url) {
-            console.log('ServerInviteEmbed: URL is empty');
+            // console.log('ServerInviteEmbed: URL is empty');
             return "";
         }
 
         // First validate it's a Subspace invite
         if (!isValidSubspaceInvite(url)) {
-            console.log('ServerInviteEmbed: Not a valid Subspace invite URL');
+            // console.log('ServerInviteEmbed: Not a valid Subspace invite URL');
             return "";
         }
 
         try {
             const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
-            console.log('ServerInviteEmbed: Normalized URL:', normalizedUrl);
+            // console.log('ServerInviteEmbed: Normalized URL:', normalizedUrl);
 
             const urlObj = new URL(normalizedUrl);
-            console.log('ServerInviteEmbed: URL hostname:', urlObj.hostname);
-            console.log('ServerInviteEmbed: URL hash:', urlObj.hash);
+            // console.log('ServerInviteEmbed: URL hostname:', urlObj.hostname);
+            // console.log('ServerInviteEmbed: URL hash:', urlObj.hash);
 
             // Extract server ID from hash like #/invite/serverId
             const hashParts = urlObj.hash.substring(1).split('/'); // Remove # and split
-            console.log('ServerInviteEmbed: Hash parts:', hashParts);
+            // console.log('ServerInviteEmbed: Hash parts:', hashParts);
 
             if (hashParts[1] === 'invite' && hashParts[2]) {
-                console.log('ServerInviteEmbed: Extracted server ID:', hashParts[2]);
+                // console.log('ServerInviteEmbed: Extracted server ID:', hashParts[2]);
                 return hashParts[2];
             }
         } catch (error) {
-            console.log('ServerInviteEmbed: Error parsing URL:', error);
+            // console.log('ServerInviteEmbed: Error parsing URL:', error);
         }
 
-        console.log('ServerInviteEmbed: No server ID found');
+        // console.log('ServerInviteEmbed: No server ID found');
         return "";
     }
 
@@ -94,10 +94,10 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
     // Fetch server details on mount
     useEffect(() => {
         const fetchServerDetails = async () => {
-            console.log('ServerInviteEmbed: Starting fetch for server ID:', serverId);
+            // console.log('ServerInviteEmbed: Starting fetch for server ID:', serverId);
 
             if (!serverId) {
-                console.log('ServerInviteEmbed: No server ID provided');
+                // console.log('ServerInviteEmbed: No server ID provided');
                 setError("Invalid invite link")
                 setIsLoading(false)
                 return
@@ -107,14 +107,14 @@ export function ServerInviteEmbed({ inviteUrl, className }: ServerInviteEmbedPro
                 setIsLoading(true)
                 setError("")
 
-                console.log('ServerInviteEmbed: Fetching details for server:', serverId);
+                // console.log('ServerInviteEmbed: Fetching details for server:', serverId);
                 const details = await subspace.server.getServerDetails({ serverId })
-                console.log('ServerInviteEmbed: Received server details:', details);
+                // console.log('ServerInviteEmbed: Received server details:', details);
 
                 if (details) {
                     setServerDetails(details)
                 } else {
-                    console.log('ServerInviteEmbed: No details returned for server');
+                    // console.log('ServerInviteEmbed: No details returned for server');
                     setError("Server not found")
                 }
             } catch (error) {

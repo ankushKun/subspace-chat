@@ -646,6 +646,46 @@ const EmptyChannelState = ({ channelName }: { channelName?: string }) => {
     )
 }
 
+const DateDivider = ({ timestamp }: { timestamp: number }) => {
+    const formatDate = (ts: number) => {
+        const date = new Date(ts)
+        const now = new Date()
+
+        // Get start of today and yesterday for comparison
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+        if (messageDate.getTime() === today.getTime()) {
+            return 'Today'
+        } else if (messageDate.getTime() === yesterday.getTime()) {
+            return 'Yesterday'
+        } else {
+            // Show full date for older messages
+            return date.toLocaleDateString([], {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            })
+        }
+    }
+
+    return (
+        <div className="relative flex items-center justify-center py-4 my-2">
+            {/* Line */}
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+            {/* Date badge */}
+            <div className="relative bg-background px-2.5 py-0.5 flex items-center justify-center rounded-full border border-border/50 shadow-sm">
+                <span className="text-xs font-medium text-muted-foreground">
+                    {formatDate(timestamp)}
+                </span>
+            </div>
+        </div>
+    )
+}
+
 const MessageSkeleton = ({ showAvatar = true, isGrouped = false }: { showAvatar?: boolean; isGrouped?: boolean }) => {
     return (
         <div className={cn(
@@ -1406,6 +1446,15 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
         }
     }), []);
 
+    // Helper function to check if two timestamps are on the same day
+    const isSameDay = (timestamp1: number, timestamp2: number) => {
+        const date1 = new Date(timestamp1)
+        const date2 = new Date(timestamp2)
+        return date1.getFullYear() === date2.getFullYear() &&
+            date1.getMonth() === date2.getMonth() &&
+            date1.getDate() === date2.getDate()
+    }
+
     // Get messages for the active channel
     const messagesInChannel = useMemo(() => {
         if (!activeServerId || !hasActiveChannel || !messages[activeServerId]?.[activeChannelId]) {
@@ -1752,25 +1801,38 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
                         <EmptyChannelState channelName={currentChannel?.name} />
                     ) : (
                         <div className="pt-6">
-                            {individualMessages.map((message, index) => (
-                                <div key={message.messageId} data-message-id={message.messageId}>
-                                    <MessageItem
-                                        message={message}
-                                        showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
-                                        isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
-                                        onReply={() => handleReply(message)}
-                                        onEdit={() => handleEdit(message)}
-                                        onDelete={() => handleDelete(message)}
-                                        isEditing={editingMessage?.messageId === message.messageId}
-                                        editedContent={editedContent}
-                                        onEditContentChange={setEditedContent}
-                                        onSaveEdit={handleSaveEdit}
-                                        onCancelEdit={handleCancelEdit}
-                                        isSavingEdit={isSavingEdit}
-                                        onJumpToMessage={handleJumpToMessage}
-                                    />
-                                </div>
-                            ))}
+                            {individualMessages.map((message, index) => {
+                                const prevMessage = individualMessages[index - 1]
+                                const shouldShowDateDivider = index === 0 || (prevMessage && !isSameDay(prevMessage.timestamp, message.timestamp))
+
+                                return (
+                                    <React.Fragment key={message.messageId}>
+                                        {/* Date divider */}
+                                        {shouldShowDateDivider && (
+                                            <DateDivider timestamp={message.timestamp} />
+                                        )}
+
+                                        {/* Message */}
+                                        <div data-message-id={message.messageId}>
+                                            <MessageItem
+                                                message={message}
+                                                showAvatar={index == 0 || individualMessages[index - 1]?.authorId != message.authorId}
+                                                isGrouped={index > 0 && individualMessages[index - 1]?.authorId == message.authorId}
+                                                onReply={() => handleReply(message)}
+                                                onEdit={() => handleEdit(message)}
+                                                onDelete={() => handleDelete(message)}
+                                                isEditing={editingMessage?.messageId === message.messageId}
+                                                editedContent={editedContent}
+                                                onEditContentChange={setEditedContent}
+                                                onSaveEdit={handleSaveEdit}
+                                                onCancelEdit={handleCancelEdit}
+                                                isSavingEdit={isSavingEdit}
+                                                onJumpToMessage={handleJumpToMessage}
+                                            />
+                                        </div>
+                                    </React.Fragment>
+                                )
+                            })}
                             <div ref={messagesEndRef} />
                         </div>
                     )}

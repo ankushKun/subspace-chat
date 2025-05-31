@@ -354,7 +354,7 @@ export default function App() {
       <title>{title}</title>
       <>
         <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={showWelcome} />
-        {connected && <div className="hidden sm:flex flex-col h-full overflow-hidden min-w-0">{activeServerId ? (
+        {connected && <div className="hidden sm:flex flex-col h-full overflow-hidden min-w-fit">{activeServerId ? (
           <ChannelList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         ) : (
           <DMList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />

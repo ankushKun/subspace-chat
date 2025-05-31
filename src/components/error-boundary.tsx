@@ -48,15 +48,61 @@ export class ErrorBoundary extends Component<Props, State> {
             ? event.reason
             : new Error(typeof event.reason === 'string' ? event.reason : 'Unhandled promise rejection')
 
+        const errorId = Math.random().toString(36).substring(2, 15)
+        const timestamp = new Date()
+
         this.setState({
             hasError: true,
             error,
             errorInfo: null,
-            errorId: Math.random().toString(36).substring(2, 15),
-            timestamp: new Date(),
+            errorId,
+            timestamp,
             isPromiseRejection: true,
             isDismissed: false
         })
+
+        // Check if this is a critical promise rejection
+        // We need to temporarily set the state to check if it's critical
+        const tempState = {
+            ...this.state,
+            error,
+            errorId,
+            timestamp,
+            isPromiseRejection: true
+        }
+
+        // Create a temporary instance to check if critical
+        const isCritical = this.isCriticalErrorForState(tempState)
+
+        if (!isCritical) {
+            console.group('🐛 Non-critical promise rejection detected')
+            console.error('Original Promise Rejection:', event.reason)
+            console.error('Error Message:', error.message)
+            console.error('Original Stack Trace:')
+            console.error(error.stack)
+            console.error('Promise Rejection Details:', {
+                errorId,
+                timestamp: timestamp.toISOString(),
+                url: window.location.href,
+                userAgent: navigator.userAgent,
+                reason: event.reason
+            })
+            console.groupEnd()
+        } else {
+            console.group('🚨 Critical promise rejection detected')
+            console.error('Original Promise Rejection:', event.reason)
+            console.error('Error Message:', error.message)
+            console.error('Original Stack Trace:')
+            console.error(error.stack)
+            console.error('Promise Rejection Details:', {
+                errorId,
+                timestamp: timestamp.toISOString(),
+                url: window.location.href,
+                userAgent: navigator.userAgent,
+                reason: event.reason
+            })
+            console.groupEnd()
+        }
 
         // Prevent the default browser error handling
         event.preventDefault()
@@ -92,10 +138,52 @@ export class ErrorBoundary extends Component<Props, State> {
             errorInfo
         })
 
+        // For non-critical errors, just log and continue
+        if (!this.isCriticalError()) {
+            console.group('🐛 Non-critical error detected')
+            console.error('Original Error:', error)
+            console.error('Error Message:', error.message)
+            console.error('Original Stack Trace:')
+            console.error(error.stack)
+            if (errorInfo.componentStack) {
+                console.error('Component Stack Trace:')
+                console.error(errorInfo.componentStack)
+            }
+            console.error('Error Details:', {
+                errorId: this.state.errorId,
+                timestamp: this.state.timestamp.toISOString(),
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            })
+            console.groupEnd()
+        } else {
+            console.group('🚨 Critical error detected')
+            console.error('Original Error:', error)
+            console.error('Error Message:', error.message)
+            console.error('Original Stack Trace:')
+            console.error(error.stack)
+            if (errorInfo.componentStack) {
+                console.error('Component Stack Trace:')
+                console.error(errorInfo.componentStack)
+            }
+            console.error('Error Details:', {
+                errorId: this.state.errorId,
+                timestamp: this.state.timestamp.toISOString(),
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            })
+            console.groupEnd()
+        }
+
         // Log to external service in production
         if (process.env.NODE_ENV === 'production') {
             // Add your error reporting service here (e.g., Sentry, LogRocket, etc.)
-            console.error('Error ID:', this.state.errorId, { error, errorInfo })
+            console.error('Error ID:', this.state.errorId, {
+                error,
+                errorInfo,
+                originalStack: error.stack,
+                componentStack: errorInfo.componentStack
+            })
         }
     }
 
@@ -128,10 +216,10 @@ export class ErrorBoundary extends Component<Props, State> {
         })
     }
 
-    private isCriticalError = (): boolean => {
+    private isCriticalErrorForState = (state: State): boolean => {
         // Determine if this is a critical error that should not be dismissible
-        const errorMessage = this.state.error?.message?.toLowerCase() || ''
-        const errorStack = this.state.error?.stack?.toLowerCase() || ''
+        const errorMessage = state.error?.message?.toLowerCase() || ''
+        const errorStack = state.error?.stack?.toLowerCase() || ''
 
         // Critical errors that suggest app-wide failure
         const criticalPatterns = [
@@ -149,7 +237,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
         return criticalPatterns.some(pattern =>
             errorMessage.includes(pattern) || errorStack.includes(pattern)
-        ) || this.state.retryCount >= 3 // After 3 retries, treat as critical
+        ) || state.retryCount >= 3 // After 3 retries, treat as critical
+    }
+
+    private isCriticalError = (): boolean => {
+        return this.isCriticalErrorForState(this.state)
     }
 
     private copyErrorDetails = () => {
@@ -157,8 +249,8 @@ export class ErrorBoundary extends Component<Props, State> {
             errorId: this.state.errorId,
             timestamp: this.state.timestamp.toISOString(),
             message: this.state.error?.message,
-            stack: this.state.error?.stack,
-            componentStack: this.state.errorInfo?.componentStack,
+            originalStackTrace: this.state.error?.stack,
+            componentStackTrace: this.state.errorInfo?.componentStack,
             userAgent: navigator.userAgent,
             url: window.location.href,
             errorType: this.state.isPromiseRejection ? 'Promise Rejection' : 'Component Error',
@@ -167,11 +259,55 @@ export class ErrorBoundary extends Component<Props, State> {
             buildInfo: {
                 version: globalThis.__VERSION__ || 'unknown',
                 environment: process.env.NODE_ENV
+            },
+            // Include the complete error object for debugging
+            completeErrorDetails: {
+                name: this.state.error?.name,
+                message: this.state.error?.message,
+                stack: this.state.error?.stack,
+                cause: (this.state.error as any)?.cause,
+                ...(this.state.error && Object.getOwnPropertyNames(this.state.error).reduce((acc, key) => {
+                    try {
+                        acc[key] = (this.state.error as any)[key]
+                    } catch (e) {
+                        acc[key] = '[Unable to serialize]'
+                    }
+                    return acc
+                }, {} as any))
             }
         }
 
-        navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2))
-        toast.success('Error details copied to clipboard')
+        const formattedDetails = `ERROR REPORT
+=============
+
+Error ID: ${errorDetails.errorId}
+Timestamp: ${errorDetails.timestamp}
+Type: ${errorDetails.errorType}
+Critical: ${errorDetails.isCritical}
+Retry Count: ${errorDetails.retryCount}
+
+ERROR MESSAGE:
+${errorDetails.message}
+
+ORIGINAL STACK TRACE:
+${errorDetails.originalStackTrace || 'No stack trace available'}
+
+${errorDetails.componentStackTrace ? `COMPONENT STACK TRACE:
+${errorDetails.componentStackTrace}
+
+` : ''}ENVIRONMENT:
+- URL: ${errorDetails.url}
+- User Agent: ${errorDetails.userAgent}
+- Build Version: ${errorDetails.buildInfo.version}
+- Environment: ${errorDetails.buildInfo.environment}
+
+COMPLETE ERROR OBJECT:
+${JSON.stringify(errorDetails.completeErrorDetails, null, 2)}`
+
+        navigator.clipboard.writeText(formattedDetails)
+        toast.success('Complete error details copied to clipboard', {
+            description: 'Includes original stack trace and all error properties'
+        })
     }
 
     private reportBug = () => {
@@ -209,7 +345,8 @@ ${this.state.errorInfo.componentStack}
     }
 
     public render() {
-        if (this.state.hasError && !this.state.isDismissed) {
+        // Only show error boundary UI for critical errors
+        if (this.state.hasError && !this.state.isDismissed && this.isCriticalError()) {
             const errorType = this.state.isPromiseRejection ? 'Promise Rejection' : 'Component Error'
             const isCritical = this.isCriticalError()
 
@@ -239,13 +376,10 @@ ${this.state.errorInfo.componentStack}
                                 <AlertTriangle className="w-8 h-8 text-destructive" />
                             </div>
                             <CardTitle className="text-2xl font-bold text-destructive">
-                                {isCritical ? 'Critical Error Detected' : 'Oops! Something went wrong'}
+                                Critical Error Detected
                             </CardTitle>
                             <CardDescription className="text-base mt-2">
-                                {isCritical
-                                    ? 'A critical error occurred that may affect app functionality. Please reload the page.'
-                                    : 'The application encountered an error. You can dismiss this and continue using the app, or reload for a fresh start.'
-                                }
+                                A critical error occurred that may affect app functionality. Please reload the page.
                             </CardDescription>
                         </CardHeader>
 
@@ -260,8 +394,8 @@ ${this.state.errorInfo.componentStack}
                                             <Badge variant="destructive" className="text-xs">
                                                 {errorType}
                                             </Badge>
-                                            <Badge variant={isCritical ? "destructive" : "secondary"} className="text-xs">
-                                                {isCritical ? "Critical" : "Non-Critical"}
+                                            <Badge variant="destructive" className="text-xs">
+                                                Critical
                                             </Badge>
                                             {this.state.retryCount > 0 && (
                                                 <Badge variant="outline" className="text-xs">
@@ -275,19 +409,6 @@ ${this.state.errorInfo.componentStack}
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Non-critical error help */}
-                            {!isCritical && (
-                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                                    <div className="flex items-start gap-3">
-                                        <ArrowLeft className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                        <div className="text-sm text-blue-700">
-                                            <p className="font-medium mb-1">You can continue using the app</p>
-                                            <p>This error doesn't appear to be critical. You can dismiss this message and continue, or try again if the error persists.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Metadata */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -365,12 +486,6 @@ ${this.state.errorInfo.componentStack}
 
                         <CardFooter className="flex flex-col sm:flex-row gap-3 pt-6">
                             <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                                {!isCritical && (
-                                    <Button onClick={this.handleDismiss} variant="secondary" className="flex-1 sm:flex-none">
-                                        <ArrowLeft className="w-4 h-4 mr-2" />
-                                        Dismiss & Continue
-                                    </Button>
-                                )}
                                 <Button onClick={this.handleReset} variant="outline" className="flex-1 sm:flex-none">
                                     Try Again
                                 </Button>
@@ -396,6 +511,7 @@ ${this.state.errorInfo.componentStack}
             )
         }
 
+        // For non-critical errors or when dismissed, continue rendering children normally
         return this.props.children
     }
 } 

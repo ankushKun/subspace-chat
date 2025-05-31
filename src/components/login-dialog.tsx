@@ -132,7 +132,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             Cancel Scanning
                         </Button>
                     </> : <>
-                        {window && window.arweaveWallet && <Button variant="ghost" className="text-start group justify-start border border-border/50 h-12"
+                        {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" && <Button variant="ghost" className="text-start group justify-start border border-border/50 h-12"
                             onClick={() => walletActions.connect(ConnectionStrategies.ArWallet)}
                         >
                             <div>Arweave Wallet</div>

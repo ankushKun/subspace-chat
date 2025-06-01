@@ -1470,6 +1470,13 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
         }
     }), []);
 
+    // Clear reply state when channel changes
+    useEffect(() => {
+        if (replyingTo) {
+            handleCancelReply();
+        }
+    }, [activeChannelId, activeServerId]);
+
     // Helper function to check if two timestamps are on the same day
     const isSameDay = (timestamp1: number, timestamp2: number) => {
         const date1 = new Date(timestamp1)

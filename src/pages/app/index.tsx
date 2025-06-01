@@ -98,8 +98,8 @@ export default function App() {
 
   useEffect(() => {
     if (!connected || !address) {
-      serverActions.setActiveChannelId(null)
-      serverActions.setActiveServerId(null)
+      serverActions.setActiveChannelId(0)
+      serverActions.setActiveServerId("")
       serverActions.setServersJoined(address, [])
     }
   }, [connected, address])
@@ -108,8 +108,11 @@ export default function App() {
     if (!connected || !address) return
     (async () => {
       try {
-        serverActions.setActiveChannelId(0)
-        serverActions.setActiveServerId(null)
+        // Only reset server/channel if we're not already connected to maintain last channel state
+        if (!activeServerId) {
+          serverActions.setActiveChannelId(0)
+          serverActions.setActiveServerId("")
+        }
         serverActions.setLoadingServers(true)
         const profile = await subspace.user.getProfile({ userId: address })
 
@@ -306,7 +309,7 @@ export default function App() {
 
       if (serverId && channelId) {
         try {
-          // Navigate to the server and channel
+          // Navigate to the server and channel directly (don't restore previous channel)
           serverActions.setActiveServerId(serverId);
           serverActions.setActiveChannelId(channelId);
 

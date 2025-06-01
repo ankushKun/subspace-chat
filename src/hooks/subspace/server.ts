@@ -10,6 +10,7 @@ interface ServerState {
 
     activeServerId: string;
     activeChannelId: number;
+    lastActiveChannelByServer: Record<string, number>; // ServerId -> ChannelId
     serversJoined: Record<string, string[]>; // UserId -> ServerId[]
     servers: Record<string, Server | null>; // ServerId -> Server
 
@@ -23,6 +24,7 @@ interface ServerActions {
 
     setActiveServerId: (serverId: string) => void;
     setActiveChannelId: (channelId: number) => void;
+    setActiveServerIdAndRestoreChannel: (serverId: string) => void;
 
     setServersJoined: (userId: string, servers: string[]) => void;
 
@@ -46,6 +48,7 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
 
     activeServerId: "",
     activeChannelId: 0,
+    lastActiveChannelByServer: {},
     servers: {},
     serversJoined: {},
 
@@ -55,8 +58,70 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
         setLoadingServerMembers: (loading: boolean) => set({ loadingServerMembers: loading }),
         setLoadingServerChannels: (loading: boolean) => set({ loadingServerChannels: loading }),
 
-        setActiveServerId: (serverId: string) => set({ activeServerId: serverId, activeChannelId: 0 }),
-        setActiveChannelId: (channelId: number) => set({ activeChannelId: channelId }),
+        setActiveServerId: (serverId: string) => {
+            const state = get();
+
+            // Store the current active channel for the previous server
+            if (state.activeServerId && state.activeChannelId > 0) {
+                set((prevState) => ({
+                    lastActiveChannelByServer: {
+                        ...prevState.lastActiveChannelByServer,
+                        [state.activeServerId]: state.activeChannelId
+                    }
+                }));
+            }
+
+            set({ activeServerId: serverId, activeChannelId: 0 });
+        },
+
+        setActiveChannelId: (channelId: number) => {
+            const state = get();
+
+            // Store the channel as the last active for the current server
+            if (state.activeServerId && channelId > 0) {
+                set((prevState) => ({
+                    activeChannelId: channelId,
+                    lastActiveChannelByServer: {
+                        ...prevState.lastActiveChannelByServer,
+                        [state.activeServerId]: channelId
+                    }
+                }));
+            } else {
+                set({ activeChannelId: channelId });
+            }
+        },
+
+        setActiveServerIdAndRestoreChannel: (serverId: string) => {
+            const state = get();
+
+            // Store the current active channel for the previous server
+            if (state.activeServerId && state.activeChannelId > 0) {
+                set((prevState) => ({
+                    lastActiveChannelByServer: {
+                        ...prevState.lastActiveChannelByServer,
+                        [state.activeServerId]: state.activeChannelId
+                    }
+                }));
+            }
+
+            // Get the last active channel for the new server
+            const lastChannelId = state.lastActiveChannelByServer[serverId];
+            let channelIdToSet = 0;
+
+            // Check if the last channel still exists in the server
+            if (lastChannelId && state.servers[serverId]) {
+                const server = state.servers[serverId];
+                const channelExists = server?.channels?.some(channel => channel.channelId === lastChannelId);
+                if (channelExists) {
+                    channelIdToSet = lastChannelId;
+                }
+            }
+
+            set({
+                activeServerId: serverId,
+                activeChannelId: channelIdToSet
+            });
+        },
 
         setServersJoined(userId: string, servers: string[]) {
             set((state) => ({ serversJoined: { ...state.serversJoined, [userId]: servers } }))
@@ -66,7 +131,11 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
         addServer: (server: Server) => set((state) => ({ servers: { ...state.servers, [server.serverId]: server } })),
         removeServer: (serverId: string) => set((state) => {
             const { [serverId]: removed, ...remainingServers } = state.servers;
-            return { servers: remainingServers };
+            const { [serverId]: removedChannel, ...remainingChannels } = state.lastActiveChannelByServer;
+            return {
+                servers: remainingServers,
+                lastActiveChannelByServer: remainingChannels
+            };
         }),
         updateServer: (serverId: string, server: Server) => set((state) => ({
             servers: {
@@ -109,13 +178,14 @@ export const useServer = create<ServerState>()(persist((set, get) => ({
             };
         }),
 
-        clearAllServers: () => set({ servers: {} }),
+        clearAllServers: () => set({ servers: {}, lastActiveChannelByServer: {} }),
     }
 }), {
     name: "subspace-server-state",
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
         activeServerId: state.activeServerId,
+        lastActiveChannelByServer: state.lastActiveChannelByServer,
         servers: state.servers,
         serversJoined: state.serversJoined,
     })

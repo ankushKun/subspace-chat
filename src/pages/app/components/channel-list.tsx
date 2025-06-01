@@ -747,7 +747,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
     }, [editServerOpen, server])
 
     // Show DMs when no server is selected
-    if (activeServerId === null) {
+    if (activeServerId === "") {
         return (
             <div
                 {...props}

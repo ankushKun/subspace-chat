@@ -892,7 +892,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 bg-primary/5 rounded-full blur-2xl" />
 
             {/* Home Button */}
-            <HomeButton isActive={activeServerId === null} onClick={() => { actions.setActiveServerId(null); actions.setActiveChannelId(null) }} />
+            <HomeButton isActive={activeServerId === ""} onClick={() => { actions.setActiveServerId(""); actions.setActiveChannelId(0) }} />
 
             {/* Enhanced Separator with gradient */}
             <div className="relative mx-auto mb-3">
@@ -922,7 +922,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
                                 style={{ animationDelay: `${index * 100}ms` }}
                                 className="animate-in slide-in-from-left-5 fade-in duration-500"
                             >
-                                <ServerButton server={servers[serverId]} isActive={serverId === activeServerId} onClick={() => actions.setActiveServerId(serverId)} />
+                                <ServerButton server={servers[serverId]} isActive={serverId === activeServerId} onClick={() => actions.setActiveServerIdAndRestoreChannel(serverId)} />
                             </div>
                         )
                     ))

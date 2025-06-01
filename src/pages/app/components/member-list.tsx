@@ -217,8 +217,42 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
             })
         }
 
-        return { owner: ownerMembers, members: regularMembers }
-    }, [filteredMembers, server?.owner])
+        // Sort function to prioritize members with primaryName or nickname
+        const sortMembers = (members: ServerMember[]) => {
+            return members.sort((a, b) => {
+                const profileA = profiles[a.userId]
+                const profileB = profiles[b.userId]
+
+                const hasNameA = !!(a.nickname || profileA?.primaryName)
+                const hasNameB = !!(b.nickname || profileB?.primaryName)
+
+                const defaultPfpHash = "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo"
+                const hasCustomPfpA = !!(profileA?.pfp && profileA.pfp !== defaultPfpHash)
+                const hasCustomPfpB = !!(profileB?.pfp && profileB.pfp !== defaultPfpHash)
+
+                // Calculate priority scores (higher is better)
+                // 4: has name AND custom pfp, 3: has name only, 2: has custom pfp only, 1: has neither
+                const scoreA = (hasNameA ? 2 : 0) + (hasCustomPfpA ? 2 : 0)
+                const scoreB = (hasNameB ? 2 : 0) + (hasCustomPfpB ? 2 : 0)
+
+                // Sort by priority score first
+                if (scoreA !== scoreB) {
+                    return scoreB - scoreA // Higher scores first
+                }
+
+                // If same priority, sort alphabetically by display name
+                const displayNameA = a.nickname || profileA?.primaryName || a.userId
+                const displayNameB = b.nickname || profileB?.primaryName || b.userId
+
+                return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
+            })
+        }
+
+        return {
+            owner: sortMembers(ownerMembers),
+            members: sortMembers(regularMembers)
+        }
+    }, [filteredMembers, server?.owner, profiles])
 
     const toggleSection = (sectionId: string) => {
         setExpandedSections(prev => {

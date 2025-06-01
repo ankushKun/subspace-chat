@@ -118,6 +118,6 @@ export default defineConfig({
     __SERVER_SRC__: JSON.stringify(serverSource),
   },
   server: {
-    allowedHosts: ["ankush-mbp.local"],
+    allowedHosts: ["ankush-mbp.local", "1jq3s5-ip-49-37-11-17.tunnelmole.net"],
   },
 });

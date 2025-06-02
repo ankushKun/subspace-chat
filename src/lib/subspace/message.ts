@@ -8,7 +8,7 @@ import { Constants } from "../constants";
 export class MessageManager {
     constructor(private connectionManager: ConnectionManager) { }
 
-    async getMessage({ serverId, messageId, messageTxId }: { serverId: string, messageId?: string, messageTxId?: string }): Promise<Message | null> {
+    async getMessage({ serverId, messageId, messageTxId }: { serverId: string, messageId?: number, messageTxId?: string }): Promise<Message | null> {
         const path = `${serverId}/get-single-message`
         const body = {}
         if (messageId) body['messageId'] = messageId
@@ -72,7 +72,7 @@ export class MessageManager {
         }
     }
 
-    async editMessage({ serverId, messageId, messageTxId = "", content }: { serverId: string, messageId: string, messageTxId: string, content: string }): Promise<boolean> {
+    async editMessage({ serverId, messageId, messageTxId = "", content }: { serverId: string, messageId: number, messageTxId: string, content: string }): Promise<boolean> {
         const path = `${serverId}/edit-message`
         const res = await aofetch(path, {
             method: "POST",
@@ -95,7 +95,7 @@ export class MessageManager {
         }
     }
 
-    async deleteMessage({ serverId, messageId, messageTxId = "" }: { serverId: string, messageId: string, messageTxId: string }): Promise<boolean> {
+    async deleteMessage({ serverId, messageId, messageTxId = "" }: { serverId: string, messageId: number, messageTxId: string }): Promise<boolean> {
         const path = `${serverId}/delete-message`
         const res = await aofetch(path, {
             method: "POST",

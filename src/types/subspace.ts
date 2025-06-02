@@ -42,7 +42,7 @@ export type Member = {
 
 export enum Permission {
     SEND_MESSAGES = 1 << 0, // 1
-    CHANGE_NICKNAME = 1 << 1, // 2
+    MANAGE_NICKNAMES = 1 << 1, // 2
     DELETE_MESSAGES = 1 << 2, // 4
     KICK_MEMBERS = 1 << 3, // 8
     BAN_MEMBERS = 1 << 4, // 16
@@ -64,7 +64,7 @@ export const hasPermission = (sum: number, perm: Permission): boolean => {
 }
 
 export type Role = {
-    id: string
+    roleId: number
     name: string
     orderId: number
     permissions: number
@@ -74,14 +74,14 @@ export type Role = {
 export type ServerMember = {
     userId: string;
     nickname: string | null;
-    // TODO: implement roles
+    roles: string; // JSON encoded array of role IDs
 }
 
 export type Server = {
     serverId: string;
     categories: Category[];
     channels: Channel[];
-    // roles: Role[]; // TODO: implement
+    roles: Role[];
     name: string;
     icon: string;
     owner: string;
@@ -148,6 +148,7 @@ export type ServerDetailsResponse = {
     categories: Category[];
     channels: Channel[];
     member_count: number;
+    roles: Role[];
 }
 
 export type VersionResponse = {

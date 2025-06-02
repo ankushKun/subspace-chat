@@ -6,16 +6,19 @@ import type { Server, ServerMember, Message, ServerDetailsResponse, VersionRespo
 import { CategoryManager } from "./category"
 import { MessageManager } from "./message"
 import { ChannelManager } from "./channel"
+import { RoleManager } from "./role"
 
 export class ServerManager {
     category: CategoryManager
     channel: ChannelManager
     message: MessageManager
+    role: RoleManager
 
     constructor(private connectionManager: ConnectionManager) {
         this.category = new CategoryManager(this.connectionManager)
         this.channel = new ChannelManager(this.connectionManager)
         this.message = new MessageManager(this.connectionManager)
+        this.role = new RoleManager(this.connectionManager)
     }
 
     // TODO: custom module with server code preloaded?

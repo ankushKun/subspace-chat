@@ -32,7 +32,7 @@ export class CategoryManager {
         }
     }
 
-    async updateCategory({ serverId, categoryId, name, orderId = undefined }: { serverId: string, categoryId: string, name?: string, orderId?: number }): Promise<boolean> {
+    async updateCategory({ serverId, categoryId, name, orderId = undefined }: { serverId: string, categoryId: number, name?: string, orderId?: number }): Promise<boolean> {
         const body = { categoryId }
         if (orderId !== undefined) {
             body['orderId'] = orderId;
@@ -59,7 +59,7 @@ export class CategoryManager {
         }
     }
 
-    async deleteCategory({ serverId, categoryId }: { serverId: string, categoryId: string }): Promise<number | null> {
+    async deleteCategory({ serverId, categoryId }: { serverId: string, categoryId: number }): Promise<number | null> {
         const path = `${serverId}/delete-category`
         const res = await aofetch(path, {
             method: "POST",

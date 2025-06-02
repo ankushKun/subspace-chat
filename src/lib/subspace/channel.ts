@@ -7,7 +7,7 @@ import type { CreateChannelResponse } from "@/types/subspace";
 export class ChannelManager {
     constructor(private connectionManager: ConnectionManager) { }
 
-    async createChannel({ serverId, parentCategoryId, name, orderId = undefined }: { serverId: string, parentCategoryId?: string, name: string, orderId?: number }): Promise<CreateChannelResponse | null> {
+    async createChannel({ serverId, parentCategoryId, name, orderId = undefined }: { serverId: string, parentCategoryId?: number, name: string, orderId?: number }): Promise<CreateChannelResponse | null> {
         const body = { parentCategoryId, name }
         if (orderId !== undefined) {
             body['orderId'] = orderId;
@@ -31,7 +31,7 @@ export class ChannelManager {
         }
     }
 
-    async updateChannel({ serverId, channelId, name, parentCategoryId, orderId = undefined }: { serverId: string, channelId: string, name?: string, parentCategoryId?: string, orderId?: number }): Promise<boolean> {
+    async updateChannel({ serverId, channelId, name, parentCategoryId, orderId = undefined }: { serverId: string, channelId: number, name?: string, parentCategoryId?: number, orderId?: number }): Promise<boolean> {
         const body = { channelId }
         if (orderId !== undefined) {
             body['orderId'] = orderId;
@@ -61,7 +61,7 @@ export class ChannelManager {
         }
     }
 
-    async deleteChannel({ serverId, channelId }: { serverId: string, channelId: string }): Promise<number | null> {
+    async deleteChannel({ serverId, channelId }: { serverId: string, channelId: number }): Promise<number | null> {
         const path = `${serverId}/delete-channel`
         const res = await aofetch(path, {
             method: "POST",

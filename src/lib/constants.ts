@@ -31,6 +31,12 @@ export class Constants {
         DeleteMessage: "Delete-Message",
         DeleteMember: "Delete-Member",
 
+        CreateRole: "Create-Role",
+        UpdateRole: "Update-Role",
+        DeleteRole: "Delete-Role",
+        AssignRole: "Assign-Role",
+        UnassignRole: "Unassign-Role",
+
         JoinServer: "Join-Server",
         LeaveServer: "Leave-Server",
 

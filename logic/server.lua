@@ -162,7 +162,8 @@ db:exec([[
 
     CREATE TABLE IF NOT EXISTS members (
         userId TEXT PRIMARY KEY,
-        nickname TEXT
+        nickname TEXT,
+        roles TEXT DEFAULT "[]"
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -179,7 +180,60 @@ db:exec([[
         FOREIGN KEY (authorId) REFERENCES members(userId) ON DELETE SET NULL,
         FOREIGN KEY (replyTo) REFERENCES messages(messageId) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS roles (
+        roleId INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        orderId INTEGER NOT NULL DEFAULT 1,
+        color TEXT NOT NULL,
+        permissions INTEGER NOT NULL DEFAULT 0
+    );
 ]])
+
+Permissions = {
+    SEND_MESSAGES = 1 << 0,    -- 1
+    MANAGE_NICKNAMES = 1 << 1, -- 2
+    DELETE_MESSAGES = 1 << 2,  -- 4
+    KICK_MEMBERS = 1 << 3,     -- 8
+    BAN_MEMBERS = 1 << 4,      -- 16
+    MANAGE_CHANNELS = 1 << 5,  -- 32
+    MANAGE_SERVER = 1 << 6,    -- 64
+    MANAGE_ROLES = 1 << 7,     -- 128
+    MANAGE_MEMBERS = 1 << 8,   -- 256
+    MENTION_EVERYONE = 1 << 9, -- 512
+    ADMINISTRATOR = 1 << 10,   -- 1024
+}
+
+function GetPermissions(sum_perms)
+    local perms = {}
+    for perm, value in pairs(Permissions) do
+        if sum_perms & value ~= 0 then
+            table.insert(perms, perm)
+        end
+    end
+    return perms
+end
+
+function HasPermission(sum_perms, perm)
+    return sum_perms & perm == perm
+end
+
+function MemberHasPermission(member, perm)
+    if isOwner(member.userId) then
+        return true
+    end
+
+    local roles = json.decode(member.roles or "[]") or {}
+    if #roles == 0 then
+        return HasPermission(0, perm)
+    end
+    for _, role in ipairs(roles) do
+        if HasPermission(role.permissions, perm) then
+            return true
+        end
+    end
+    return false
+end
 
 -- Record for original id and delegated id (addresses)
 -- whenever a request is received, if it is a delegated id, use the original id in place of the delegated id
@@ -223,6 +277,7 @@ app.get("/", function(req, res)
     local categories = SQLRead("SELECT * FROM categories ORDER BY orderId ASC")
     local channels = SQLRead("SELECT * FROM channels ORDER BY categoryId, orderId ASC")
     local member_count = SQLRead("SELECT COUNT(*) FROM members")[1]["COUNT(*)"]
+    local roles = SQLRead("SELECT * FROM roles ORDER BY orderId ASC")
 
     res:json({
         name = server_name,
@@ -230,7 +285,8 @@ app.get("/", function(req, res)
         owner = Owner,
         categories = categories,
         channels = channels,
-        member_count = member_count
+        member_count = member_count,
+        roles = roles
     })
 end)
 
@@ -1089,6 +1145,240 @@ app.post("/delete-message", function(req, res)
 end)
 
 ------------------------------------------------------------
+-- ROLES
+
+app.post("/create-role", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local HasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+    if not HasPermission then
+        res:status(403):json({
+            error = "You are not authorized to create roles"
+        })
+        return
+    end
+
+    local name = VarOrNil(req.body.name) or "New Role"
+    local color = VarOrNil(req.body.color) or "#696969"
+    local permissions = VarOrNil(req.body.permissions) or 1
+    local orderId
+
+    -- put the new role at bottom by default
+    local c_roles = SQLRead("SELECT COUNT(*) as count FROM roles")[1].count
+    orderId = c_roles + 1
+
+    local rows_updated = SQLWrite("INSERT INTO roles (name, color, permissions, orderId) VALUES (?, ?, ?, ?)", name,
+        color, permissions, orderId)
+    if rows_updated == 1 then
+        res:json({})
+    else
+        res:status(500):json({
+            error = "Failed to create role " .. db:errmsg()
+        })
+    end
+end)
+
+app.post("/update-role", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+
+    local roleId = req.body.roleId
+
+    local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+    if not role or #role == 0 then
+        res:status(404):json({
+            error = "Role not found"
+        })
+        return
+    end
+
+    role = role[1]
+
+    local name = VarOrNil(req.body.name) or role.name
+    local color = VarOrNil(req.body.color) or role.color
+    local permissions = tonumber(VarOrNil(req.body.permissions) or role.permissions)
+    local orderId = tonumber(VarOrNil(req.body.orderId) or role.orderId)
+
+    -- implement role ordering like channels
+
+
+    local rows_updated = SQLWrite("UPDATE roles SET name = ?, color = ?, permissions = ?, orderId = ? WHERE roleId = ?",
+        name,
+        color, permissions, orderId, roleId)
+    if rows_updated == 1 then
+        res:json({})
+    else
+        res:status(500):json({
+            error = "Failed to update role " .. db:errmsg()
+        })
+    end
+end)
+
+app.post("/delete-role", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+    if not hasPermission then
+        res:status(403):json({
+            error = "You are not authorized to delete roles"
+        })
+        return
+    end
+
+    local roleId = req.body.roleId
+    local rows_updated = SQLWrite("DELETE FROM roles WHERE roleId = ?", roleId)
+    if rows_updated == 1 then
+        -- update all members that have this role in their roles list
+        local members = SQLRead("SELECT * FROM members WHERE roles LIKE ?", "%" .. roleId .. "%")
+        local usersUpdated = 0
+        for _, member in ipairs(members) do
+            local roles = json.decode(member.roles or "[]") or {}
+            for i, role in ipairs(roles) do
+                if role.roleId == roleId then
+                    table.remove(roles, i)
+                    break
+                end
+            end
+            local updatedRolesString
+            if #roles == 0 then
+                updatedRolesString = "[]"
+            else
+                updatedRolesString = json.encode(roles)
+            end
+            local rows_updated_1 = SQLWrite("UPDATE members SET roles = ? WHERE userId = ?", updatedRolesString,
+                member.userId)
+            usersUpdated = usersUpdated + rows_updated_1
+        end
+        res:json({
+            usersUpdated = usersUpdated
+        })
+    else
+        res:status(500):json({
+            error = "Failed to delete role " .. db:errmsg()
+        })
+    end
+end)
+
+app.post("/assign-role", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+    if not hasPermission then
+        res:status(403):json({
+            error = "You are not authorized to assign roles"
+        })
+        return
+    end
+
+    local userIdToUpdate = req.body.userId
+    local roleId = req.body.roleId
+
+    local member = SQLRead("SELECT * FROM members WHERE userId = ?", userIdToUpdate)
+    if not member or #member == 0 then
+        res:status(404):json({
+            error = "Member not found"
+        })
+        return
+    end
+
+    local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+    if not role or #role == 0 then
+        res:status(404):json({
+            error = "Role not found"
+        })
+        return
+    end
+
+    role = role[1]
+
+    local roles = json.decode(member.roles or "[]") or {}
+    for _, addingRoleId in ipairs(roles) do
+        if addingRoleId == roleId then
+            res:status(400):json({
+                error = "Member already has this role"
+            })
+            return
+        end
+    end
+
+    table.insert(roles, roleId)
+
+    local updatedRolesString = json.encode(roles)
+    local rows_updated = SQLWrite("UPDATE members SET roles = ? WHERE userId = ?", updatedRolesString, userIdToUpdate)
+    if rows_updated == 1 then
+        res:json({})
+    else
+        res:status(500):json({
+            error = "Failed to assign role " .. db:errmsg()
+        })
+    end
+end)
+
+app.post("/unassign-role", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+    if not hasPermission then
+        res:status(403):json({
+            error = "You are not authorized to unassign roles"
+        })
+        return
+    end
+
+    local userIdToUpdate = req.body.userId
+    local roleId = req.body.roleId
+
+    local member = SQLRead("SELECT * FROM members WHERE userId = ?", userIdToUpdate)
+    if not member or #member == 0 then
+        res:status(404):json({
+            error = "Member not found"
+        })
+        return
+    end
+
+    local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+    if not role or #role == 0 then
+        res:status(404):json({
+            error = "Role not found"
+        })
+        return
+    end
+
+    role = role[1]
+
+    local roles = json.decode(member.roles or "[]") or {}
+
+    local removed = false
+    for i, removingRoleId in ipairs(roles) do
+        if removingRoleId == roleId then
+            table.remove(roles, i)
+            removed = true
+            break
+        end
+    end
+
+    if not removed then
+        res:status(400):json({
+            error = "Member does not have this role"
+        })
+        return
+    end
+
+    local updatedRolesString = json.encode(roles)
+    local rows_updated = SQLWrite("UPDATE members SET roles = ? WHERE userId = ?", updatedRolesString, userIdToUpdate)
+    if rows_updated == 1 then
+        res:json({})
+    else
+        res:status(500):json({
+            error = "Failed to unassign role " .. db:errmsg()
+        })
+    end
+end)
+
+------------------------------------------------------------
+
 
 Handlers.add("Add-Member", function(msg)
     assert(msg.From == PROFILES, "You are not authorized to add members to this server")

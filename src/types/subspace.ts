@@ -40,36 +40,35 @@ export type Member = {
 
 // TODO: implement permissions
 
-// 0000 0000 0000 0000
-// bit 1: ADMINISTRATOR
-// bit 2: MANAGE_SERVER
-// bit 3: DELETE_MESSAGES
-// bit 4: KICK_MEMBERS
-// bit 5: BAN_MEMBERS
-// bit 6: MANAGE_CHANNELS
-
 export enum Permission {
-    ADMINISTRATOR = 1 << 0, // 1
-    MANAGE_SERVER = 1 << 1, // 2
+    SEND_MESSAGES = 1 << 0, // 1
+    CHANGE_NICKNAME = 1 << 1, // 2
     DELETE_MESSAGES = 1 << 2, // 4
     KICK_MEMBERS = 1 << 3, // 8
     BAN_MEMBERS = 1 << 4, // 16
     MANAGE_CHANNELS = 1 << 5, // 32
+    MANAGE_SERVER = 1 << 6, // 64
+    MANAGE_ROLES = 1 << 7, // 128
+    MANAGE_MEMBERS = 1 << 8, // 256
+    MENTION_EVERYONE = 1 << 9, // 512
+    ADMINISTRATOR = 1 << 10, // 1024
 }
-
-// a role with perms kick and ban = 1<<3 + 1<<4 = 24
-// and its binary is 0000 0000 0001 1000 = 24
 
 // function input = permission number, output = array of permissions
 export const getPermissions = (perms: number): Permission[] => {
     return Object.values(Permission).filter((p: Permission) => (perms & p) === p) as Permission[];
 }
 
+export const hasPermission = (sum: number, perm: Permission): boolean => {
+    return (sum & perm) === perm
+}
+
 export type Role = {
     id: string
     name: string
-    order_id: number
+    orderId: number
     permissions: number
+    color: string
 }
 
 export type ServerMember = {

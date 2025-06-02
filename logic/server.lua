@@ -1147,6 +1147,23 @@ end)
 ------------------------------------------------------------
 -- ROLES
 
+app.get("/get-roles", function(req, res)
+    local roles = SQLRead("SELECT * FROM roles ORDER BY orderId ASC")
+    res:json(roles)
+end)
+
+app.get("/get-role", function(req, res)
+    local roleId = req.body.roleId
+    local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+    if not role or #role == 0 then
+        res:status(404):json({
+            error = "Role not found"
+        })
+        return
+    end
+    res:json(role[1])
+end)
+
 app.post("/create-role", function(req, res)
     local userId = req.msg.From
     userId = TranslateDelegation(userId)
@@ -1183,6 +1200,12 @@ app.post("/update-role", function(req, res)
     userId = TranslateDelegation(userId)
 
     local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_ROLES)
+    if not hasPermission then
+        res:status(403):json({
+            error = "You are not authorized to update roles"
+        })
+        return
+    end
 
     local roleId = req.body.roleId
 
@@ -1201,15 +1224,59 @@ app.post("/update-role", function(req, res)
     local permissions = tonumber(VarOrNil(req.body.permissions) or role.permissions)
     local orderId = tonumber(VarOrNil(req.body.orderId) or role.orderId)
 
-    -- implement role ordering like channels
+    db:exec("BEGIN TRANSACTION")
+    local success = true
 
+    -- If just updating name, color, or permissions without changing order
+    if not orderId then
+        local rows = SQLWrite("UPDATE roles SET name = ?, color = ?, permissions = ? WHERE roleId = ?",
+            name, color, permissions, roleId)
+        if rows ~= 1 then
+            success = false
+        end
+    else
+        -- Handle ordering changes
+        local current_order = role.orderId
 
-    local rows_updated = SQLWrite("UPDATE roles SET name = ?, color = ?, permissions = ?, orderId = ? WHERE roleId = ?",
-        name,
-        color, permissions, orderId, roleId)
-    if rows_updated == 1 then
+        if orderId ~= current_order then
+            if orderId < current_order then
+                -- Moving up in order
+                SQLWrite([[
+                    UPDATE roles
+                    SET orderId = orderId + 1
+                    WHERE orderId >= ? AND orderId < ? AND roleId != ?
+                ]], orderId, current_order, roleId)
+            else
+                -- Moving down in order
+                SQLWrite([[
+                    UPDATE roles
+                    SET orderId = orderId - 1
+                    WHERE orderId > ? AND orderId <= ? AND roleId != ?
+                ]], current_order, orderId, roleId)
+
+                -- Adjust for shift
+                orderId = orderId - 1
+            end
+        end
+
+        -- Update the role with all fields
+        local rows = SQLWrite("UPDATE roles SET name = ?, color = ?, permissions = ?, orderId = ? WHERE roleId = ?",
+            name, color, permissions, orderId, roleId)
+        if rows ~= 1 then
+            success = false
+        end
+
+        -- Resequence to clean up any gaps
+        if success then
+            resequence_roles()
+        end
+    end
+
+    if success then
+        db:exec("COMMIT")
         res:json({})
     else
+        db:exec("ROLLBACK")
         res:status(500):json({
             error = "Failed to update role " .. db:errmsg()
         })
@@ -1228,6 +1295,10 @@ app.post("/delete-role", function(req, res)
     end
 
     local roleId = req.body.roleId
+
+    db:exec("BEGIN TRANSACTION")
+    local success = true
+
     local rows_updated = SQLWrite("DELETE FROM roles WHERE roleId = ?", roleId)
     if rows_updated == 1 then
         -- update all members that have this role in their roles list
@@ -1251,10 +1322,16 @@ app.post("/delete-role", function(req, res)
                 member.userId)
             usersUpdated = usersUpdated + rows_updated_1
         end
+
+        -- Resequence roles to fill the gap
+        resequence_roles()
+
+        db:exec("COMMIT")
         res:json({
             usersUpdated = usersUpdated
         })
     else
+        db:exec("ROLLBACK")
         res:status(500):json({
             error = "Failed to delete role " .. db:errmsg()
         })
@@ -1555,6 +1632,18 @@ function resequence_categories()
     end
 
     return #categories
+end
+
+-- Helper function to resequence all roles
+function resequence_roles()
+    local roles = SQLRead("SELECT roleId FROM roles ORDER BY orderId ASC")
+
+    -- Resequence starting from 1
+    for i, role in ipairs(roles) do
+        SQLWrite("UPDATE roles SET orderId = ? WHERE roleId = ?", i, role.roleId)
+    end
+
+    return #roles
 end
 
 app.listen()

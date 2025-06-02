@@ -55,8 +55,9 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                     profileActions.updateProfile(userId, latestProfile)
                 }
 
-                // Fetch latest server member data if we're in a server
+                // Fetch latest server data if we're in a server
                 if (activeServerId) {
+                    // Fetch latest server member data
                     const latestMember = await subspace.server.getServerMember({
                         serverId: activeServerId,
                         userId
@@ -76,6 +77,20 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                             }
 
                             serverActions.updateServerMembers(activeServerId, updatedMembers)
+                        }
+                    }
+
+                    // Fetch latest roles data to ensure correct ordering
+                    const latestRoles = await subspace.server.role.getRoles({ serverId: activeServerId })
+                    if (latestRoles) {
+                        // Update the server with the latest roles
+                        const currentServer = servers[activeServerId]
+                        if (currentServer) {
+                            const updatedServer = {
+                                ...currentServer,
+                                roles: latestRoles
+                            }
+                            serverActions.updateServer(activeServerId, updatedServer)
                         }
                     }
                 }

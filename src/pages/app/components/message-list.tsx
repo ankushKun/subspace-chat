@@ -340,6 +340,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttribu
     onJumpToMessage?: (messageId: number) => void;
 }) => {
     const { profiles } = useProfile()
+    const { activeServerId, servers } = useServer()
 
     if (!replyToMessage) {
         return (
@@ -352,6 +353,9 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttribu
 
     const authorProfile = profiles[replyToMessage.authorId]
     const displayName = authorProfile?.primaryName || shortenAddress(replyToMessage.authorId)
+
+    // Get the highest role color for the reply author
+    const replyAuthorRoleColor = getUserHighestRoleColor(replyToMessage.authorId, activeServerId, servers)
 
     // Truncate content for preview
     const previewContent = replyToMessage.content.length > 50
@@ -389,7 +393,12 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttribu
                         align="start"
                         userId={replyToMessage.authorId}
                         renderer={(text) => (
-                            <span className="text-xs font-medium text-foreground/70 group-hover/reply:text-primary flex-shrink-0 hover:underline">
+                            <span
+                                className="text-xs font-medium group-hover/reply:text-primary flex-shrink-0 hover:underline"
+                                style={{
+                                    color: replyAuthorRoleColor || 'var(--foreground)'
+                                }}
+                            >
                                 {text}
                             </span>
                         )}
@@ -401,6 +410,26 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttribu
             </div>
         </div>
     )
+}
+
+// Helper function to get the highest role color for a user
+const getUserHighestRoleColor = (userId: string, activeServerId: string, servers: Record<string, any>) => {
+    if (!activeServerId || !servers[activeServerId]) return null
+
+    const server = servers[activeServerId]
+    const member = server?.members?.find((m: any) => m.userId === userId)
+
+    if (!member?.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
+        return null
+    }
+
+    // Get roles that the user has, sorted by orderId (ascending - lower orderId = higher priority)
+    const userRoles = server.roles
+        ?.filter((role: any) => member.roles.includes(role.roleId))
+        ?.sort((a: any, b: any) => a.orderId - b.orderId)
+
+    // Return the color of the highest priority role (first in sorted array)
+    return userRoles?.[0]?.color || null
 }
 
 const MessageItem = ({
@@ -434,8 +463,12 @@ const MessageItem = ({
 }) => {
     const { profiles } = useProfile()
     const { address } = useWallet()
+    const { activeServerId, servers } = useServer()
     const profile = profiles[message.authorId]
     const [isHovered, setIsHovered] = useState(false)
+
+    // Get the highest role color for the message author
+    const authorRoleColor = getUserHighestRoleColor(message.authorId, activeServerId, servers)
 
     // Check if the current user is mentioned in this message
     const isCurrentUserMentioned = useMemo(() => {
@@ -503,7 +536,12 @@ const MessageItem = ({
                     {(showAvatar || message.replyTo) && (
                         <div className="flex items-baseline gap-2">
                             <UserMention side="bottom" align="start" userId={message.authorId} renderer={(text) =>
-                                <span className="text-foreground hover:underline cursor-pointer">
+                                <span
+                                    className="hover:underline cursor-pointer font-medium"
+                                    style={{
+                                        color: authorRoleColor || 'var(--foreground)'
+                                    }}
+                                >
                                     {text}
                                 </span>
                             } />

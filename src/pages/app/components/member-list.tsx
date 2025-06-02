@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, ChevronRight, UsersRound } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ServerMember } from "@/types/subspace"
+import type { ServerMember, Role } from "@/types/subspace"
 import UserMention from "@/components/user-mention"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -50,10 +50,12 @@ const MemberAvatar = ({
 const MemberItem = ({
     member,
     isOwner = false,
+    roleColor,
     onClick
 }: {
     member: ServerMember;
     isOwner?: boolean;
+    roleColor?: string;
     onClick?: () => void;
 }) => {
     const { profiles } = useProfile()
@@ -83,7 +85,12 @@ const MemberItem = ({
                         {/* Member info */}
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                                <span className="font-medium truncate transition-colors text-foreground">
+                                <span
+                                    className="font-medium truncate transition-colors"
+                                    style={{
+                                        color: roleColor || undefined
+                                    }}
+                                >
                                     {displayName}
                                 </span>
 
@@ -118,60 +125,47 @@ const MemberItem = ({
 const MemberSection = ({
     title,
     members,
-    isExpanded,
-    onToggle,
-    isOwnerSection = false
+    isOwnerSection = false,
+    roleColor,
+    server
 }: {
     title: string;
     members: ServerMember[];
-    isExpanded: boolean;
-    onToggle: () => void;
     isOwnerSection?: boolean;
+    roleColor?: string;
+    server?: any;
 }) => {
-    const { servers, activeServerId } = useServer()
-    const server = activeServerId ? servers[activeServerId] : null
-
     const memberCount = members.length
 
     return (
         <div className="mb-3">
             {/* Section header */}
-            <Button
-                variant="ghost"
-                size="sm"
+            <div
                 className={cn(
-                    "w-full h-7 px-2 justify-start text-xs font-semibold uppercase tracking-wider transition-all duration-200",
-                    "text-muted-foreground hover:text-foreground",
-                    "hover:bg-muted/50 rounded-md"
+                    "w-full h-7 px-2 flex items-center text-xs font-semibold uppercase tracking-wider",
+                    "text-muted-foreground"
                 )}
-                onClick={onToggle}
             >
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
-                        {isExpanded ? (
-                            <ChevronDown className="w-3 h-3 transition-transform duration-200" />
-                        ) : (
-                            <ChevronRight className="w-3 h-3 transition-transform duration-200" />
-                        )}
                         <span className="truncate">{title}</span>
                     </div>
                     <span className="text-xs text-muted-foreground/60">{memberCount}</span>
                 </div>
-            </Button>
+            </div>
 
-            {/* Members list */}
-            {isExpanded && (
-                <div className="mt-1 space-y-0.5">
-                    {members.map((member) => (
-                        <MemberItem
-                            key={member.userId}
-                            member={member}
-                            isOwner={isOwnerSection || member.userId === server?.owner}
-                            onClick={() => console.log('Open member profile:', member.userId)}
-                        />
-                    ))}
-                </div>
-            )}
+            {/* Members list - always visible */}
+            <div className="mt-1 space-y-0.5">
+                {members.map((member) => (
+                    <MemberItem
+                        key={member.userId}
+                        member={member}
+                        isOwner={isOwnerSection || member.userId === server?.owner}
+                        roleColor={roleColor}
+                        onClick={() => console.log('Open member profile:', member.userId)}
+                    />
+                ))}
+            </div>
         </div>
     )
 }
@@ -180,10 +174,10 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
     const { activeServerId, servers } = useServer()
     const { profiles } = useProfile()
     const [searchQuery, setSearchQuery] = useState("")
-    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["owner", "members"]))
 
     const server = activeServerId ? servers[activeServerId] : null
     const serverMembers = Array.isArray(server?.members) ? server.members : []
+    const serverRoles = Array.isArray(server?.roles) ? server.roles : []
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {
@@ -201,25 +195,50 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
         })
     }, [serverMembers, searchQuery, profiles])
 
-    // Organize members into owner and regular members
-    const organizedMembers = useMemo(() => {
-        const ownerMembers: ServerMember[] = []
-        const regularMembers: ServerMember[] = []
+    // Get member's highest priority role (lowest orderId)
+    const getMemberHighestRole = (member: ServerMember): Role | null => {
+        if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
+            return null
+        }
 
-        // Ensure filteredMembers is an array before calling forEach
+        const memberRoles = serverRoles
+            .filter(role => member.roles.includes(role.roleId))
+            .sort((a, b) => a.orderId - b.orderId)
+
+        return memberRoles[0] || null
+    }
+
+    // Organize members by roles based on role order
+    const organizedMembersByRole = useMemo(() => {
+        const roleGroups: Record<string, { role: Role | null; members: ServerMember[] }> = {}
+
+        // Initialize with all roles
+        serverRoles.forEach(role => {
+            roleGroups[`role-${role.roleId}`] = { role, members: [] }
+        })
+
+        // Add "No Role" section for members without roles
+        roleGroups['no-role'] = { role: null, members: [] }
+
+        // Organize members by their highest priority role
         if (Array.isArray(filteredMembers)) {
             filteredMembers.forEach(member => {
-                if (member.userId === server?.owner) {
-                    ownerMembers.push(member)
+                const highestRole = getMemberHighestRole(member)
+
+                if (highestRole) {
+                    const key = `role-${highestRole.roleId}`
+                    if (roleGroups[key]) {
+                        roleGroups[key].members.push(member)
+                    }
                 } else {
-                    regularMembers.push(member)
+                    roleGroups['no-role'].members.push(member)
                 }
             })
         }
 
-        // Sort function to prioritize members with primaryName or nickname
-        const sortMembers = (members: ServerMember[]) => {
-            return members.sort((a, b) => {
+        // Sort members within each role group
+        Object.values(roleGroups).forEach(group => {
+            group.members.sort((a, b) => {
                 const profileA = profiles[a.userId]
                 const profileB = profiles[b.userId]
 
@@ -231,7 +250,6 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
                 const hasCustomPfpB = !!(profileB?.pfp && profileB.pfp !== defaultPfpHash)
 
                 // Calculate priority scores (higher is better)
-                // 4: has name AND custom pfp, 3: has name only, 2: has custom pfp only, 1: has neither
                 const scoreA = (hasNameA ? 2 : 0) + (hasCustomPfpA ? 2 : 0)
                 const scoreB = (hasNameB ? 2 : 0) + (hasCustomPfpB ? 2 : 0)
 
@@ -246,25 +264,34 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
 
                 return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
             })
-        }
-
-        return {
-            owner: sortMembers(ownerMembers),
-            members: sortMembers(regularMembers)
-        }
-    }, [filteredMembers, server?.owner, profiles])
-
-    const toggleSection = (sectionId: string) => {
-        setExpandedSections(prev => {
-            const newSet = new Set(prev)
-            if (newSet.has(sectionId)) {
-                newSet.delete(sectionId)
-            } else {
-                newSet.add(sectionId)
-            }
-            return newSet
         })
-    }
+
+        return roleGroups
+    }, [filteredMembers, serverRoles, profiles])
+
+    // Sort role groups by role order (and owner first if exists)
+    const sortedRoleGroups = useMemo(() => {
+        const groups = Object.entries(organizedMembersByRole)
+            .filter(([key, group]) => group.members.length > 0)
+            .sort(([keyA, groupA], [keyB, groupB]) => {
+                // Owner section always first
+                if (keyA === 'owner') return -1
+                if (keyB === 'owner') return 1
+
+                // No role section always last
+                if (keyA === 'no-role') return 1
+                if (keyB === 'no-role') return -1
+
+                // Sort by role order
+                const roleA = groupA.role
+                const roleB = groupB.role
+
+                if (!roleA || !roleB) return 0
+                return roleA.orderId - roleB.orderId
+            })
+
+        return groups
+    }, [organizedMembersByRole])
 
     if (!server) {
         return (
@@ -334,7 +361,7 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
                 </div>
             </div>
 
-            {/* Members list */}
+            {/* Members list organized by roles */}
             <div className="flex-1 overflow-y-auto space-y-1 px-2">
                 {!Array.isArray(filteredMembers) || filteredMembers.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-32 text-center">
@@ -350,27 +377,21 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
                     </div>
                 ) : (
                     <>
-                        {/* Owner section */}
-                        {organizedMembers.owner.length > 0 && (
-                            <MemberSection
-                                title="Owner"
-                                members={organizedMembers.owner}
-                                isExpanded={expandedSections.has("owner")}
-                                onToggle={() => toggleSection("owner")}
-                                isOwnerSection={true}
-                            />
-                        )}
+                        {sortedRoleGroups.map(([key, group]) => {
+                            const sectionTitle = group.role ? group.role.name : "No Role"
+                            const isOwnerSection = key === 'owner'
 
-                        {/* Members section */}
-                        {organizedMembers.members.length > 0 && (
-                            <MemberSection
-                                title="Members"
-                                members={organizedMembers.members}
-                                isExpanded={expandedSections.has("members")}
-                                onToggle={() => toggleSection("members")}
-                                isOwnerSection={false}
-                            />
-                        )}
+                            return (
+                                <MemberSection
+                                    key={key}
+                                    title={sectionTitle}
+                                    members={group.members}
+                                    isOwnerSection={isOwnerSection}
+                                    roleColor={group.role?.color}
+                                    server={server}
+                                />
+                            )
+                        })}
                     </>
                 )}
             </div>

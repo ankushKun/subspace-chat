@@ -14,7 +14,7 @@ import useSubspace from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import { uploadFileAR, cn } from "@/lib/utils"
-import type { Server, Role } from "@/types/subspace"
+import type { Server, Role, ServerMember, Member } from "@/types/subspace"
 import { Permission, getPermissions, hasPermission } from "@/types/subspace"
 
 interface ServerSettingsProps {
@@ -61,6 +61,10 @@ export default function ServerSettings({
     const [updatingRoles, setUpdatingRoles] = useState<number[]>([])
     const [showMobileRoleDetails, setShowMobileRoleDetails] = useState(false)
 
+    // Role members state
+    const [roleMembers, setRoleMembers] = useState<Member[]>([])
+    const [loadingRoleMembers, setLoadingRoleMembers] = useState(false)
+
     // Role form state
     const [roleName, setRoleName] = useState("")
     const [roleColor, setRoleColor] = useState("#696969")
@@ -76,6 +80,13 @@ export default function ServerSettings({
             loadRoles()
         }
     }, [settingsOpen, activeTab, server?.serverId])
+
+    // Load role members when selected role changes or when Members tab is opened
+    useEffect(() => {
+        if (selectedRole && server?.serverId && (showMobileRoleDetails || activeTab === "roles")) {
+            loadRoleMembers()
+        }
+    }, [selectedRole, server?.serverId, showMobileRoleDetails, activeTab])
 
     // Update form when selected role changes
     useEffect(() => {
@@ -105,6 +116,13 @@ export default function ServerSettings({
         }
     }, [settingsOpen, activeTab])
 
+    // Reset role members when role changes
+    useEffect(() => {
+        if (selectedRole) {
+            setRoleMembers([])
+        }
+    }, [selectedRole])
+
     const loadRoles = async () => {
         if (!server?.serverId) return
 
@@ -119,6 +137,29 @@ export default function ServerSettings({
             toast.error("Failed to load roles")
         } finally {
             setLoadingRoles(false)
+        }
+    }
+
+    const loadRoleMembers = async () => {
+        if (!server?.serverId || !selectedRole) return
+
+        setLoadingRoleMembers(true)
+        try {
+            const members = await subspace.server.role.getRoleMembers({
+                serverId: server.serverId,
+                roleId: selectedRole.roleId
+            })
+            if (members) {
+                setRoleMembers(members)
+            } else {
+                setRoleMembers([])
+            }
+        } catch (error) {
+            console.error("Error loading role members:", error)
+            toast.error("Failed to load role members")
+            setRoleMembers([])
+        } finally {
+            setLoadingRoleMembers(false)
         }
     }
 
@@ -1202,7 +1243,7 @@ export default function ServerSettings({
                                                                                             ref={provided.innerRef}
                                                                                             {...provided.draggableProps}
                                                                                             className={cn(
-                                                                                                "p-3 rounded-lg border border-transparent hover:border-border/50 hover:bg-muted/80 transition-all duration-200 cursor-pointer group",
+                                                                                                "p-3 rounded-lg border border-transparent hover:border-border/50 hover:bg-background/50 transition-all duration-200 cursor-pointer group",
                                                                                                 selectedRole?.roleId === role.roleId && "bg-background border-border/50 shadow-sm",
                                                                                                 snapshot.isDragging && "opacity-90 shadow-lg ring-1 ring-primary/30"
                                                                                             )}
@@ -1252,6 +1293,7 @@ export default function ServerSettings({
                                                                     <TabsList className="bg-muted/30 p-1">
                                                                         <TabsTrigger value="display" className="px-4 py-2">Display</TabsTrigger>
                                                                         <TabsTrigger value="permissions" className="px-4 py-2">Permissions</TabsTrigger>
+                                                                        <TabsTrigger value="members" className="px-4 py-2">Members</TabsTrigger>
                                                                     </TabsList>
                                                                     <div className="flex items-center gap-2">
                                                                         {hasUnsavedChanges && (
@@ -1430,6 +1472,67 @@ export default function ServerSettings({
                                                                                 </div>
                                                                             ))}
                                                                         </div>
+                                                                    </div>
+                                                                </TabsContent>
+
+                                                                {/* Members Tab */}
+                                                                <TabsContent value="members" className="m-0 h-full overflow-y-auto">
+                                                                    <div className="p-6 space-y-6">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <h4 className="text-lg font-semibold">Members with this role</h4>
+                                                                            <div className="text-sm text-muted-foreground">
+                                                                                {roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {loadingRoleMembers ? (
+                                                                            <div className="flex items-center justify-center py-8">
+                                                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                                                                <span className="ml-3 text-muted-foreground">Loading members...</span>
+                                                                            </div>
+                                                                        ) : roleMembers.length === 0 ? (
+                                                                            <div className="text-center py-8">
+                                                                                <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                                                                                <p className="text-muted-foreground mb-1">No members with this role</p>
+                                                                                <p className="text-sm text-muted-foreground/60">Members with this role will appear here</p>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="space-y-2">
+                                                                                {roleMembers.map((member) => (
+                                                                                    <div
+                                                                                        key={member.userId}
+                                                                                        className="flex items-center gap-3 p-3 rounded-lg border border-border/30 hover:border-border/50 hover:bg-muted/30 transition-colors"
+                                                                                    >
+                                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                                                                            <User className="w-4 h-4 text-primary" />
+                                                                                        </div>
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="font-medium text-sm truncate">
+                                                                                                {member.nickname || member.userId}
+                                                                                            </div>
+                                                                                            {member.nickname && (
+                                                                                                <div className="text-xs text-muted-foreground truncate">
+                                                                                                    {member.userId}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {isServerOwner && (
+                                                                                            <Button
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                className="text-muted-foreground hover:text-destructive"
+                                                                                                onClick={() => {
+                                                                                                    // TODO: Implement remove role functionality
+                                                                                                    toast.info("Remove role functionality coming soon")
+                                                                                                }}
+                                                                                            >
+                                                                                                <X className="w-4 h-4" />
+                                                                                            </Button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </TabsContent>
                                                             </div>

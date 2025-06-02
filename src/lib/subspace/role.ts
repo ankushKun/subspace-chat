@@ -2,7 +2,7 @@ import { aofetch } from "ao-fetch";
 import { ConnectionManager } from ".";
 import { Logger } from "@/lib/utils";
 import { Constants } from "../constants";
-import type { Role } from "@/types/subspace";
+import type { Member, Role } from "@/types/subspace";
 
 export class RoleManager {
     constructor(private connectionManager: ConnectionManager) { }
@@ -32,6 +32,21 @@ export class RoleManager {
             return res.json as Role;
         } else {
             Logger.error("getRole", res);
+            return null;
+        }
+    }
+
+    async getRoleMembers({ serverId, roleId }: { serverId: string, roleId: number }): Promise<Member[] | null> {
+        const path = `${serverId}/get-role-members`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: { roleId },
+            AO: this.connectionManager.getAo()
+        })
+        if (res.status == 200) {
+            return res.json as Member[];
+        } else {
+            Logger.error("getRoleMembers", res);
             return null;
         }
     }

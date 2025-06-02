@@ -1203,6 +1203,27 @@ app.get("/get-role", function(req, res)
     res:json(role[1])
 end)
 
+app.get("/get-role-members", function(req, res)
+    local roleId = VarOrNil(req.body.roleId)
+
+    if not roleId then
+        res:status(400):json({
+            error = "Role ID is required"
+        })
+        return
+    end
+
+    local members = SQLRead("SELECT * FROM members WHERE roles LIKE ?", "%" .. roleId .. "%")
+    local membersWithRole = {}
+    for _, member in ipairs(members) do
+        local roles = json.decode(member.roles)
+        if roles[roleId] then
+            table.insert(membersWithRole, member)
+        end
+    end
+    res:json(membersWithRole)
+end)
+
 app.post("/create-role", function(req, res)
     local userId = req.msg.From
     userId = TranslateDelegation(userId)

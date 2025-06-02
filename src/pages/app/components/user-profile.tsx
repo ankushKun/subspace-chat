@@ -384,7 +384,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                             </div>
                                             {isEditing && (
                                                 <>
-                                                    <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                                    <label className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
                                                         <div className="flex flex-col items-center gap-1">
                                                             <Camera className="h-6 w-6 text-white" />
                                                             <span className="text-xs text-white font-medium">Upload</span>
@@ -396,12 +396,21 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                             className="hidden"
                                                         />
                                                     </label>
+                                                    {/* Invisible clickable overlay for better UX */}
+                                                    <label className="absolute inset-0 cursor-pointer z-10">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/png,image/jpeg,image/jpg"
+                                                            onChange={handleProfilePicChange}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
                                                     {/* Always visible upload indicator when in edit mode */}
-                                                    <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg border-2 border-background">
+                                                    <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg border-2 border-background z-20">
                                                         <Camera className="h-3 w-3" />
                                                     </div>
                                                     {/* Pulsing animation to draw attention */}
-                                                    <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-pulse"></div>
+                                                    <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-pulse z-0"></div>
                                                 </>
                                             )}
                                         </div>

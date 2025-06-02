@@ -313,7 +313,7 @@ export default function ServerSettings({
 
             {/* Full-screen Server Settings Dialog */}
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <DialogContent removeCloseButton className="!w-screen h-screen min-w-screen max-w-screen max-h-none p-0 gap-0 overflow-hidden rounded-none border-0 flex flex-col items-start justify-start">
+                <DialogContent className="!w-screen h-screen min-w-screen max-w-screen max-h-none p-0 gap-0 overflow-hidden rounded-none border-0 flex flex-col items-start justify-start">
                     <DialogHeader className="p-4 h-fit w-full border-b border-border/50 flex-shrink-0 bg-background/95 backdrop-blur-sm">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="flex items-center gap-4 text-2xl">
@@ -331,14 +331,111 @@ export default function ServerSettings({
                     </DialogHeader>
 
                     <div className="w-full h-full overflow-hidden bg-background">
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:flex-row w-full h-full">
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-0 md:flex-row w-full h-full">
                             {/* Tab Navigation */}
                             <div className="w-full md:w-80 flex-shrink-0 bg-muted/20 border-r border-border/50">
-                                <div className="p-6">
+                                <div className="p-4 py-2">
                                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
                                         Configuration
                                     </h3>
-                                    <TabsList className="flex flex-col w-full justify-start bg-transparent p-0 space-y-2 h-auto">
+
+                                    {/* Mobile Dropdown - only visible on mobile */}
+                                    <div className="md:hidden mb-4">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-between h-14 px-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                            {activeTab === "profile" && <User className="w-4 h-4 text-primary" />}
+                                                            {activeTab === "roles" && <Shield className="w-4 h-4 text-primary" />}
+                                                            {activeTab === "update-code" && <Upload className="w-4 h-4 text-primary" />}
+                                                            {activeTab === "delete" && <Trash2 className="w-4 h-4 text-destructive" />}
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <div className="font-medium">
+                                                                {activeTab === "profile" && "Server Profile"}
+                                                                {activeTab === "roles" && "Roles"}
+                                                                {activeTab === "update-code" && "Update Server Code"}
+                                                                {activeTab === "delete" && "Delete Server"}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {activeTab === "profile" && "Name and icon"}
+                                                                {activeTab === "roles" && "Permissions"}
+                                                                {activeTab === "update-code" && "Latest version"}
+                                                                {activeTab === "delete" && "Permanent action"}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <ChevronDown className="w-4 h-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent className="w-[90vw] mx-auto" align="start">
+                                                <DropdownMenuItem
+                                                    onClick={() => setActiveTab("profile")}
+                                                    className={cn(
+                                                        "cursor-pointer flex items-center gap-4 h-14 px-4 rounded-md transition-all",
+                                                        activeTab === "profile" && "bg-accent"
+                                                    )}
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                        <User className="w-4 h-4 text-primary" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="font-medium">Server Profile</div>
+                                                        <div className="text-xs text-muted-foreground">Name and icon</div>
+                                                    </div>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setActiveTab("roles")}
+                                                    className={cn(
+                                                        "cursor-pointer flex items-center gap-4 h-14 px-4 rounded-md transition-all",
+                                                        activeTab === "roles" && "bg-accent"
+                                                    )}
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                        <Shield className="w-4 h-4 text-primary" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="font-medium">Roles</div>
+                                                        <div className="text-xs text-muted-foreground">Permissions</div>
+                                                    </div>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setActiveTab("update-code")}
+                                                    className={cn(
+                                                        "cursor-pointer flex items-center gap-4 h-14 px-4 rounded-md transition-all",
+                                                        activeTab === "update-code" && "bg-accent"
+                                                    )}
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                        <Upload className="w-4 h-4 text-primary" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="font-medium">Update Server Code</div>
+                                                        <div className="text-xs text-muted-foreground">Latest version</div>
+                                                    </div>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setActiveTab("delete")}
+                                                    className={cn(
+                                                        "cursor-pointer flex items-center gap-4 h-14 px-4 rounded-md transition-all text-destructive",
+                                                        activeTab === "delete" && "bg-accent"
+                                                    )}
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="font-medium">Delete Server</div>
+                                                        <div className="text-xs text-muted-foreground">Permanent action</div>
+                                                    </div>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+
+                                    {/* Desktop Tab List - hidden on mobile */}
+                                    <TabsList className="hidden md:flex flex-col w-full justify-start bg-transparent p-0 space-y-2 h-auto">
                                         <TabsTrigger
                                             value="profile"
                                             className="w-full justify-start gap-4 h-14 px-4 rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border/50 transition-all"
@@ -392,9 +489,9 @@ export default function ServerSettings({
                             </div>
 
                             {/* Tab Content */}
-                            <div className="flex overflow-y-auto w-full">
+                            <div className="flex overflow-y-scroll mb-4 w-full">
                                 {/* Server Profile Tab */}
-                                <TabsContent value="profile" className="p-8 space-y-8 m-0 h-full max-w-4xl">
+                                <TabsContent value="profile" className="px-4 space-y-8 m-0 h-full max-w-4xl">
                                     <div>
                                         <h3 className="text-2xl font-bold mb-3">Server Profile</h3>
                                         <p className="text-muted-foreground text-lg">

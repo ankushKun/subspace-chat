@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { FileDropzone } from "@/components/ui/file-dropzone"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
@@ -64,6 +65,12 @@ export default function ServerSettings({
     // Role members state
     const [roleMembers, setRoleMembers] = useState<Member[]>([])
     const [loadingRoleMembers, setLoadingRoleMembers] = useState(false)
+
+    // Add member to role state
+    const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false)
+    const [allServerMembers, setAllServerMembers] = useState<ServerMember[]>([])
+    const [loadingServerMembers, setLoadingServerMembers] = useState(false)
+    const [assigningRole, setAssigningRole] = useState(false)
 
     // Role form state
     const [roleName, setRoleName] = useState("")
@@ -160,6 +167,26 @@ export default function ServerSettings({
             setRoleMembers([])
         } finally {
             setLoadingRoleMembers(false)
+        }
+    }
+
+    const loadServerMembers = async () => {
+        if (!server?.serverId) return
+
+        setLoadingServerMembers(true)
+        try {
+            const members = await subspace.server.getServerMembers({ serverId: server.serverId })
+            if (members) {
+                setAllServerMembers(members)
+            } else {
+                setAllServerMembers([])
+            }
+        } catch (error) {
+            console.error("Error loading server members:", error)
+            toast.error("Failed to load server members")
+            setAllServerMembers([])
+        } finally {
+            setLoadingServerMembers(false)
         }
     }
 
@@ -526,6 +553,88 @@ export default function ServerSettings({
     const handleMobileBackToList = () => {
         setShowMobileRoleDetails(false)
         setSelectedRole(null)
+    }
+
+    const handleAssignRole = async (userId: string) => {
+        if (!server?.serverId || !selectedRole) {
+            toast.error("No role selected")
+            return
+        }
+
+        setAssigningRole(true)
+        try {
+            const success = await subspace.server.role.assignRole({
+                serverId: server.serverId,
+                userId: userId,
+                roleId: selectedRole.roleId
+            })
+
+            if (success) {
+                toast.success("Role assigned successfully")
+                setAddMemberDialogOpen(false)
+                // Refresh role members list
+                await loadRoleMembers()
+                // Refresh server members list to update available members
+                await loadServerMembers()
+            } else {
+                toast.error("Failed to assign role")
+            }
+        } catch (error) {
+            console.error("Error assigning role:", error)
+            toast.error("Failed to assign role")
+        } finally {
+            setAssigningRole(false)
+        }
+    }
+
+    const handleRemoveRole = async (userId: string) => {
+        if (!server?.serverId || !selectedRole) {
+            toast.error("No role selected")
+            return
+        }
+
+        try {
+            const success = await subspace.server.role.unassignRole({
+                serverId: server.serverId,
+                userId: userId,
+                roleId: selectedRole.roleId
+            })
+
+            if (success) {
+                toast.success("Role removed successfully")
+                // Refresh role members list
+                await loadRoleMembers()
+                // Refresh server members list to update available members
+                await loadServerMembers()
+            } else {
+                toast.error("Failed to remove role")
+            }
+        } catch (error) {
+            console.error("Error removing role:", error)
+            toast.error("Failed to remove role")
+        }
+    }
+
+    // Load server members when add member dialog opens
+    useEffect(() => {
+        if (addMemberDialogOpen && server?.serverId) {
+            loadServerMembers()
+        }
+    }, [addMemberDialogOpen, server?.serverId])
+
+    // Get available members (those who don't already have the selected role)
+    const getAvailableMembers = () => {
+        if (!selectedRole) return []
+
+        return allServerMembers.filter(member => {
+            try {
+                return !member.roles.includes(selectedRole.roleId)
+            } catch (error) {
+                // If parsing fails, assume no roles and include the member
+                console.warn("Failed to parse member roles:", error)
+                return true
+            }
+        })
     }
 
     return (
@@ -1480,8 +1589,21 @@ export default function ServerSettings({
                                                                     <div className="p-6 space-y-6">
                                                                         <div className="flex items-center justify-between">
                                                                             <h4 className="text-lg font-semibold">Members with this role</h4>
-                                                                            <div className="text-sm text-muted-foreground">
-                                                                                {roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="text-sm text-muted-foreground">
+                                                                                    {roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}
+                                                                                </div>
+                                                                                {isServerOwner && (
+                                                                                    <Button
+                                                                                        variant="outline"
+                                                                                        size="sm"
+                                                                                        onClick={() => setAddMemberDialogOpen(true)}
+                                                                                        disabled={loadingRoleMembers}
+                                                                                    >
+                                                                                        <Plus className="w-4 h-4 mr-2" />
+                                                                                        Add Member
+                                                                                    </Button>
+                                                                                )}
                                                                             </div>
                                                                         </div>
 
@@ -1521,10 +1643,7 @@ export default function ServerSettings({
                                                                                                 variant="ghost"
                                                                                                 size="sm"
                                                                                                 className="text-muted-foreground hover:text-destructive"
-                                                                                                onClick={() => {
-                                                                                                    // TODO: Implement remove role functionality
-                                                                                                    toast.info("Remove role functionality coming soon")
-                                                                                                }}
+                                                                                                onClick={() => handleRemoveRole(member.userId)}
                                                                                             >
                                                                                                 <X className="w-4 h-4" />
                                                                                             </Button>
@@ -1868,6 +1987,56 @@ export default function ServerSettings({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Add Member to Role Dialog */}
+            <CommandDialog
+                open={addMemberDialogOpen}
+                onOpenChange={setAddMemberDialogOpen}
+                title="Add Member to Role"
+                description={`Search and select a member to add to the "${selectedRole?.name}" role`}
+            >
+                <CommandInput placeholder="Search members..." disabled={loadingServerMembers || assigningRole} />
+                <CommandList>
+                    {loadingServerMembers ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            <span className="ml-3 text-muted-foreground">Loading members...</span>
+                        </div>
+                    ) : (
+                        <>
+                            <CommandEmpty>No members found.</CommandEmpty>
+                            <CommandGroup heading="Available Members">
+                                {getAvailableMembers().map((member) => (
+                                    <CommandItem
+                                        key={member.userId}
+                                        value={`${member.nickname || member.userId} ${member.userId}`}
+                                        onSelect={() => handleAssignRole(member.userId)}
+                                        disabled={assigningRole}
+                                        className="flex items-center gap-3 p-3"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                            <User className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm truncate">
+                                                {member.nickname || member.userId}
+                                            </div>
+                                            {member.nickname && (
+                                                <div className="text-xs text-muted-foreground truncate">
+                                                    {member.userId}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {assigningRole && (
+                                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                        )}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        </>
+                    )}
+                </CommandList>
+            </CommandDialog>
         </>
     )
 } 

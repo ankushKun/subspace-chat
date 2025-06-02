@@ -104,6 +104,8 @@ export class ServerManager {
             AO: this.connectionManager.getAo(),
         })
         if (res.status == 200) {
+            (res.json as any).roles = JSON.parse((res.json as any).roles) as number[];
+            console.log(res);
             return res.json as ServerMember;
         } else {
             Logger.error("getServerMember", res);
@@ -117,7 +119,10 @@ export class ServerManager {
             AO: this.connectionManager.getAo()
         })
         if (res.status == 200) {
-            console.log(res.json)
+            res.json.forEach(member => {
+                member.roles = JSON.parse(member.roles) as number[];
+            })
+            console.log(res)
             return res.json as ServerMember[];
         } else {
             Logger.error("getServerMembers", res);

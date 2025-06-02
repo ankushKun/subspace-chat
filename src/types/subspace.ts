@@ -74,7 +74,7 @@ export type Role = {
 export type ServerMember = {
     userId: string;
     nickname: string | null;
-    roles: string; // JSON encoded array of role IDs
+    roles: number[]; // JSON encoded array of role IDs
 }
 
 export type Server = {

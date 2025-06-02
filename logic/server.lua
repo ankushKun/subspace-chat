@@ -61,12 +61,94 @@ end
 
 -- Migrate existing tables to new schema
 function migrate_tables()
+    -- First, create any missing tables with basic structure
+    if not table_exists("categories") then
+        print("Creating categories table...")
+        db:exec([[
+            CREATE TABLE categories (
+                categoryId INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                orderId INTEGER NOT NULL DEFAULT 1
+            );
+        ]])
+    end
+
+    if not table_exists("channels") then
+        print("Creating channels table...")
+        db:exec([[
+            CREATE TABLE channels (
+                channelId INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                orderId INTEGER NOT NULL DEFAULT 1,
+                categoryId INTEGER,
+                FOREIGN KEY (categoryId) REFERENCES categories(categoryId) ON DELETE SET NULL
+            );
+        ]])
+    end
+
+    if not table_exists("members") then
+        print("Creating members table...")
+        db:exec([[
+            CREATE TABLE members (
+                userId TEXT PRIMARY KEY,
+                nickname TEXT,
+                roles TEXT DEFAULT "[]"
+            );
+        ]])
+    end
+
+    if not table_exists("messages") then
+        print("Creating messages table...")
+        db:exec([[
+            CREATE TABLE messages (
+                messageId INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL,
+                channelId INTEGER,
+                authorId TEXT,
+                messageTxId TEXT UNIQUE,
+                timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                edited INTEGER NOT NULL DEFAULT 0,
+                attachments TEXT DEFAULT "[]",
+                replyTo INTEGER,
+                FOREIGN KEY (channelId) REFERENCES channels(channelId) ON DELETE CASCADE,
+                FOREIGN KEY (authorId) REFERENCES members(userId) ON DELETE SET NULL,
+                FOREIGN KEY (replyTo) REFERENCES messages(messageId) ON DELETE SET NULL
+            );
+        ]])
+    end
+
+    if not table_exists("roles") then
+        print("Creating roles table...")
+        db:exec([[
+            CREATE TABLE roles (
+                roleId INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                orderId INTEGER NOT NULL DEFAULT 1,
+                color TEXT NOT NULL,
+                permissions INTEGER NOT NULL DEFAULT 0
+            );
+        ]])
+    end
+
+    -- Now handle existing tables and add missing columns
+
     -- Migrate categories table
     if table_exists("categories") then
+        -- Add missing columns
+        if not column_exists("categories", "orderId") then
+            print("Adding orderId column to categories table...")
+            db:exec("ALTER TABLE categories ADD COLUMN orderId INTEGER NOT NULL DEFAULT 1")
+        end
+
+        -- Handle column renames
         if column_exists("categories", "id") and not column_exists("categories", "categoryId") then
-            print("Migrating categories table...")
+            print("Migrating categories table column names...")
             db:exec([[
                 ALTER TABLE categories RENAME COLUMN id TO categoryId;
+            ]])
+        end
+        if column_exists("categories", "order_id") and not column_exists("categories", "orderId") then
+            db:exec([[
                 ALTER TABLE categories RENAME COLUMN order_id TO orderId;
             ]])
         end
@@ -74,11 +156,31 @@ function migrate_tables()
 
     -- Migrate channels table
     if table_exists("channels") then
+        -- Add missing columns
+        if not column_exists("channels", "orderId") then
+            print("Adding orderId column to channels table...")
+            db:exec("ALTER TABLE channels ADD COLUMN orderId INTEGER NOT NULL DEFAULT 1")
+        end
+        if not column_exists("channels", "categoryId") then
+            print("Adding categoryId column to channels table...")
+            db:exec(
+                "ALTER TABLE channels ADD COLUMN categoryId INTEGER REFERENCES categories(categoryId) ON DELETE SET NULL")
+        end
+
+        -- Handle column renames
         if column_exists("channels", "id") and not column_exists("channels", "channelId") then
-            print("Migrating channels table...")
+            print("Migrating channels table column names...")
             db:exec([[
                 ALTER TABLE channels RENAME COLUMN id TO channelId;
+            ]])
+        end
+        if column_exists("channels", "order_id") and not column_exists("channels", "orderId") then
+            db:exec([[
                 ALTER TABLE channels RENAME COLUMN order_id TO orderId;
+            ]])
+        end
+        if column_exists("channels", "category_id") and not column_exists("channels", "categoryId") then
+            db:exec([[
                 ALTER TABLE channels RENAME COLUMN category_id TO categoryId;
             ]])
         end
@@ -86,8 +188,19 @@ function migrate_tables()
 
     -- Migrate members table
     if table_exists("members") then
+        -- Add missing columns
+        if not column_exists("members", "nickname") then
+            print("Adding nickname column to members table...")
+            db:exec("ALTER TABLE members ADD COLUMN nickname TEXT")
+        end
+        if not column_exists("members", "roles") then
+            print("Adding roles column to members table...")
+            db:exec("ALTER TABLE members ADD COLUMN roles TEXT DEFAULT '[]'")
+        end
+
+        -- Handle column renames
         if column_exists("members", "id") and not column_exists("members", "userId") then
-            print("Migrating members table...")
+            print("Migrating members table column names...")
             db:exec([[
                 ALTER TABLE members RENAME COLUMN id TO userId;
             ]])
@@ -126,6 +239,25 @@ function migrate_tables()
 
     -- Migrate messages table (more complex due to foreign keys)
     if table_exists("messages") then
+        -- Add missing columns to existing messages table
+        if not column_exists("messages", "attachments") then
+            print("Adding attachments column to messages table...")
+            db:exec("ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'")
+        end
+        if not column_exists("messages", "replyTo") then
+            print("Adding replyTo column to messages table...")
+            db:exec("ALTER TABLE messages ADD COLUMN replyTo INTEGER REFERENCES messages(messageId) ON DELETE SET NULL")
+        end
+        if not column_exists("messages", "messageTxId") then
+            print("Adding messageTxId column to messages table...")
+            db:exec("ALTER TABLE messages ADD COLUMN messageTxId TEXT UNIQUE")
+        end
+        if not column_exists("messages", "edited") then
+            print("Adding edited column to messages table...")
+            db:exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0")
+        end
+
+        -- Handle complex column renames (requires table recreation)
         if column_exists("messages", "id") and not column_exists("messages", "messageId") then
             print("Migrating messages table...")
 
@@ -150,24 +282,45 @@ function migrate_tables()
             -- Copy data from old table to new table
             db:exec([[
                 INSERT INTO messages_new (messageId, content, channelId, authorId, messageTxId, timestamp, edited, attachments)
-                SELECT id, content, channel_id, author_id,
-                       COALESCE(msg_id, 'msg_' || id),
-                       timestamp, edited, '[]'
+                SELECT id, content,
+                       COALESCE(channel_id, channelId),
+                       COALESCE(author_id, authorId),
+                       COALESCE(msg_id, messageTxId, 'msg_' || id),
+                       timestamp,
+                       COALESCE(edited, 0),
+                       COALESCE(attachments, '[]')
                 FROM messages;
             ]])
 
             -- Drop old table and rename new one
             db:exec("DROP TABLE messages")
             db:exec("ALTER TABLE messages_new RENAME TO messages")
-        else
-            -- Add new columns if they don't exist in already migrated table
-            if not column_exists("messages", "attachments") then
-                db:exec("ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'")
-            end
-            if not column_exists("messages", "replyTo") then
-                db:exec(
-                    "ALTER TABLE messages ADD COLUMN replyTo INTEGER REFERENCES messages(messageId) ON DELETE SET NULL")
-            end
+        end
+    end
+
+    -- Migrate roles table
+    if table_exists("roles") then
+        -- Add missing columns
+        if not column_exists("roles", "orderId") then
+            print("Adding orderId column to roles table...")
+            db:exec("ALTER TABLE roles ADD COLUMN orderId INTEGER NOT NULL DEFAULT 1")
+        end
+        if not column_exists("roles", "color") then
+            print("Adding color column to roles table...")
+            db:exec("ALTER TABLE roles ADD COLUMN color TEXT NOT NULL DEFAULT '#696969'")
+        end
+        if not column_exists("roles", "permissions") then
+            print("Adding permissions column to roles table...")
+            db:exec("ALTER TABLE roles ADD COLUMN permissions INTEGER NOT NULL DEFAULT 0")
+        end
+
+        -- Handle column renames
+        if column_exists("roles", "id") and not column_exists("roles", "roleId") then
+            print("Migrating roles table column names...")
+            db:exec("ALTER TABLE roles RENAME COLUMN id TO roleId")
+        end
+        if column_exists("roles", "order_id") and not column_exists("roles", "orderId") then
+            db:exec("ALTER TABLE roles RENAME COLUMN order_id TO orderId")
         end
     end
 end
@@ -1412,8 +1565,8 @@ app.post("/assign-role", function(req, res)
     local userIdToUpdate = req.body.userId
     local roleId = req.body.roleId
 
-    local member = SQLRead("SELECT * FROM members WHERE userId = ?", userIdToUpdate)
-    if not member or #member == 0 then
+    local member = GetProfile(userIdToUpdate)
+    if not member then
         res:status(404):json({
             error = "Member not found"
         })
@@ -1467,8 +1620,8 @@ app.post("/unassign-role", function(req, res)
     local userIdToUpdate = req.body.userId
     local roleId = req.body.roleId
 
-    local member = SQLRead("SELECT * FROM members WHERE userId = ?", userIdToUpdate)
-    if not member or #member == 0 then
+    local member = GetProfile(userIdToUpdate)
+    if not member then
         res:status(404):json({
             error = "Member not found"
         })

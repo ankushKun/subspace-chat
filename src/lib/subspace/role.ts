@@ -43,6 +43,7 @@ export class RoleManager {
             body: { roleId },
             AO: this.connectionManager.getAo()
         })
+        console.log(res);
         if (res.status == 200) {
             return res.json as Member[];
         } else {

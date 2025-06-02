@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
+import { useProfile } from "@/hooks/subspace"
 import { uploadFileAR, cn } from "@/lib/utils"
 import type { Server, Role, ServerMember, Member } from "@/types/subspace"
 import { Permission, getPermissions, hasPermission } from "@/types/subspace"
@@ -25,6 +26,110 @@ interface ServerSettingsProps {
     onCreateChannel: (categoryId?: number) => void
 }
 
+// Add MemberAvatar component
+const MemberAvatar = ({
+    userId,
+    size = "sm"
+}: {
+    userId: string;
+    size?: "xs" | "sm" | "md";
+}) => {
+    const { profiles } = useProfile()
+    const profile = profiles[userId]
+
+    const sizeClasses = {
+        xs: "w-6 h-6",
+        sm: "w-8 h-8",
+        md: "w-10 h-10"
+    }
+
+    return (
+        <div className="relative flex-shrink-0">
+            <div className={cn(
+                "relative rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center",
+                sizeClasses[size]
+            )}>
+                {profile?.pfp ? (
+                    <img
+                        src={`https://arweave.net/${profile.pfp}`}
+                        alt={userId}
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <span className="text-primary font-semibold text-xs">
+                        {(profile?.primaryName || userId).charAt(0).toUpperCase()}
+                    </span>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// Add helper function to get display name
+const getDisplayName = (member: ServerMember | Member, profiles: Record<string, any>) => {
+    const profile = profiles[member.userId]
+    return member.nickname || profile?.primaryName || member.userId
+}
+
+// Add helper function to sort members - separate functions for different types
+const sortServerMembersByPriority = (members: ServerMember[], profiles: Record<string, any>): ServerMember[] => {
+    return members.sort((a, b) => {
+        const profileA = profiles[a.userId]
+        const profileB = profiles[b.userId]
+
+        const hasNameA = !!(a.nickname || profileA?.primaryName)
+        const hasNameB = !!(b.nickname || profileB?.primaryName)
+
+        const defaultPfpHash = "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo"
+        const hasCustomPfpA = !!(profileA?.pfp && profileA.pfp !== defaultPfpHash)
+        const hasCustomPfpB = !!(profileB?.pfp && profileB.pfp !== defaultPfpHash)
+
+        // Calculate priority scores (higher is better)
+        const scoreA = (hasNameA ? 2 : 0) + (hasCustomPfpA ? 2 : 0)
+        const scoreB = (hasNameB ? 2 : 0) + (hasCustomPfpB ? 2 : 0)
+
+        // Sort by priority score first
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA // Higher scores first
+        }
+
+        // If same priority, sort alphabetically by display name
+        const displayNameA = getDisplayName(a, profiles)
+        const displayNameB = getDisplayName(b, profiles)
+
+        return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
+    })
+}
+
+const sortMembersByPriority = (members: Member[], profiles: Record<string, any>): Member[] => {
+    return members.sort((a, b) => {
+        const profileA = profiles[a.userId]
+        const profileB = profiles[b.userId]
+
+        const hasNameA = !!(a.nickname || profileA?.primaryName)
+        const hasNameB = !!(b.nickname || profileB?.primaryName)
+
+        const defaultPfpHash = "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo"
+        const hasCustomPfpA = !!(profileA?.pfp && profileA.pfp !== defaultPfpHash)
+        const hasCustomPfpB = !!(profileB?.pfp && profileB.pfp !== defaultPfpHash)
+
+        // Calculate priority scores (higher is better)
+        const scoreA = (hasNameA ? 2 : 0) + (hasCustomPfpA ? 2 : 0)
+        const scoreB = (hasNameB ? 2 : 0) + (hasCustomPfpB ? 2 : 0)
+
+        // Sort by priority score first
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA // Higher scores first
+        }
+
+        // If same priority, sort alphabetically by display name
+        const displayNameA = getDisplayName(a, profiles)
+        const displayNameB = getDisplayName(b, profiles)
+
+        return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
+    })
+}
+
 export default function ServerSettings({
     server,
     isServerOwner,
@@ -34,6 +139,7 @@ export default function ServerSettings({
     const subspace = useSubspace()
     const { address } = useWallet()
     const { actions } = useServer()
+    const { profiles } = useProfile()
 
     // Main settings dialog state
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -177,7 +283,10 @@ export default function ServerSettings({
         try {
             const members = await subspace.server.getServerMembers({ serverId: server.serverId })
             if (members) {
-                setAllServerMembers(members)
+                // Ensure we have proper ServerMember type before sorting
+                const serverMembers = members as ServerMember[]
+                const sortedMembers = sortServerMembersByPriority(serverMembers, profiles)
+                setAllServerMembers(sortedMembers as ServerMember[])
             } else {
                 setAllServerMembers([])
             }
@@ -622,11 +731,74 @@ export default function ServerSettings({
         }
     }, [addMemberDialogOpen, server?.serverId])
 
+    // In the Members Tab section, update the role members display
+    const renderRoleMembersSection = () => {
+        if (loadingRoleMembers) {
+            return (
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="ml-3 text-muted-foreground">Loading members...</span>
+                </div>
+            )
+        }
+
+        if (roleMembers.length === 0) {
+            return (
+                <div className="text-center py-8">
+                    <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-muted-foreground mb-1">No members with this role</p>
+                    <p className="text-sm text-muted-foreground/60">Members with this role will appear here</p>
+                </div>
+            )
+        }
+
+        // Sort role members by priority
+        const sortedRoleMembers = sortMembersByPriority(roleMembers, profiles)
+
+        return (
+            <div className="space-y-2">
+                {sortedRoleMembers.map((member) => {
+                    const displayName = getDisplayName(member, profiles)
+                    const profile = profiles[member.userId]
+
+                    return (
+                        <div
+                            key={member.userId}
+                            className="flex items-center gap-3 p-3 rounded-lg border border-border/30 hover:border-border/50 hover:bg-muted/30 transition-colors group"
+                        >
+                            <MemberAvatar userId={member.userId} size="sm" />
+                            <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">
+                                    {displayName}
+                                </div>
+                                {(member.nickname || profile?.primaryName) && member.userId !== displayName && (
+                                    <div className="text-xs text-muted-foreground truncate">
+                                        {member.userId}
+                                    </div>
+                                )}
+                            </div>
+                            {isServerOwner && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleRemoveRole(member.userId)}
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
+
     // Get available members (those who don't already have the selected role)
     const getAvailableMembers = () => {
         if (!selectedRole) return []
 
-        return allServerMembers.filter(member => {
+        const availableMembers = allServerMembers.filter(member => {
             try {
                 return !member.roles.includes(selectedRole.roleId)
             } catch (error) {
@@ -635,6 +807,9 @@ export default function ServerSettings({
                 return true
             }
         })
+
+        // Sort available members by priority
+        return sortServerMembersByPriority(availableMembers, profiles)
     }
 
     return (
@@ -1607,51 +1782,7 @@ export default function ServerSettings({
                                                                             </div>
                                                                         </div>
 
-                                                                        {loadingRoleMembers ? (
-                                                                            <div className="flex items-center justify-center py-8">
-                                                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                                                                <span className="ml-3 text-muted-foreground">Loading members...</span>
-                                                                            </div>
-                                                                        ) : roleMembers.length === 0 ? (
-                                                                            <div className="text-center py-8">
-                                                                                <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                                                                                <p className="text-muted-foreground mb-1">No members with this role</p>
-                                                                                <p className="text-sm text-muted-foreground/60">Members with this role will appear here</p>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className="space-y-2">
-                                                                                {roleMembers.map((member) => (
-                                                                                    <div
-                                                                                        key={member.userId}
-                                                                                        className="flex items-center gap-3 p-3 rounded-lg border border-border/30 hover:border-border/50 hover:bg-muted/30 transition-colors"
-                                                                                    >
-                                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                                            <User className="w-4 h-4 text-primary" />
-                                                                                        </div>
-                                                                                        <div className="flex-1 min-w-0">
-                                                                                            <div className="font-medium text-sm truncate">
-                                                                                                {member.nickname || member.userId}
-                                                                                            </div>
-                                                                                            {member.nickname && (
-                                                                                                <div className="text-xs text-muted-foreground truncate">
-                                                                                                    {member.userId}
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        {isServerOwner && (
-                                                                                            <Button
-                                                                                                variant="ghost"
-                                                                                                size="sm"
-                                                                                                className="text-muted-foreground hover:text-destructive"
-                                                                                                onClick={() => handleRemoveRole(member.userId)}
-                                                                                            >
-                                                                                                <X className="w-4 h-4" />
-                                                                                            </Button>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
+                                                                        {renderRoleMembersSection()}
                                                                     </div>
                                                                 </TabsContent>
                                                             </div>
@@ -2006,32 +2137,35 @@ export default function ServerSettings({
                         <>
                             <CommandEmpty>No members found.</CommandEmpty>
                             <CommandGroup heading="Available Members">
-                                {getAvailableMembers().map((member) => (
-                                    <CommandItem
-                                        key={member.userId}
-                                        value={`${member.nickname || member.userId} ${member.userId}`}
-                                        onSelect={() => handleAssignRole(member.userId)}
-                                        disabled={assigningRole}
-                                        className="flex items-center gap-3 p-3"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                            <User className="w-4 h-4 text-primary" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-sm truncate">
-                                                {member.nickname || member.userId}
-                                            </div>
-                                            {member.nickname && (
-                                                <div className="text-xs text-muted-foreground truncate">
-                                                    {member.userId}
+                                {getAvailableMembers().map((member) => {
+                                    const displayName = getDisplayName(member, profiles)
+                                    const profile = profiles[member.userId]
+
+                                    return (
+                                        <CommandItem
+                                            key={member.userId}
+                                            value={`${displayName} ${member.userId} ${profile?.primaryName || ''}`}
+                                            onSelect={() => handleAssignRole(member.userId)}
+                                            disabled={assigningRole}
+                                            className="flex items-center gap-3 p-3 cursor-pointer"
+                                        >
+                                            <MemberAvatar userId={member.userId} size="sm" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-sm truncate">
+                                                    {displayName}
                                                 </div>
+                                                {(member.nickname || profile?.primaryName) && member.userId !== displayName && (
+                                                    <div className="text-xs text-muted-foreground truncate">
+                                                        {member.userId}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {assigningRole && (
+                                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
                                             )}
-                                        </div>
-                                        {assigningRole && (
-                                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                                        )}
-                                    </CommandItem>
-                                ))}
+                                        </CommandItem>
+                                    )
+                                })}
                             </CommandGroup>
                         </>
                     )}

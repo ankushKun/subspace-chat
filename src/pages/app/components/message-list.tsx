@@ -3,7 +3,7 @@ import { useServer } from "@/hooks/subspace/server"
 import React, { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check } from "lucide-react"
+import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check, UsersRound } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn, shortenAddress } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
@@ -32,7 +32,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
     const isMobile = useIsMobile()
 
     return (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
+        <div className="flex items-center justify-between px-4 py-3 pr-2 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
             {/* Left side - Channel info */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
             </div>
 
             {/* Right side - Action buttons */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center justify-center gap-1 h-full">
                 {/* <Button
                     size="sm"
                     variant="ghost"
@@ -85,18 +85,18 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
 
                 {!isMobile && activeServerId && (
                     <Button
-                        size="sm"
+                        size="icon"
                         variant="ghost"
                         onClick={onToggleMemberList}
                         className={cn(
-                            "h-8 w-8 p-0 hover:bg-muted/50 transition-colors",
+                            "!h-8 !w-8 hover:bg-muted/50 transition-colors items-center justify-center",
                             showMemberList
                                 ? "text-primary hover:text-primary"
                                 : "text-muted-foreground hover:text-foreground"
                         )}
                         title={showMemberList ? "Hide member list" : "Show member list"}
                     >
-                        <Users className="w-4 h-4" />
+                        <UsersRound className="!w-4 !h-4" />
                     </Button>
                 )}
             </div>

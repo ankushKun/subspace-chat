@@ -3,7 +3,7 @@ import { useProfile } from "@/hooks/subspace"
 import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, ChevronRight } from "lucide-react"
+import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, ChevronRight, UsersRound } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ServerMember } from "@/types/subspace"
 import UserMention from "@/components/user-mention"
@@ -306,7 +306,7 @@ export default function MemberList(props: React.HTMLAttributes<HTMLDivElement>) 
             {/* Header */}
             <div className="mb-4 p-4 flex flex-col justify-center items-start relative">
                 <div className="flex items-center gap-2 w-full">
-                    <Users className="w-5 h-5 text-muted-foreground" />
+                    <UsersRound className="w-5 h-5 text-muted-foreground" />
                     <h2 className="text-lg font-semibold text-foreground">
                         Members
                     </h2>

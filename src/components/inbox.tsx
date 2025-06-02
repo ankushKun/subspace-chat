@@ -8,6 +8,8 @@ import useSubspace, { useNotifications, useServer } from "@/hooks/subspace";
 import { useSound } from "@/hooks/use-sound";
 import { format } from "date-fns";
 import type { SubspaceNotification } from "@/types/subspace";
+import { BiSolidInbox } from "react-icons/bi";
+
 
 export default function InboxComponent({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
     const [open, setOpen] = useState(false);
@@ -252,8 +254,8 @@ export default function InboxComponent({ children, ...props }: React.HTMLAttribu
             <PopoverTrigger className={cn("relative", props.className)}>
                 {children ? children : (
                     <>
-                        <Button variant="ghost" size="icon" className="relative">
-                            <InboxIcon className="!w-5 !h-5" />
+                        <Button variant="ghost" size="icon" className="relative bottom-0.5">
+                            <BiSolidInbox className="!w-5 !h-5" />
                             {unreadCountFiltered > 0 && (
                                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center !text-xs font-medium">
                                     {unreadCountFiltered > 99 ? '99+' : unreadCountFiltered}

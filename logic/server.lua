@@ -92,6 +92,36 @@ function migrate_tables()
                 ALTER TABLE members RENAME COLUMN id TO userId;
             ]])
         end
+
+        -- Migrate roles field from full role objects to role IDs
+        local members_with_roles = SQLRead("SELECT userId, roles FROM members WHERE roles IS NOT NULL AND roles != '[]'")
+        if #members_with_roles > 0 then
+            print("Migrating member roles from objects to IDs...")
+            for _, member in ipairs(members_with_roles) do
+                local roles = json.decode(member.roles or "[]") or {}
+                local roleIds = {}
+                local needsMigration = false
+
+                -- Check if roles are stored as objects (old format) or IDs (new format)
+                for _, role in ipairs(roles) do
+                    if type(role) == "table" and role.roleId then
+                        -- Old format: role is an object with roleId field
+                        table.insert(roleIds, role.roleId)
+                        needsMigration = true
+                    elseif type(role) == "number" then
+                        -- New format: role is just an ID
+                        table.insert(roleIds, role)
+                    end
+                end
+
+                -- Only update if migration is needed
+                if needsMigration then
+                    local newRolesString = json.encode(roleIds)
+                    SQLWrite("UPDATE members SET roles = ? WHERE userId = ?", newRolesString, member.userId)
+                    print("Migrated roles for member: " .. member.userId)
+                end
+            end
+        end
     end
 
     -- Migrate messages table (more complex due to foreign keys)
@@ -218,6 +248,14 @@ function HasPermission(sum_perms, perm)
     return sum_perms & perm == perm
 end
 
+function GetRole(roleId)
+    local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+    if #role == 1 then
+        return role[1]
+    end
+    return nil
+end
+
 function MemberHasPermission(member, perm)
     if isOwner(member.userId) then
         return true
@@ -227,8 +265,9 @@ function MemberHasPermission(member, perm)
     if #roles == 0 then
         return HasPermission(0, perm)
     end
-    for _, role in ipairs(roles) do
-        if HasPermission(role.permissions, perm) then
+    for _, roleId in ipairs(roles) do
+        local role = GetRole(roleId)
+        if role and HasPermission(role.permissions, perm) then
             return true
         end
     end

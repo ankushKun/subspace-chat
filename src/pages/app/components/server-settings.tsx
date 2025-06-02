@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, Link, Plus, Hash, Settings, Code, Trash2, Loader2, X, User, Shield, Upload } from "lucide-react"
+import { ChevronDown, Link, Plus, Hash, Settings, Code, Trash2, Loader2, X, User, Shield, Upload, Pencil, Eye, GripVertical } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { FileDropzone } from "@/components/ui/file-dropzone"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import { uploadFileAR, cn } from "@/lib/utils"
-import type { Server } from "@/types/subspace"
+import type { Server, Role } from "@/types/subspace"
+import { Permission, getPermissions, hasPermission } from "@/types/subspace"
 
 interface ServerSettingsProps {
     server: Server
@@ -47,6 +50,210 @@ export default function ServerSettings({
     // Update server code confirmation state
     const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false)
     const [isUpdating, setIsUpdating] = useState(false)
+
+    // Roles state
+    const [roles, setRoles] = useState<Role[]>([])
+    const [loadingRoles, setLoadingRoles] = useState(false)
+    const [createRoleOpen, setCreateRoleOpen] = useState(false)
+    const [editRoleOpen, setEditRoleOpen] = useState(false)
+    const [deleteRoleOpen, setDeleteRoleOpen] = useState(false)
+    const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+    const [updatingRoles, setUpdatingRoles] = useState<number[]>([])
+    const [showMobileRoleDetails, setShowMobileRoleDetails] = useState(false)
+
+    // Role form state
+    const [roleName, setRoleName] = useState("")
+    const [roleColor, setRoleColor] = useState("#696969")
+    const [rolePermissions, setRolePermissions] = useState<Permission[]>([])
+    const [isCreatingRole, setIsCreatingRole] = useState(false)
+    const [isEditingRole, setIsEditingRole] = useState(false)
+    const [isDeletingRole, setIsDeletingRole] = useState(false)
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+    // Load roles when tab is opened
+    useEffect(() => {
+        if (settingsOpen && activeTab === "roles" && server?.serverId) {
+            loadRoles()
+        }
+    }, [settingsOpen, activeTab, server?.serverId])
+
+    // Update form when selected role changes
+    useEffect(() => {
+        if (selectedRole) {
+            setRoleName(selectedRole.name)
+            setRoleColor(selectedRole.color)
+            setRolePermissions(getPermissions(selectedRole.permissions))
+            setHasUnsavedChanges(false)
+        }
+    }, [selectedRole])
+
+    // Check for unsaved changes
+    useEffect(() => {
+        if (selectedRole) {
+            const nameChanged = roleName !== selectedRole.name
+            const colorChanged = roleColor !== selectedRole.color
+            const permissionsChanged = JSON.stringify(rolePermissions.sort()) !== JSON.stringify(getPermissions(selectedRole.permissions).sort())
+            setHasUnsavedChanges(nameChanged || colorChanged || permissionsChanged)
+        }
+    }, [roleName, roleColor, rolePermissions, selectedRole])
+
+    // Reset mobile view when tab changes or dialog closes
+    useEffect(() => {
+        if (!settingsOpen || activeTab !== "roles") {
+            setShowMobileRoleDetails(false)
+            setSelectedRole(null)
+        }
+    }, [settingsOpen, activeTab])
+
+    const loadRoles = async () => {
+        if (!server?.serverId) return
+
+        setLoadingRoles(true)
+        try {
+            const serverRoles = await subspace.server.role.getRoles({ serverId: server.serverId })
+            if (serverRoles) {
+                setRoles(serverRoles)
+            }
+        } catch (error) {
+            console.error("Error loading roles:", error)
+            toast.error("Failed to load roles")
+        } finally {
+            setLoadingRoles(false)
+        }
+    }
+
+    const handleCreateRole = async () => {
+        if (!server?.serverId || !roleName.trim()) {
+            toast.error("Please enter a role name")
+            return
+        }
+
+        setIsCreatingRole(true)
+        try {
+            const permissionSum = rolePermissions.reduce((sum, perm) => sum | perm, 0)
+            const success = await subspace.server.role.createRole({
+                serverId: server.serverId,
+                name: roleName.trim(),
+                color: roleColor,
+                permissions: permissionSum
+            })
+
+            if (success) {
+                toast.success("Role created successfully")
+                setRoleName("")
+                setRoleColor("#696969")
+                setRolePermissions([])
+                setCreateRoleOpen(false)
+                await loadRoles()
+            } else {
+                toast.error("Failed to create role")
+            }
+        } catch (error) {
+            console.error("Error creating role:", error)
+            toast.error("Failed to create role")
+        } finally {
+            setIsCreatingRole(false)
+        }
+    }
+
+    const handleSaveRole = async () => {
+        if (!server?.serverId || !selectedRole || !roleName.trim()) {
+            toast.error("Please enter a role name")
+            return
+        }
+
+        setIsEditingRole(true)
+        try {
+            const permissionSum = rolePermissions.reduce((sum, perm) => sum | perm, 0)
+            const success = await subspace.server.role.updateRole({
+                serverId: server.serverId,
+                roleId: selectedRole.roleId,
+                name: roleName.trim(),
+                color: roleColor,
+                permissions: permissionSum
+            })
+
+            if (success) {
+                toast.success("Role updated successfully")
+                setHasUnsavedChanges(false)
+                await loadRoles()
+                // Update selected role with new data
+                const updatedRole = { ...selectedRole, name: roleName.trim(), color: roleColor, permissions: permissionSum }
+                setSelectedRole(updatedRole)
+            } else {
+                toast.error("Failed to update role")
+            }
+        } catch (error) {
+            console.error("Error updating role:", error)
+            toast.error("Failed to update role")
+        } finally {
+            setIsEditingRole(false)
+        }
+    }
+
+    const handleEditRole = async () => {
+        // This function is kept for compatibility but now just calls handleSaveRole
+        await handleSaveRole()
+    }
+
+    const handleDeleteRole = async () => {
+        if (!server?.serverId || !selectedRole) {
+            toast.error("No role selected")
+            return
+        }
+
+        setIsDeletingRole(true)
+        try {
+            const usersUpdated = await subspace.server.role.deleteRole({
+                serverId: server.serverId,
+                roleId: selectedRole.roleId
+            })
+
+            if (usersUpdated !== null) {
+                toast.success(`Role deleted successfully. ${usersUpdated} users were updated.`)
+                setDeleteRoleOpen(false)
+                setSelectedRole(null)
+                await loadRoles()
+            } else {
+                toast.error("Failed to delete role")
+            }
+        } catch (error) {
+            console.error("Error deleting role:", error)
+            toast.error("Failed to delete role")
+        } finally {
+            setIsDeletingRole(false)
+        }
+    }
+
+    const openCreateRole = () => {
+        setRoleName("")
+        setRoleColor("#696969")
+        setRolePermissions([])
+        setCreateRoleOpen(true)
+    }
+
+    const openEditRole = (role: Role) => {
+        setSelectedRole(role)
+        setRoleName(role.name)
+        setRoleColor(role.color)
+        setRolePermissions(getPermissions(role.permissions))
+        setEditRoleOpen(true)
+    }
+
+    const openDeleteRole = (role: Role) => {
+        setSelectedRole(role)
+        setDeleteRoleOpen(true)
+    }
+
+    const togglePermission = (permission: Permission) => {
+        setRolePermissions(prev => {
+            if (prev.includes(permission)) {
+                return prev.filter(p => p !== permission)
+            } else {
+                return [...prev, permission]
+            }
+        })
+    }
 
     const handleCopyInvite = () => {
         if (!server) return
@@ -214,6 +421,71 @@ export default function ServerSettings({
             setServerIcon(null)
         }
     }, [settingsOpen, server])
+
+    const handleRoleDragEnd = async (result: any) => {
+        const { source, destination } = result
+
+        // Dropped outside the list
+        if (!destination) return
+
+        // No change
+        if (source.index === destination.index) return
+
+        if (!server?.serverId) return
+
+        // Reorder roles array
+        const newRoles = Array.from(roles)
+        const [removed] = newRoles.splice(source.index, 1)
+        newRoles.splice(destination.index, 0, removed)
+
+        // Update local state immediately (optimistic update)
+        const updatedRoles = newRoles.map((role, index) => ({
+            ...role,
+            orderId: index + 1
+        }))
+        setRoles(updatedRoles)
+
+        // Update the order_id of the moved role
+        const roleToUpdate = newRoles[destination.index]
+        const newOrder = destination.index + 1
+
+        // Mark this role as updating
+        setUpdatingRoles(prev => [...prev, roleToUpdate.roleId])
+
+        try {
+            const success = await subspace.server.role.updateRole({
+                serverId: server.serverId,
+                roleId: roleToUpdate.roleId,
+                orderId: newOrder
+            })
+
+            if (success) {
+                toast.success('Role order updated')
+                // Refresh roles to get the correct order from server
+                await loadRoles()
+            } else {
+                throw new Error('Failed to update role order')
+            }
+        } catch (error) {
+            console.error('Error updating role order:', error)
+            toast.error('Failed to update role order')
+
+            // Revert optimistic update
+            await loadRoles()
+        } finally {
+            setUpdatingRoles(prev => prev.filter(id => id !== roleToUpdate.roleId))
+        }
+    }
+
+    const handleMobileRoleSelect = (role: Role) => {
+        setSelectedRole(role)
+        setShowMobileRoleDetails(true)
+    }
+
+    const handleMobileBackToList = () => {
+        setShowMobileRoleDetails(false)
+        setSelectedRole(null)
+    }
 
     return (
         <>
@@ -455,7 +727,7 @@ export default function ServerSettings({
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="delete"
-                                            className="w-full justify-start gap-4 h-14 px-4 rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border/50 transition-all text-destructive data-[state=active]:text-destructive"
+                                            className="w-full justify-start gap-4 h-14 px-4 rounded-lg data-[state=active]:bg-background  data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border/50 transition-all text-destructive data-[state=active]:!text-destructive"
                                         >
                                             <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
                                                 <Trash2 className="w-4 h-4 text-destructive" />
@@ -564,21 +836,615 @@ export default function ServerSettings({
                                 </TabsContent>
 
                                 {/* Roles Tab */}
-                                <TabsContent value="roles" className="p-8 space-y-8 m-0 h-full max-w-4xl">
-                                    <div>
-                                        <h3 className="text-2xl font-bold mb-3">Roles & Permissions</h3>
-                                        <p className="text-muted-foreground text-lg">
-                                            Manage server roles and user permissions.
-                                        </p>
-                                    </div>
+                                <TabsContent value="roles" className="p-0 space-y-0 m-0 h-full max-w-none">
+                                    <div className="h-full flex flex-col">
+                                        <div className="p-4 md:p-8 pb-4">
+                                            <h3 className="text-xl md:text-2xl font-bold mb-3">Roles & Permissions</h3>
+                                            <p className="text-muted-foreground text-base md:text-lg">
+                                                Manage server roles and configure permissions for different user groups.
+                                            </p>
+                                        </div>
 
-                                    <div className="flex items-center justify-center h-96 border-2 border-dashed border-border/50 rounded-xl bg-muted/20">
-                                        <div className="text-center">
-                                            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                                                <Shield className="w-8 h-8 text-primary/50" />
+                                        <div className="flex-1 flex flex-col md:flex-row ">
+                                            {/* Mobile View - Conditional rendering */}
+                                            <div className="md:hidden flex-1 flex flex-col">
+                                                {!showMobileRoleDetails ? (
+                                                    /* Mobile Roles List */
+                                                    <div className="flex flex-col h-full">
+                                                        <div className="p-4 border-b border-border/50">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <h4 className="font-semibold">Roles</h4>
+                                                                <Button onClick={openCreateRole} size="sm" className="h-8">
+                                                                    <Plus className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                            <p className="text-sm text-muted-foreground">
+                                                                Use roles to group your server members and assign permissions.
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="flex-1 overflow-y-auto p-2">
+                                                            {loadingRoles ? (
+                                                                <div className="flex items-center justify-center py-8">
+                                                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                                                    <span className="ml-2 text-muted-foreground text-sm">Loading...</span>
+                                                                </div>
+                                                            ) : roles.length === 0 ? (
+                                                                <div className="text-center py-8">
+                                                                    <Shield className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+                                                                    <p className="text-sm text-muted-foreground mb-3">No roles yet</p>
+                                                                    <Button onClick={openCreateRole} variant="outline" size="sm">
+                                                                        <Plus className="w-4 h-4 mr-2" />
+                                                                        Create Role
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <DragDropContext onDragEnd={handleRoleDragEnd}>
+                                                                    <Droppable droppableId="roles">
+                                                                        {(provided, snapshot) => (
+                                                                            <div
+                                                                                ref={provided.innerRef}
+                                                                                {...provided.droppableProps}
+                                                                                className={cn(
+                                                                                    "space-y-1",
+                                                                                    snapshot.isDraggingOver && "bg-accent/20 p-2 rounded-lg"
+                                                                                )}
+                                                                            >
+                                                                                {roles.map((role, index) => (
+                                                                                    <Draggable
+                                                                                        key={role.roleId}
+                                                                                        draggableId={`role-${role.roleId}`}
+                                                                                        index={index}
+                                                                                        isDragDisabled={updatingRoles.includes(role.roleId)}
+                                                                                    >
+                                                                                        {(provided, snapshot) => (
+                                                                                            <div
+                                                                                                ref={provided.innerRef}
+                                                                                                {...provided.draggableProps}
+                                                                                                className={cn(
+                                                                                                    "p-3 rounded-lg border border-transparent hover:border-border/50 hover:bg-background/50 transition-all duration-200 cursor-pointer group",
+                                                                                                    snapshot.isDragging && "opacity-50 shadow-lg ring-1 ring-primary/30"
+                                                                                                )}
+                                                                                                onClick={() => handleMobileRoleSelect(role)}
+                                                                                            >
+                                                                                                <div className="flex items-center gap-3">
+                                                                                                    <div
+                                                                                                        {...provided.dragHandleProps}
+                                                                                                        className="opacity-20 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                                                                                                    >
+                                                                                                        <GripVertical className="w-4 h-4" />
+                                                                                                    </div>
+                                                                                                    <div
+                                                                                                        className="w-4 h-4 rounded-full border border-border/50 flex-shrink-0"
+                                                                                                        style={{ backgroundColor: role.color }}
+                                                                                                    />
+                                                                                                    <div className="flex-1 min-w-0">
+                                                                                                        <div className="font-medium text-sm truncate">{role.name}</div>
+                                                                                                        <div className="text-xs text-muted-foreground">
+                                                                                                            {getPermissions(role.permissions).length} permission{getPermissions(role.permissions).length !== 1 ? 's' : ''}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    {updatingRoles.includes(role.roleId) && (
+                                                                                                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </Draggable>
+                                                                                ))}
+                                                                                {provided.placeholder}
+                                                                            </div>
+                                                                        )}
+                                                                    </Droppable>
+                                                                </DragDropContext>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    /* Mobile Role Details */
+                                                    selectedRole && (
+                                                        <Tabs defaultValue="display" className="flex flex-col h-full">
+                                                            {/* Mobile Header with Back Button */}
+                                                            <div className="border-b border-border/50 bg-background/50">
+                                                                <div className="flex items-center gap-3 px-4 py-3">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={handleMobileBackToList}
+                                                                        className="h-8 w-8 p-0"
+                                                                    >
+                                                                        <ChevronDown className="w-4 h-4 rotate-90" />
+                                                                    </Button>
+                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                        <div
+                                                                            className="w-4 h-4 rounded-full border border-border/50 flex-shrink-0"
+                                                                            style={{ backgroundColor: selectedRole.color }}
+                                                                        />
+                                                                        <h4 className="font-semibold truncate">{selectedRole.name}</h4>
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => openDeleteRole(selectedRole)}
+                                                                        className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                </div>
+
+                                                                <div className="px-4 pb-3">
+                                                                    <TabsList className="bg-muted/30 p-1 w-full">
+                                                                        <TabsTrigger value="display" className="px-4 py-2 flex-1">Display</TabsTrigger>
+                                                                        <TabsTrigger value="permissions" className="px-4 py-2 flex-1">Permissions</TabsTrigger>
+                                                                    </TabsList>
+                                                                    {hasUnsavedChanges && (
+                                                                        <Button
+                                                                            onClick={handleSaveRole}
+                                                                            disabled={isEditingRole || !roleName.trim()}
+                                                                            className="w-full mt-3"
+                                                                            size="sm"
+                                                                        >
+                                                                            {isEditingRole ? (
+                                                                                <>
+                                                                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                                                                    Saving...
+                                                                                </>
+                                                                            ) : (
+                                                                                "Save Changes"
+                                                                            )}
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Mobile Tab Content */}
+                                                            <div className="flex-1 overflow-hidden">
+                                                                {/* Display Tab */}
+                                                                <TabsContent value="display" className="m-0 h-full overflow-y-auto">
+                                                                    <div className="p-4 space-y-6">
+                                                                        <div className="space-y-6">
+                                                                            {/* Role Name */}
+                                                                            <div className="space-y-3">
+                                                                                <label className="text-sm font-medium text-foreground">
+                                                                                    Role Name <span className="text-destructive">*</span>
+                                                                                </label>
+                                                                                <Input
+                                                                                    value={roleName}
+                                                                                    onChange={(e) => setRoleName(e.target.value)}
+                                                                                    className="w-full"
+                                                                                    disabled={isEditingRole}
+                                                                                />
+                                                                            </div>
+
+                                                                            {/* Role Color */}
+                                                                            <div className="space-y-3">
+                                                                                <label className="text-sm font-medium text-foreground">
+                                                                                    Role Color <span className="text-destructive">*</span>
+                                                                                </label>
+                                                                                <p className="text-sm text-muted-foreground">
+                                                                                    Members use the color of the highest role they have on the roles list.
+                                                                                </p>
+                                                                                <div className="flex flex-col gap-4">
+                                                                                    <div
+                                                                                        className="w-16 h-16 rounded-lg border border-border/50 flex-shrink-0 mx-auto"
+                                                                                        style={{ backgroundColor: roleColor }}
+                                                                                    />
+                                                                                    <div className="space-y-3 w-full">
+                                                                                        <input
+                                                                                            type="color"
+                                                                                            value={roleColor}
+                                                                                            onChange={(e) => setRoleColor(e.target.value)}
+                                                                                            className="sr-only"
+                                                                                            id="mobile-role-color-picker"
+                                                                                        />
+                                                                                        <div className="grid grid-cols-10 gap-2 w-full">
+                                                                                            {[
+                                                                                                '#5865f2', '#57f287', '#fee75c', '#eb459e', '#ed4245',
+                                                                                                '#ff6600', '#1abc9c', '#9b59b6', '#e67e22', '#95a5a6',
+                                                                                                '#34495e', '#11806a', '#206694', '#71368a', '#ad1457',
+                                                                                                '#c27c0e', '#a84300', '#992d22', '#979c9f', '#7f8c8d'
+                                                                                            ].map((color) => (
+                                                                                                <button
+                                                                                                    key={color}
+                                                                                                    type="button"
+                                                                                                    className={cn(
+                                                                                                        "w-6 h-6 rounded border-2 transition-all hover:scale-110",
+                                                                                                        roleColor === color ? "border-foreground" : "border-border/30"
+                                                                                                    )}
+                                                                                                    style={{ backgroundColor: color }}
+                                                                                                    onClick={() => setRoleColor(color)}
+                                                                                                />
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <label htmlFor="mobile-role-color-picker" className="cursor-pointer">
+                                                                                                <div className="w-8 h-8 rounded border border-border/50 bg-muted/50 hover:bg-muted flex items-center justify-center">
+                                                                                                    <Pencil className="w-4 h-4" />
+                                                                                                </div>
+                                                                                            </label>
+                                                                                            <Input
+                                                                                                value={roleColor}
+                                                                                                onChange={(e) => setRoleColor(e.target.value)}
+                                                                                                className="flex-1 font-mono text-sm"
+                                                                                                placeholder="#696969"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </TabsContent>
+
+                                                                {/* Permissions Tab */}
+                                                                <TabsContent value="permissions" className="m-0 h-full overflow-y-auto">
+                                                                    <div className="p-4 space-y-6">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <h4 className="text-lg font-semibold">Permissions</h4>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() => setRolePermissions([])}
+                                                                                className="text-sm"
+                                                                            >
+                                                                                Clear all
+                                                                            </Button>
+                                                                        </div>
+
+                                                                        <div className="space-y-1">
+                                                                            {Object.values(Permission).filter(p => typeof p === 'number').map((permission) => (
+                                                                                <div
+                                                                                    key={permission}
+                                                                                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                                                                                >
+                                                                                    <div className="flex-1 pr-4">
+                                                                                        <div className="font-medium text-sm">
+                                                                                            {Permission[permission as Permission]}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-muted-foreground mt-1">
+                                                                                            {permission === Permission.SEND_MESSAGES && "Allows members to send messages in text channels."}
+                                                                                            {permission === Permission.MANAGE_CHANNELS && "Allows members to create, edit, or delete channels."}
+                                                                                            {permission === Permission.MANAGE_ROLES && "Allows members to create new roles and edit or delete roles lower than their highest role."}
+                                                                                            {permission === Permission.MANAGE_SERVER && "Allows members to change the server's name and other settings."}
+                                                                                            {permission === Permission.DELETE_MESSAGES && "Allows members to delete messages from other users."}
+                                                                                            {permission === Permission.KICK_MEMBERS && "Allows members to remove other members from this server."}
+                                                                                            {permission === Permission.BAN_MEMBERS && "Allows members to permanently ban other members from this server."}
+                                                                                            {permission === Permission.ADMINISTRATOR && "Members with this permission will have every permission and also bypass all channel specific permissions."}
+                                                                                            {permission === Permission.MANAGE_NICKNAMES && "Allows members to change nicknames of other members."}
+                                                                                            {permission === Permission.MANAGE_MEMBERS && "Allows members to manage other members' roles and permissions."}
+                                                                                            {permission === Permission.MENTION_EVERYONE && "Allows members to use @everyone and @here mentions."}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex-shrink-0">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            role="switch"
+                                                                                            aria-checked={rolePermissions.includes(permission as Permission)}
+                                                                                            onClick={() => togglePermission(permission as Permission)}
+                                                                                            className={cn(
+                                                                                                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                                                                                                rolePermissions.includes(permission as Permission)
+                                                                                                    ? "bg-primary"
+                                                                                                    : "bg-input"
+                                                                                            )}
+                                                                                        >
+                                                                                            <span
+                                                                                                className={cn(
+                                                                                                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                                                                                    rolePermissions.includes(permission as Permission) ? "translate-x-6" : "translate-x-1"
+                                                                                                )}
+                                                                                            />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </TabsContent>
+                                                            </div>
+                                                        </Tabs>
+                                                    )
+                                                )}
                                             </div>
-                                            <h4 className="text-lg font-semibold mb-2">Roles Management</h4>
-                                            <p className="text-muted-foreground">This feature is coming soon</p>
+
+                                            {/* Desktop View - Side by side layout (hidden on mobile) */}
+                                            <div className="hidden md:flex flex-1 overflow-hidden">
+                                                {/* Left Sidebar - Roles List */}
+                                                <div className="w-80 border-r border-border/50 bg-muted/20 flex flex-col">
+                                                    <div className="p-4 border-b border-border/50">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <h4 className="font-semibold">Roles</h4>
+                                                            <Button onClick={openCreateRole} size="sm" className="h-8">
+                                                                <Plus className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Use roles to group your server members and assign permissions.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex-1 overflow-y-auto p-2">
+                                                        {loadingRoles ? (
+                                                            <div className="flex items-center justify-center py-8">
+                                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                                                <span className="ml-2 text-muted-foreground text-sm">Loading...</span>
+                                                            </div>
+                                                        ) : roles.length === 0 ? (
+                                                            <div className="text-center py-8">
+                                                                <Shield className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+                                                                <p className="text-sm text-muted-foreground mb-3">No roles yet</p>
+                                                                <Button onClick={openCreateRole} variant="outline" size="sm">
+                                                                    <Plus className="w-4 h-4 mr-2" />
+                                                                    Create Role
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <DragDropContext onDragEnd={handleRoleDragEnd}>
+                                                                <Droppable droppableId="roles">
+                                                                    {(provided, snapshot) => (
+                                                                        <div
+                                                                            ref={provided.innerRef}
+                                                                            {...provided.droppableProps}
+                                                                            className={cn(
+                                                                                "space-y-1",
+                                                                                snapshot.isDraggingOver && "bg-accent/20 p-2 rounded-lg"
+                                                                            )}
+                                                                        >
+                                                                            {roles.map((role, index) => (
+                                                                                <Draggable
+                                                                                    key={role.roleId}
+                                                                                    draggableId={`role-${role.roleId}`}
+                                                                                    index={index}
+                                                                                    isDragDisabled={updatingRoles.includes(role.roleId)}
+                                                                                >
+                                                                                    {(provided, snapshot) => (
+                                                                                        <div
+                                                                                            ref={provided.innerRef}
+                                                                                            {...provided.draggableProps}
+                                                                                            className={cn(
+                                                                                                "p-3 rounded-lg border border-transparent hover:border-border/50 hover:bg-muted/80 transition-all duration-200 cursor-pointer group",
+                                                                                                selectedRole?.roleId === role.roleId && "bg-background border-border/50 shadow-sm",
+                                                                                                snapshot.isDragging && "opacity-90 shadow-lg ring-1 ring-primary/30"
+                                                                                            )}
+                                                                                            onClick={() => setSelectedRole(role)}
+                                                                                        >
+                                                                                            <div className="flex items-center gap-3">
+                                                                                                <div
+                                                                                                    {...provided.dragHandleProps}
+                                                                                                    className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                                                                                                >
+                                                                                                    <GripVertical className="w-4 h-4 text-muted-foreground" />
+                                                                                                </div>
+                                                                                                <div
+                                                                                                    className="w-4 h-4 rounded-full border border-border/50 flex-shrink-0"
+                                                                                                    style={{ backgroundColor: role.color }}
+                                                                                                />
+                                                                                                <div className="flex-1 min-w-0">
+                                                                                                    <div className="font-medium text-sm truncate">{role.name}</div>
+                                                                                                    <div className="text-xs text-muted-foreground">
+                                                                                                        {getPermissions(role.permissions).length} permission{getPermissions(role.permissions).length !== 1 ? 's' : ''}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                {updatingRoles.includes(role.roleId) && (
+                                                                                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </Draggable>
+                                                                            ))}
+                                                                            {provided.placeholder}
+                                                                        </div>
+                                                                    )}
+                                                                </Droppable>
+                                                            </DragDropContext>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Right Panel - Role Editor */}
+                                                <div className="flex-1 flex flex-col overflow-hidden">
+                                                    {selectedRole ? (
+                                                        <Tabs defaultValue="display" className="flex flex-col h-full">
+                                                            {/* Tab Navigation */}
+                                                            <div className="border-b border-border/50 bg-background/50">
+                                                                <div className="flex items-center justify-between px-6 py-3">
+                                                                    <TabsList className="bg-muted/30 p-1">
+                                                                        <TabsTrigger value="display" className="px-4 py-2">Display</TabsTrigger>
+                                                                        <TabsTrigger value="permissions" className="px-4 py-2">Permissions</TabsTrigger>
+                                                                    </TabsList>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {hasUnsavedChanges && (
+                                                                            <Button
+                                                                                onClick={handleSaveRole}
+                                                                                disabled={isEditingRole || !roleName.trim()}
+                                                                                className="h-8"
+                                                                                size="sm"
+                                                                            >
+                                                                                {isEditingRole ? (
+                                                                                    <>
+                                                                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                                                                        Saving...
+                                                                                    </>
+                                                                                ) : (
+                                                                                    "Save Changes"
+                                                                                )}
+                                                                            </Button>
+                                                                        )}
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            onClick={() => openDeleteRole(selectedRole)}
+                                                                            className="text-destructive hover:text-destructive"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4 mr-2" />
+                                                                            Delete Role
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Tab Content */}
+                                                            <div className="flex-1 overflow-hidden">
+                                                                {/* Display Tab */}
+                                                                <TabsContent value="display" className="m-0 h-full overflow-y-auto">
+                                                                    <div className="p-6 space-y-6">
+                                                                        <div>
+                                                                            <h4 className="text-lg font-semibold mb-4">Display</h4>
+
+                                                                            <div className="space-y-6">
+                                                                                {/* Role Name */}
+                                                                                <div className="space-y-3">
+                                                                                    <label className="text-sm font-medium text-foreground">
+                                                                                        Role Name <span className="text-destructive">*</span>
+                                                                                    </label>
+                                                                                    <Input
+                                                                                        value={roleName}
+                                                                                        onChange={(e) => setRoleName(e.target.value)}
+                                                                                        className="max-w-md"
+                                                                                        disabled={isEditingRole}
+                                                                                    />
+                                                                                </div>
+
+                                                                                {/* Role Color */}
+                                                                                <div className="space-y-3">
+                                                                                    <label className="text-sm font-medium text-foreground">
+                                                                                        Role Color <span className="text-destructive">*</span>
+                                                                                    </label>
+                                                                                    <p className="text-sm text-muted-foreground">
+                                                                                        Members use the color of the highest role they have on the roles list.
+                                                                                    </p>
+                                                                                    <div className="flex items-center gap-4">
+                                                                                        <div
+                                                                                            className="w-16 h-16 rounded-lg border border-border/50 flex-shrink-0"
+                                                                                            style={{ backgroundColor: roleColor }}
+                                                                                        />
+                                                                                        <div className="space-y-3">
+                                                                                            <input
+                                                                                                type="color"
+                                                                                                value={roleColor}
+                                                                                                onChange={(e) => setRoleColor(e.target.value)}
+                                                                                                className="sr-only"
+                                                                                                id="role-color-picker"
+                                                                                            />
+                                                                                            <div className="grid grid-cols-10 gap-2 max-w-md">
+                                                                                                {[
+                                                                                                    '#5865f2', '#57f287', '#fee75c', '#eb459e', '#ed4245',
+                                                                                                    '#ff6600', '#1abc9c', '#9b59b6', '#e67e22', '#95a5a6',
+                                                                                                    '#34495e', '#11806a', '#206694', '#71368a', '#ad1457',
+                                                                                                    '#c27c0e', '#a84300', '#992d22', '#979c9f', '#7f8c8d'
+                                                                                                ].map((color) => (
+                                                                                                    <button
+                                                                                                        key={color}
+                                                                                                        type="button"
+                                                                                                        className={cn(
+                                                                                                            "w-8 h-8 rounded border-2 transition-all hover:scale-110",
+                                                                                                            roleColor === color ? "border-foreground" : "border-border/30"
+                                                                                                        )}
+                                                                                                        style={{ backgroundColor: color }}
+                                                                                                        onClick={() => setRoleColor(color)}
+                                                                                                    />
+                                                                                                ))}
+                                                                                            </div>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <label htmlFor="role-color-picker" className="cursor-pointer">
+                                                                                                    <div className="w-8 h-8 rounded border border-border/50 bg-muted/50 hover:bg-muted flex items-center justify-center">
+                                                                                                        <Pencil className="w-4 h-4" />
+                                                                                                    </div>
+                                                                                                </label>
+                                                                                                <Input
+                                                                                                    value={roleColor}
+                                                                                                    onChange={(e) => setRoleColor(e.target.value)}
+                                                                                                    className="w-24 font-mono text-sm"
+                                                                                                    placeholder="#696969"
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </TabsContent>
+
+                                                                {/* Permissions Tab */}
+                                                                <TabsContent value="permissions" className="m-0 h-full overflow-y-auto">
+                                                                    <div className="p-6 space-y-6">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <h4 className="text-lg font-semibold">Permissions</h4>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() => setRolePermissions([])}
+                                                                                className="text-sm"
+                                                                            >
+                                                                                Clear permissions
+                                                                            </Button>
+                                                                        </div>
+
+                                                                        <div className="space-y-1">
+                                                                            {Object.values(Permission).filter(p => typeof p === 'number').map((permission) => (
+                                                                                <div
+                                                                                    key={permission}
+                                                                                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                                                                                >
+                                                                                    <div className="flex-1 pr-4">
+                                                                                        <div className="font-medium text-sm">
+                                                                                            {Permission[permission as Permission]}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-muted-foreground mt-1">
+                                                                                            {permission === Permission.SEND_MESSAGES && "Allows members to send messages in text channels."}
+                                                                                            {permission === Permission.MANAGE_CHANNELS && "Allows members to create, edit, or delete channels."}
+                                                                                            {permission === Permission.MANAGE_ROLES && "Allows members to create new roles and edit or delete roles lower than their highest role."}
+                                                                                            {permission === Permission.MANAGE_SERVER && "Allows members to change the server's name and other settings."}
+                                                                                            {permission === Permission.DELETE_MESSAGES && "Allows members to delete messages from other users."}
+                                                                                            {permission === Permission.KICK_MEMBERS && "Allows members to remove other members from this server."}
+                                                                                            {permission === Permission.BAN_MEMBERS && "Allows members to permanently ban other members from this server."}
+                                                                                            {permission === Permission.ADMINISTRATOR && "Members with this permission will have every permission and also bypass all channel specific permissions."}
+                                                                                            {permission === Permission.MANAGE_NICKNAMES && "Allows members to change nicknames of other members."}
+                                                                                            {permission === Permission.MANAGE_MEMBERS && "Allows members to manage other members' roles and permissions."}
+                                                                                            {permission === Permission.MENTION_EVERYONE && "Allows members to use @everyone and @here mentions."}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex-shrink-0">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            role="switch"
+                                                                                            aria-checked={rolePermissions.includes(permission as Permission)}
+                                                                                            onClick={() => togglePermission(permission as Permission)}
+                                                                                            className={cn(
+                                                                                                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                                                                                                rolePermissions.includes(permission as Permission)
+                                                                                                    ? "bg-primary"
+                                                                                                    : "bg-input"
+                                                                                            )}
+                                                                                        >
+                                                                                            <span
+                                                                                                className={cn(
+                                                                                                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                                                                                    rolePermissions.includes(permission as Permission) ? "translate-x-6" : "translate-x-1"
+                                                                                                )}
+                                                                                            />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </TabsContent>
+                                                            </div>
+                                                        </Tabs>
+                                                    ) : (
+                                                        <div className="flex-1 flex items-center justify-center p-4">
+                                                            <div className="text-center">
+                                                                <Shield className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                                                                <h4 className="text-lg font-semibold mb-2">Select a role to edit</h4>
+                                                                <p className="text-muted-foreground">Choose a role from the list to view and edit its settings</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </TabsContent>
@@ -673,31 +1539,6 @@ export default function ServerSettings({
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Server Confirmation Dialog */}
-            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="text-destructive">Delete Server</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete "{server.name}"? This action cannot be undone.
-                            Although the server will be removed from Subspace, the data and messages will still exist somewhere on the permaweb.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteServer}
-                            disabled={isDeleting}
-                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                        >
-                            {isDeleting ? "Deleting..." : "Delete Server"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             {/* Update Server Code Confirmation Dialog */}
             <AlertDialog open={updateConfirmOpen} onOpenChange={setUpdateConfirmOpen}>
                 <AlertDialogContent>
@@ -729,6 +1570,197 @@ export default function ServerSettings({
                             ) : (
                                 "Update Server"
                             )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Create Role Dialog */}
+            <AlertDialog open={createRoleOpen} onOpenChange={setCreateRoleOpen}>
+                <AlertDialogContent className="max-w-lg">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <Shield className="w-5 h-5 text-primary" />
+                            Create Role
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Create a new role with a name and color. You can configure permissions after creation.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Role Name</label>
+                            <Input
+                                placeholder="e.g. Moderator"
+                                value={roleName}
+                                onChange={(e) => setRoleName(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Role Color</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    value={roleColor}
+                                    onChange={(e) => setRoleColor(e.target.value)}
+                                    className="w-10 h-10 rounded border border-border/50"
+                                />
+                                <Input
+                                    value={roleColor}
+                                    onChange={(e) => setRoleColor(e.target.value)}
+                                    placeholder="#696969"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isCreatingRole}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleCreateRole}
+                            disabled={isCreatingRole || !roleName.trim()}
+                        >
+                            {isCreatingRole ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create Role"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Edit Role Dialog */}
+            <AlertDialog open={editRoleOpen} onOpenChange={setEditRoleOpen}>
+                <AlertDialogContent className="max-w-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <Pencil className="w-5 h-5 text-primary" />
+                            Edit Role
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Update the role's name, color, and permissions.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Role Name</label>
+                                <Input
+                                    placeholder="e.g. Moderator"
+                                    value={roleName}
+                                    onChange={(e) => setRoleName(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Role Color</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={roleColor}
+                                        onChange={(e) => setRoleColor(e.target.value)}
+                                        className="w-10 h-10 rounded border border-border/50"
+                                    />
+                                    <Input
+                                        value={roleColor}
+                                        onChange={(e) => setRoleColor(e.target.value)}
+                                        placeholder="#696969"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="text-sm font-medium">Permissions</label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                                {Object.values(Permission).filter(p => typeof p === 'number').map((permission) => (
+                                    <div key={permission} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`edit-perm-${permission}`}
+                                            checked={rolePermissions.includes(permission as Permission)}
+                                            onCheckedChange={() => togglePermission(permission as Permission)}
+                                        />
+                                        <label
+                                            htmlFor={`edit-perm-${permission}`}
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                        >
+                                            {Permission[permission as Permission]}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isEditingRole}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleEditRole}
+                            disabled={isEditingRole || !roleName.trim()}
+                        >
+                            {isEditingRole ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Updating...
+                                </>
+                            ) : (
+                                "Update Role"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Role Dialog */}
+            <AlertDialog open={deleteRoleOpen} onOpenChange={setDeleteRoleOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive">Delete Role</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete the role "{selectedRole?.name}"? This action cannot be undone and will remove this role from all users who have it.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingRole}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteRole}
+                            disabled={isDeletingRole}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            {isDeletingRole ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                "Delete Role"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Server Confirmation Dialog */}
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive">Delete Server</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete "{server.name}"? This action cannot be undone.
+                            Although the server will be removed from Subspace, the data and messages will still exist somewhere on the permaweb.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteServer}
+                            disabled={isDeleting}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            {isDeleting ? "Deleting..." : "Delete Server"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

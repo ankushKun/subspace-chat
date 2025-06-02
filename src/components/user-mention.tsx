@@ -1,27 +1,94 @@
 import { useProfile, useServer } from "@/hooks/subspace"
+import useSubspace from "@/hooks/subspace"
 import { shortenAddress } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ArioBadge from "./ario-badhe";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Shield, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useState, useCallback } from "react";
 
 export default function UserMention({ userId, showAt = true, side = "bottom", align = "center", renderer }:
     { userId: string; showAt?: boolean, side?: "top" | "left" | "bottom" | "right", align?: "start" | "center" | "end", renderer: (text: string) => React.ReactNode }) {
-    const { profiles } = useProfile()
-    const { activeServerId, servers } = useServer()
+    const subspace = useSubspace()
+    const { profiles, actions: profileActions } = useProfile()
+    const { activeServerId, servers, actions: serverActions } = useServer()
+
+    const [isRefreshing, setIsRefreshing] = useState(false)
+    const [isOpen, setIsOpen] = useState(false)
 
     const server = activeServerId ? servers[activeServerId] : null
     const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname : null
+    const member = server ? server?.members.find(m => m.userId === userId) : null
 
     const profile = profiles[userId]
     const primaryName = profile?.primaryName || null;
 
     const displayText = nickname || primaryName || shortenAddress(userId)
 
+    // Get user's roles from the server
+    const getUserRoles = () => {
+        if (!server || !member || !member.roles || !Array.isArray(member.roles)) {
+            return []
+        }
+
+        // Filter server roles to get only the ones assigned to this user
+        return server.roles
+            .filter(role => member.roles.includes(role.roleId))
+            .sort((a, b) => a.orderId - b.orderId) // Sort by order (higher roles first)
+    }
+
+    const userRoles = getUserRoles()
+
+    // Fetch latest data when popover opens
+    const handleOpenChange = useCallback(async (open: boolean) => {
+        setIsOpen(open)
+
+        if (open && !isRefreshing) {
+            setIsRefreshing(true)
+
+            try {
+                // Fetch latest profile data
+                const latestProfile = await subspace.user.getProfile({ userId })
+                if (latestProfile) {
+                    profileActions.updateProfile(userId, latestProfile)
+                }
+
+                // Fetch latest server member data if we're in a server
+                if (activeServerId) {
+                    const latestMember = await subspace.server.getServerMember({
+                        serverId: activeServerId,
+                        userId
+                    })
+
+                    if (latestMember) {
+                        // Update the specific member in the server's member list
+                        const currentServer = servers[activeServerId]
+                        if (currentServer && currentServer.members) {
+                            const updatedMembers = currentServer.members.map(m =>
+                                m.userId === userId ? latestMember : m
+                            )
+
+                            // If member wasn't found, add them
+                            if (!currentServer.members.find(m => m.userId === userId)) {
+                                updatedMembers.push(latestMember)
+                            }
+
+                            serverActions.updateServerMembers(activeServerId, updatedMembers)
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to refresh user data:', error)
+            } finally {
+                setIsRefreshing(false)
+            }
+        }
+    }, [userId, activeServerId, servers, subspace, profileActions, serverActions, isRefreshing])
+
     return (
-        <Popover>
+        <Popover open={isOpen} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                 {renderer(displayText)}
             </PopoverTrigger>
@@ -31,6 +98,14 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                         {/* Header with gradient background */}
                         <div className="h-16 bg-gradient-to-r from-primary/30 via-accent to-primary/30 relative">
                             <div className="absolute inset-0 bg-background/10"></div>
+                            {/* Refresh indicator */}
+                            {isRefreshing && (
+                                <div className="absolute top-2 right-2">
+                                    <div className="w-6 h-6 rounded-full bg-background/20 backdrop-blur-sm flex items-center justify-center">
+                                        <Loader2 className="w-3 h-3 animate-spin text-foreground/70" />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Profile content */}
@@ -115,6 +190,38 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                             </Badge>
                                         </div>
                                     )}
+
+                                    {/* Display assigned roles */}
+                                    {userRoles.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                                    Roles
+                                                </span>
+                                                <Shield className="w-3 h-3 text-muted-foreground" />
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {userRoles.map((role) => (
+                                                    <Badge
+                                                        key={role.roleId}
+                                                        variant="secondary"
+                                                        className="text-xs px-2 py-1 flex items-center gap-1.5"
+                                                        style={{
+                                                            backgroundColor: `${role.color}20`,
+                                                            borderColor: `${role.color}40`,
+                                                            color: role.color
+                                                        }}
+                                                    >
+                                                        <div
+                                                            className="w-2 h-2 rounded-full"
+                                                            style={{ backgroundColor: role.color }}
+                                                        />
+                                                        <span className="font-medium">{role.name}</span>
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -126,6 +233,12 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                         </div>
                         <p className="text-sm text-muted-foreground font-medium">No profile found</p>
                         <p className="text-xs text-muted-foreground/70 mt-1">This user hasn't set up their profile yet</p>
+                        {isRefreshing && (
+                            <div className="flex items-center justify-center mt-2">
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                <span className="ml-2 text-xs text-muted-foreground">Refreshing...</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </PopoverContent>

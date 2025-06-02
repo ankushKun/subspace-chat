@@ -180,17 +180,6 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                         </Badge>
                                     </div>
 
-                                    {server && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                                Server Role
-                                            </span>
-                                            <Badge variant="outline" className="text-xs">
-                                                {server.owner == userId ? "Owner" : "Member"}
-                                            </Badge>
-                                        </div>
-                                    )}
-
                                     {/* Display assigned roles */}
                                     {userRoles.length > 0 && (
                                         <div>
@@ -198,14 +187,14 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                                                     Roles
                                                 </span>
-                                                <Shield className="w-3 h-3 text-muted-foreground" />
+                                                {/* <Shield className="w-3 h-3 text-muted-foreground" /> */}
                                             </div>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {userRoles.map((role) => (
                                                     <Badge
                                                         key={role.roleId}
                                                         variant="secondary"
-                                                        className="text-xs px-2 py-1 flex items-center gap-1.5"
+                                                        className="text-xs px-1 py-0.5 flex items-center gap-1.5"
                                                         style={{
                                                             backgroundColor: `${role.color}20`,
                                                             borderColor: `${role.color}40`,

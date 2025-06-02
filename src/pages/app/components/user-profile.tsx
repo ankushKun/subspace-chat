@@ -205,7 +205,7 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     return (
         <>
-            <div className={cn("border-t border-border/30 bg-background/50 backdrop-blur-sm", className)}>
+            <div className={cn("bg-background/50 backdrop-blur-sm", className)}>
                 <div className="p-2 flex items-center justify-between gap-2">
                     {/* Profile Button */}
                     <DropdownMenu>

@@ -139,7 +139,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
             className={cn(
                 "flex flex-col w-60 h-full relative",
                 "bg-gradient-to-b from-background via-background/95 to-background/90",
-                "border-r border-border/50 backdrop-blur-sm",
+                "border-r border-b border-border/50 backdrop-blur-sm rounded-br-lg",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_50%)] before:pointer-events-none",

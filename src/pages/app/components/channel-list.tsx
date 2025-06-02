@@ -746,39 +746,6 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
         }
     }, [editServerOpen, server])
 
-    // Show DMs when no server is selected
-    if (activeServerId === "") {
-        return (
-            <div
-                {...props}
-                className={cn(
-                    "flex flex-col w-60 h-full relative",
-                    "bg-gradient-to-b from-background via-background/95 to-background/90",
-                    "border-r border-border/50 backdrop-blur-sm",
-                    "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
-                    // Subtle pattern overlay
-                    "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_50%)] before:pointer-events-none",
-                    props.className
-                )}
-            >
-                {/* Ambient glow at top */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-16 bg-primary/5 rounded-full blur-2xl" />
-
-                {/* DM Content Area - placeholder for future DM list */}
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-muted-foreground animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
-                        <Hash className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">Direct Messages</p>
-                        <p className="text-xs mt-1">Coming soon...</p>
-                    </div>
-                </div>
-
-                {/* Ambient glow at bottom */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-12 bg-primary/3 rounded-full blur-xl" />
-            </div>
-        )
-    }
-
     // Show placeholder when server is selected but not found
     if (!server) {
         return (
@@ -808,7 +775,7 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
             className={cn(
                 "flex flex-col w-60 h-full relative",
                 "bg-gradient-to-b from-background via-background/95 to-background/90",
-                "border-r border-border/50 backdrop-blur-sm",
+                "border-r border-b border-border/50 backdrop-blur-sm rounded-br-lg",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",
                 // Subtle pattern overlay
                 "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_50%)] before:pointer-events-none",

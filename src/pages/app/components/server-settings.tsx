@@ -158,6 +158,10 @@ export default function ServerSettings({
     const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false)
     const [isUpdating, setIsUpdating] = useState(false)
 
+    // Server version state
+    const [serverVersion, setServerVersion] = useState<string | null>(null)
+    const [loadingVersion, setLoadingVersion] = useState(false)
+
     // Roles state
     const [roles, setRoles] = useState<Role[]>([])
     const [loadingRoles, setLoadingRoles] = useState(false)
@@ -186,6 +190,13 @@ export default function ServerSettings({
     const [isEditingRole, setIsEditingRole] = useState(false)
     const [isDeletingRole, setIsDeletingRole] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+    // Load version when update-code tab is opened
+    useEffect(() => {
+        if (settingsOpen && activeTab === "update-code" && server?.serverId && !serverVersion) {
+            loadServerVersion()
+        }
+    }, [settingsOpen, activeTab, server?.serverId])
 
     // Load roles when tab is opened
     useEffect(() => {
@@ -235,6 +246,21 @@ export default function ServerSettings({
             setRoleMembers([])
         }
     }, [selectedRole])
+
+    const loadServerVersion = async () => {
+        if (!server?.serverId) return
+
+        setLoadingVersion(true)
+        try {
+            const version = await subspace.server.getVersion({ serverId: server.serverId })
+            setServerVersion(version)
+        } catch (error) {
+            console.error("Error loading server version:", error)
+            toast.error("Failed to load server version")
+        } finally {
+            setLoadingVersion(false)
+        }
+    }
 
     const loadRoles = async () => {
         if (!server?.serverId) return
@@ -598,6 +624,13 @@ export default function ServerSettings({
             setServerIcon(null)
         }
     }, [settingsOpen, server])
+
+    // Clear version when settings close to ensure fresh data on next open
+    useEffect(() => {
+        if (!settingsOpen) {
+            setServerVersion(null)
+        }
+    }, [settingsOpen])
 
     const handleRoleDragEnd = async (result: any) => {
         const { source, destination } = result
@@ -1809,6 +1842,31 @@ export default function ServerSettings({
                                         <p className="text-muted-foreground text-lg">
                                             Update your server to the latest version of the Subspace protocol for new features and improvements.
                                         </p>
+                                    </div>
+
+                                    {/* Current Version Display */}
+                                    <div className="p-6 bg-muted/30 rounded-xl border border-border/30">
+                                        <h4 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
+                                            <Code className="w-5 h-5 text-primary" />
+                                            Current Version
+                                        </h4>
+                                        {loadingVersion ? (
+                                            <div className="flex items-center gap-3">
+                                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                                <span className="text-sm text-muted-foreground">Loading version...</span>
+                                            </div>
+                                        ) : serverVersion ? (
+                                            <div className="flex items-center gap-3">
+                                                <div className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg border border-primary/20 font-mono text-sm">
+                                                    v{serverVersion}
+                                                </div>
+                                                <span className="text-sm text-muted-foreground">Currently running</span>
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-muted-foreground">
+                                                Unable to fetch version information
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="p-6 bg-green-500/5 rounded-xl border border-green-500/10">

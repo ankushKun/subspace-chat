@@ -9,7 +9,7 @@ PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
 server_icon = server_icon or "W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
 
-version = "0.0.1"
+version = "0.0.2"
 
 -- easily read from the database
 function SQLRead(query, ...)

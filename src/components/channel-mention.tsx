@@ -16,7 +16,7 @@ export default function ChannelMention({ channelId, showHash = true, renderer }:
 
     return (
         <div
-            className="font-medium text-white cursor-pointer px-0.5 bg-primary/80 hover:bg-primary/60 transition-colors duration-200 w-fit rounded-sm p-0"
+            className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer"
             onClick={handleClick}
         >
             {renderer(displayText)}

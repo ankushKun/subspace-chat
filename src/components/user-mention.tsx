@@ -49,7 +49,7 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
             setIsRefreshing(true)
 
             try {
-                // Fetch latest profile data
+                // Fetch latest profile data and update state
                 const latestProfile = await subspace.user.getProfile({ userId })
                 if (latestProfile) {
                     profileActions.updateProfile(userId, latestProfile)
@@ -57,7 +57,41 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
 
                 // Fetch latest server data if we're in a server
                 if (activeServerId) {
-                    // Fetch latest server member data
+                    // Fetch and update server details (member count, etc.)
+                    const latestServerDetails = await subspace.server.getServerDetails({ serverId: activeServerId })
+                    if (latestServerDetails) {
+                        // Update server with latest details
+                        const currentServer = servers[activeServerId]
+                        if (currentServer) {
+                            const updatedServer = {
+                                ...currentServer,
+                                ...latestServerDetails
+                            }
+                            serverActions.updateServer(activeServerId, updatedServer)
+                        }
+                    }
+
+                    // Fetch and update all server members to ensure fresh member data
+                    const latestServerMembers = await subspace.server.getServerMembers({ serverId: activeServerId })
+                    if (latestServerMembers) {
+                        serverActions.updateServerMembers(activeServerId, latestServerMembers)
+                    }
+
+                    // Fetch and update latest roles data to ensure correct ordering and info
+                    const latestRoles = await subspace.server.role.getRoles({ serverId: activeServerId })
+                    if (latestRoles) {
+                        // Update the server with the latest roles
+                        const currentServer = servers[activeServerId]
+                        if (currentServer) {
+                            const updatedServer = {
+                                ...currentServer,
+                                roles: latestRoles
+                            }
+                            serverActions.updateServer(activeServerId, updatedServer)
+                        }
+                    }
+
+                    // Fetch specific user member data to ensure it's the most current
                     const latestMember = await subspace.server.getServerMember({
                         serverId: activeServerId,
                         userId
@@ -79,23 +113,9 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                             serverActions.updateServerMembers(activeServerId, updatedMembers)
                         }
                     }
-
-                    // Fetch latest roles data to ensure correct ordering
-                    const latestRoles = await subspace.server.role.getRoles({ serverId: activeServerId })
-                    if (latestRoles) {
-                        // Update the server with the latest roles
-                        const currentServer = servers[activeServerId]
-                        if (currentServer) {
-                            const updatedServer = {
-                                ...currentServer,
-                                roles: latestRoles
-                            }
-                            serverActions.updateServer(activeServerId, updatedServer)
-                        }
-                    }
                 }
             } catch (error) {
-                console.error('Failed to refresh user data:', error)
+                console.error('Failed to refresh user and server data:', error)
             } finally {
                 setIsRefreshing(false)
             }

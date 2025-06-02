@@ -64,7 +64,7 @@ export const mdComponents: Components = {
             if (!mention) return <>{children}</>;
 
             return <UserMention userId={mention.id} side="bottom" align="start" showAt={true}
-                renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded cursor-pointer">
+                renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
                     @{text}
                 </span>} />
         }
@@ -76,7 +76,7 @@ export const mdComponents: Components = {
             if (!mention) return <>{children}</>;
 
             return <ChannelMention channelId={mention.id} showHash={true}
-                renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded cursor-pointer">
+                renderer={(text) => <span>
                     #{text}
                 </span>} />
         }

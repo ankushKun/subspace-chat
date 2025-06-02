@@ -1644,7 +1644,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
             // Send the edit to the server
             const success = await subspace.server.message.editMessage({
                 serverId: activeServerId,
-                messageId: editingMessage.messageId.toString(),
+                messageId: editingMessage.messageId,
                 content: editedContent.trim(),
                 messageTxId: editingMessage.messageTxId
             })
@@ -1703,7 +1703,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
             // Send delete request to server
             const success = await subspace.server.message.deleteMessage({
                 serverId: activeServerId,
-                messageId: message.messageId.toString(),
+                messageId: message.messageId,
                 messageTxId: message.messageTxId
             })
 

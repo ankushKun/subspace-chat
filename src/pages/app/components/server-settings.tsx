@@ -44,6 +44,10 @@ export default function ServerSettings({
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
+    // Update server code confirmation state
+    const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false)
+    const [isUpdating, setIsUpdating] = useState(false)
+
     const handleCopyInvite = () => {
         if (!server) return
         const inviteLink = `${window.location.origin}/#/invite/${server.serverId}`
@@ -57,63 +61,40 @@ export default function ServerSettings({
             return
         }
 
-        // Show confirmation toast with action buttons
-        toast.custom((t) => (
-            <div className="flex items-center gap-4 bg-accent border border-border backdrop-blur-sm p-4 rounded-lg">
-                <Code className="w-5 h-5 text-green-500" />
-                <div className="flex-1">
-                    <p className="font-medium">Update Server Code</p>
-                    <p className="text-sm text-muted-foreground">
-                        This will update the server to the latest version. Are you sure?
-                    </p>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                    <Button
-                        size="sm"
-                        onClick={async () => {
-                            toast.dismiss(t)
+        setIsUpdating(true)
 
-                            try {
-                                toast.loading("Updating server code...", {
-                                    richColors: true,
-                                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
-                                })
+        try {
+            toast.loading("Updating server code...", {
+                richColors: true,
+                style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+            })
 
-                                const success = await subspace.server.updateServerCode({
-                                    serverId: server.serverId
-                                })
+            const success = await subspace.server.updateServerCode({
+                serverId: server.serverId
+            })
 
-                                toast.dismiss()
+            toast.dismiss()
 
-                                if (success) {
-                                    toast.success("Server code updated successfully", {
-                                        richColors: true,
-                                        style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
-                                    })
-                                    const updatedServer = await subspace.server.getServerDetails({ serverId: server.serverId })
-                                    if (updatedServer) {
-                                        actions.updateServer(server.serverId, updatedServer as Server)
-                                    }
-                                } else {
-                                    toast.error("Failed to update server code", { richColors: true })
-                                }
-                            } catch (error) {
-                                console.error("Error updating server code:", error)
-                                toast.dismiss()
-                                toast.error(error instanceof Error ? error.message : "Failed to update server code")
-                            }
-                        }}
-                    >
-                        Update
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => toast.dismiss(t)}>
-                        Cancel
-                    </Button>
-                </div>
-            </div>
-        ), {
-            duration: Infinity, // Keep the toast open until user interacts
-        })
+            if (success) {
+                toast.success("Server code updated successfully", {
+                    richColors: true,
+                    style: { backgroundColor: "var(--background)", color: "var(--foreground)" }
+                })
+                const updatedServer = await subspace.server.getServerDetails({ serverId: server.serverId })
+                if (updatedServer) {
+                    actions.updateServer(server.serverId, updatedServer as Server)
+                }
+                setUpdateConfirmOpen(false)
+            } else {
+                toast.error("Failed to update server code", { richColors: true })
+            }
+        } catch (error) {
+            console.error("Error updating server code:", error)
+            toast.dismiss()
+            toast.error(error instanceof Error ? error.message : "Failed to update server code")
+        } finally {
+            setIsUpdating(false)
+        }
     }
 
     const handleDeleteServer = async () => {
@@ -636,7 +617,7 @@ export default function ServerSettings({
                                         </ul>
                                     </div>
 
-                                    <Button onClick={handleUpdateServerCode} className="h-12 px-8 text-base" size="lg">
+                                    <Button onClick={() => setUpdateConfirmOpen(true)} className="h-12 px-8 text-base" size="lg">
                                         <Code className="w-4 h-4 mr-3" />
                                         Update Server Code
                                     </Button>
@@ -712,6 +693,42 @@ export default function ServerSettings({
                             className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                         >
                             {isDeleting ? "Deleting..." : "Delete Server"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Update Server Code Confirmation Dialog */}
+            <AlertDialog open={updateConfirmOpen} onOpenChange={setUpdateConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <Code className="w-5 h-5 text-green-500" />
+                            Update Server Code
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will update "{server.name}" to the latest version of the Subspace protocol.
+                            The server will get new features and improvements while preserving all data and settings.
+                            Are you sure you want to continue?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isUpdating}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleUpdateServerCode}
+                            disabled={isUpdating}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                            {isUpdating ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Updating...
+                                </div>
+                            ) : (
+                                "Update Server"
+                            )}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

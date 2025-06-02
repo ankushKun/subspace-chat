@@ -120,7 +120,7 @@ export class ServerManager {
         })
         if (res.status == 200) {
             res.json.forEach(member => {
-                member.roles = JSON.parse(member.roles) as number[];
+                member.roles = JSON.parse(member.roles ? member.roles : "[]") as number[];
             })
             console.log(res)
             return res.json as ServerMember[];

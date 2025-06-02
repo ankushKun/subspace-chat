@@ -33,6 +33,10 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
             return []
         }
 
+        if (!server.roles) {
+            return []
+        }
+
         // Filter server roles to get only the ones assigned to this user
         return server.roles
             .filter(role => member.roles.includes(role.roleId))

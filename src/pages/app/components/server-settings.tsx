@@ -494,6 +494,8 @@ export default function ServerSettings({
                 if (updatedServer) {
                     actions.updateServer(server.serverId, updatedServer as Server)
                 }
+                // Refetch the latest server version after successful update
+                await loadServerVersion()
                 setUpdateConfirmOpen(false)
             } else {
                 toast.error("Failed to update server code", { richColors: true })

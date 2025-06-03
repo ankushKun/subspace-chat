@@ -9,7 +9,7 @@ PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
 server_icon = server_icon or "W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
 
-version = "0.0.2"
+version = "0.0.3"
 
 -- easily read from the database
 function SQLRead(query, ...)
@@ -1366,12 +1366,15 @@ app.get("/get-role-members", function(req, res)
         return
     end
 
-    local members = SQLRead("SELECT * FROM members WHERE roles LIKE ?", "%" .. roleId .. "%")
+    local members = SQLRead("SELECT * FROM members WHERE roles LIKE ?", "%" .. tostring(roleId) .. "%")
     local membersWithRole = {}
     for _, member in ipairs(members) do
         local roles = json.decode(member.roles)
-        if roles[roleId] then
-            table.insert(membersWithRole, member)
+        for _, role in ipairs(roles) do
+            if role == roleId then
+                table.insert(membersWithRole, member)
+                break
+            end
         end
     end
     res:json(membersWithRole)

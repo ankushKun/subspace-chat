@@ -1,26 +1,36 @@
 import { useProfile, useServer } from "@/hooks/subspace"
 import useSubspace from "@/hooks/subspace"
+import { useWallet } from "@/hooks/use-wallet"
 import { shortenAddress } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ArioBadge from "./ario-badhe";
-import { Check, Copy, Shield, Loader2 } from "lucide-react";
+import { Check, Copy, Shield, Loader2, Plus, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useCallback } from "react";
+import { Button } from "./ui/button";
+import { toast } from "sonner";
 
 export default function UserMention({ userId, showAt = true, side = "bottom", align = "center", renderer }:
     { userId: string; showAt?: boolean, side?: "top" | "left" | "bottom" | "right", align?: "start" | "center" | "end", renderer: (text: string) => React.ReactNode }) {
     const subspace = useSubspace()
+    const { address } = useWallet()
     const { profiles, actions: profileActions } = useProfile()
     const { activeServerId, servers, actions: serverActions } = useServer()
 
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
+    const [rolePopoverOpen, setRolePopoverOpen] = useState(false)
+    const [assigningRole, setAssigningRole] = useState(false)
+    const [removingRoles, setRemovingRoles] = useState<number[]>([])
 
     const server = activeServerId ? servers[activeServerId] : null
     const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname : null
     const member = server ? server?.members.find(m => m.userId === userId) : null
+
+    // Check if current user is server owner
+    const isServerOwner = server?.owner === address
 
     const profile = profiles[userId]
     const primaryName = profile?.primaryName || null;
@@ -43,7 +53,113 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
             .sort((a, b) => a.orderId - b.orderId) // Sort by order (higher roles first)
     }
 
+    // Get available roles for assignment (roles the user doesn't have)
+    const getAvailableRoles = () => {
+        if (!server || !server.roles || !member) {
+            return []
+        }
+
+        const userRoleIds = member.roles || []
+        return server.roles
+            .filter(role => !userRoleIds.includes(role.roleId))
+            .sort((a, b) => a.orderId - b.orderId)
+    }
+
     const userRoles = getUserRoles()
+    const availableRoles = getAvailableRoles()
+
+    // Handle role assignment
+    const handleAssignRole = async (roleId: number) => {
+        if (!server || !activeServerId) {
+            toast.error("Server not found")
+            return
+        }
+
+        setAssigningRole(true)
+        try {
+            const success = await subspace.server.role.assignRole({
+                serverId: activeServerId,
+                userId: userId,
+                roleId: roleId
+            })
+
+            if (success) {
+                const roleName = server.roles?.find(r => r.roleId === roleId)?.name || "Unknown Role"
+                toast.success(`Successfully assigned ${roleName} role`)
+                setRolePopoverOpen(false)
+
+                // Refresh the member data to reflect the new role
+                const latestMember = await subspace.server.getServerMember({
+                    serverId: activeServerId,
+                    userId
+                })
+
+                if (latestMember) {
+                    // Update the specific member in the server's member list
+                    const currentServer = servers[activeServerId]
+                    if (currentServer && currentServer.members) {
+                        const updatedMembers = currentServer.members.map(m =>
+                            m.userId === userId ? latestMember : m
+                        )
+                        serverActions.updateServerMembers(activeServerId, updatedMembers)
+                    }
+                }
+            } else {
+                toast.error("Failed to assign role")
+            }
+        } catch (error) {
+            console.error("Error assigning role:", error)
+            toast.error("Failed to assign role")
+        } finally {
+            setAssigningRole(false)
+        }
+    }
+
+    // Handle role removal
+    const handleRemoveRole = async (roleId: number) => {
+        if (!server || !activeServerId) {
+            toast.error("Server not found")
+            return
+        }
+
+        setRemovingRoles(prev => [...prev, roleId])
+        try {
+            const success = await subspace.server.role.unassignRole({
+                serverId: activeServerId,
+                userId: userId,
+                roleId: roleId
+            })
+
+            if (success) {
+                const roleName = server.roles?.find(r => r.roleId === roleId)?.name || "Unknown Role"
+                toast.success(`Successfully removed ${roleName} role`)
+
+                // Refresh the member data to reflect the role removal
+                const latestMember = await subspace.server.getServerMember({
+                    serverId: activeServerId,
+                    userId
+                })
+
+                if (latestMember) {
+                    // Update the specific member in the server's member list
+                    const currentServer = servers[activeServerId]
+                    if (currentServer && currentServer.members) {
+                        const updatedMembers = currentServer.members.map(m =>
+                            m.userId === userId ? latestMember : m
+                        )
+                        serverActions.updateServerMembers(activeServerId, updatedMembers)
+                    }
+                }
+            } else {
+                toast.error("Failed to remove role")
+            }
+        } catch (error) {
+            console.error("Error removing role:", error)
+            toast.error("Failed to remove role")
+        } finally {
+            setRemovingRoles(prev => prev.filter(id => id !== roleId))
+        }
+    }
 
     // Fetch latest data when popover opens
     const handleOpenChange = useCallback(async (open: boolean) => {
@@ -220,36 +336,131 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                     </div>
 
                                     {/* Display assigned roles */}
-                                    {userRoles.length > 0 && (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                                    Roles
-                                                </span>
-                                                {/* <Shield className="w-3 h-3 text-muted-foreground" /> */}
-                                            </div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {userRoles.map((role) => (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                                Roles
+                                            </span>
+                                            {/* Only show the add role button to server owners */}
+                                            {isServerOwner && (
+                                                <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="w-4.5 h-4.5 hover:bg-primary/10"
+                                                            disabled={assigningRole}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setRolePopoverOpen(true)
+                                                            }}
+                                                        >
+                                                            {assigningRole ? (
+                                                                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                                                            ) : (
+                                                                <Plus className="w-3 h-3 text-muted-foreground" />
+                                                            )}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-64 p-2"
+                                                        side="right"
+                                                        align="start"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <div className="space-y-2">
+                                                            <div className="px-2 py-1">
+                                                                <h4 className="text-sm font-semibold">Assign Role</h4>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Select a role to assign to this user
+                                                                </p>
+                                                            </div>
+                                                            <Separator />
+                                                            <div className="max-h-48 overflow-y-auto space-y-1">
+                                                                {availableRoles.length > 0 ? (
+                                                                    availableRoles.map((role) => (
+                                                                        <Button
+                                                                            key={role.roleId}
+                                                                            variant="ghost"
+                                                                            className="w-full justify-start h-auto p-2 text-left"
+                                                                            onClick={() => handleAssignRole(role.roleId)}
+                                                                            disabled={assigningRole}
+                                                                        >
+                                                                            <div className="flex items-center gap-2 w-full">
+                                                                                <div
+                                                                                    className="w-3 h-3 rounded-full border border-border/50 flex-shrink-0"
+                                                                                    style={{ backgroundColor: role.color }}
+                                                                                />
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="font-medium text-sm truncate">
+                                                                                        {role.name}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </Button>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="px-2 py-4 text-center">
+                                                                        <p className="text-sm text-muted-foreground">
+                                                                            No roles available to assign
+                                                                        </p>
+                                                                        <p className="text-xs text-muted-foreground/70 mt-1">
+                                                                            This user already has all available roles
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {(userRoles.length > 0) ? userRoles.map((role) => (
+                                                <div key={role.roleId} className="group relative">
                                                     <Badge
-                                                        key={role.roleId}
                                                         variant="secondary"
-                                                        className="text-xs px-1 py-0.5 flex items-center gap-1.5"
+                                                        className="text-xs px-1 py-0.5 flex items-center justify-center gap-1.5"
                                                         style={{
                                                             backgroundColor: `${role.color}20`,
                                                             borderColor: `${role.color}40`,
                                                             color: role.color
                                                         }}
                                                     >
-                                                        <div
-                                                            className="w-2 h-2 rounded-full"
-                                                            style={{ backgroundColor: role.color }}
-                                                        />
+                                                        {/* Color dot with X button overlay */}
+                                                        <div className="relative w-2.5 h-2.5 flex-shrink-0 flex items-center justify-center">
+                                                            {/* Default color dot */}
+                                                            <div
+                                                                className="w-2.5 h-2.5 rounded-full absolute inset-0 group-hover:opacity-0 transition-opacity"
+                                                                style={{ backgroundColor: role.color }}
+                                                            />
+                                                            {/* X button - only visible on hover for server owners */}
+                                                            {isServerOwner && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleRemoveRole(role.roleId)
+                                                                    }}
+                                                                    disabled={removingRoles.includes(role.roleId)}
+                                                                    className="absolute p-0 inset-0 w-2.5 h-2.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                                                    title="Remove role"
+                                                                >
+                                                                    {removingRoles.includes(role.roleId) ? (
+                                                                        <Loader2 className="w-1.5 h-1.5 animate-spin text-white" />
+                                                                    ) : (
+                                                                        <X className="!w-2.5 !h-2.5 text-white" />
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                         <span className="font-medium">{role.name}</span>
                                                     </Badge>
-                                                ))}
-                                            </div>
+                                                </div>
+                                            )) : <p className="text-xs text-muted-foreground/70">No roles assigned</p>}
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

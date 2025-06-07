@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ar.io/sdk": "^3.12.1",
+    "@ardrive/turbo-sdk": "^1.26.0",
     "@dha-team/arbundles": "^1.0.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.0.1",

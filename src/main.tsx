@@ -5,7 +5,7 @@ import App from '@/pages/app'
 import { HashRouter, Route, Routes } from "react-router"
 import SubspaceLanding from '@/pages/landing'
 import { ConnectionStrategies, useWallet } from './hooks/use-wallet'
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import NotFound from '@/pages/404'
 import Settings from '@/pages/settings'
 import { Toaster } from 'sonner'
@@ -16,24 +16,30 @@ import Developer from '@/pages/developer'
 import DeveloperBots from '@/pages/developer/bots'
 
 function Main() {
-  const { connect } = useWallet((state) => state.actions)
+  const connect = useWallet((state) => state.actions.connect)
   const strategy = useWallet((state) => state.connectionStrategy)
   const jwk = useWallet((state) => state.jwk)
   const { theme } = useTheme()
 
-  useEffect(() => {
-    if (strategy) {
-      if (strategy == ConnectionStrategies.ScannedJWK) {
-        connect(strategy, jwk).then(() => {
-          console.log("connected with jwk")
-        })
+  const handleConnection = useCallback(async () => {
+    if (!strategy) return
+
+    try {
+      if (strategy === ConnectionStrategies.ScannedJWK) {
+        await connect(strategy, jwk)
+        console.log("connected with jwk")
       } else {
-        connect(strategy).then(() => {
-          console.log("connected with strategy", strategy)
-        })
+        await connect(strategy)
+        console.log("connected with strategy", strategy)
       }
+    } catch (error) {
+      console.error("Connection failed:", error)
     }
-  }, [strategy, jwk])
+  }, [strategy, jwk, connect])
+
+  useEffect(() => {
+    handleConnection()
+  }, [handleConnection])
 
   return (
     <ErrorBoundary>

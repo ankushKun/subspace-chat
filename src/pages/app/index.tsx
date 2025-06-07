@@ -3,7 +3,7 @@ import ChannelList from "./components/channel-list"
 import MemberList from "./components/member-list"
 import MessageList from "./components/message-list"
 import useSubspace, { useMessages, useProfile, useNotifications } from "@/hooks/subspace"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import LoginDialog from "@/components/login-dialog"
@@ -24,28 +24,39 @@ export default function App() {
   const [showMemberList, setShowMemberList] = useState(true)
 
   const subspace = useSubspace()
-  const { connected, address, connectionStrategy, actions: walletActions } = useWallet()
-  const { actions: serverActions, activeServerId, activeChannelId, servers, serversJoined } = useServer()
-  const { actions: profileActions } = useProfile()
-  const { actions: messagesActions } = useMessages()
-  const { actions: notificationActions } = useNotifications()
+  // Use more specific selectors to prevent unnecessary re-renders
+  const connected = useWallet((state) => state.connected)
+  const address = useWallet((state) => state.address)
+  const connectionStrategy = useWallet((state) => state.connectionStrategy)
+  const walletActions = useWallet((state) => state.actions)
+
+  const activeServerId = useServer((state) => state.activeServerId)
+  const activeChannelId = useServer((state) => state.activeChannelId)
+  const servers = useServer((state) => state.servers)
+  const serversJoined = useServer((state) => state.serversJoined)
+  const serverActions = useServer((state) => state.actions)
+
+  const profileActions = useProfile((state) => state.actions)
+  const messagesActions = useMessages((state) => state.actions)
+  const notificationActions = useNotifications((state) => state.actions)
   const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
 
+  // Memoize the resize handler to prevent re-creation on every render
+  const handleResize = useCallback(() => {
+    const windowWidth = window.innerWidth
+    // Auto-hide member list when window is smaller than 1200px
+    // Auto-show when window is larger than 1280px (with some hysteresis to prevent flickering)
+    if (windowWidth < 1200) {
+      setShowMemberList(false)
+    } else if (windowWidth > 1280) {
+      setShowMemberList(true)
+    }
+  }, [])
+
   // Auto-collapse member list based on window width
   useEffect(() => {
-    const handleResize = () => {
-      const windowWidth = window.innerWidth
-      // Auto-hide member list when window is smaller than 1200px
-      // Auto-show when window is larger than 1280px (with some hysteresis to prevent flickering)
-      if (windowWidth < 1200) {
-        setShowMemberList(false)
-      } else if (windowWidth > 1280) {
-        setShowMemberList(true)
-      }
-    }
-
     // Set initial state based on current window size
     handleResize()
 
@@ -54,7 +65,7 @@ export default function App() {
 
     // Cleanup
     return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [handleResize])
 
   // Check for welcome popup parameters on mount
   useEffect(() => {
@@ -356,7 +367,7 @@ export default function App() {
     <div className="flex flex-row items-start justify-start h-screen overflow-x-hidden">
       <title>{title}</title>
       <>
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={showWelcome} />
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={useCallback(showWelcome, [showWelcome])} />
         {connected && <div className="hidden sm:flex flex-col h-full overflow-hidden min-w-fit">{activeServerId ? (
           <ChannelList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         ) : (
@@ -368,7 +379,7 @@ export default function App() {
       {connected && address ? (
         <MessageList
           className="grow h-full overflow-hidden min-w-0"
-          onToggleMemberList={() => setShowMemberList(!showMemberList)}
+          onToggleMemberList={useCallback(() => setShowMemberList(!showMemberList), [showMemberList])}
           showMemberList={showMemberList}
         />
       ) : (

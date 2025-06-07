@@ -1,5 +1,5 @@
 import { useServer } from "@/hooks/subspace/server"
-import { useState, useEffect } from "react"
+import { useState, useEffect, memo } from "react"
 import useSubspace, { useProfile, useNotifications } from "@/hooks/subspace"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { type Profile, type Server } from "@/types/subspace"
@@ -15,7 +15,7 @@ import { uploadFileAR } from "@/lib/utils"
 import { usePWA } from "@/hooks/use-pwa"
 import { JoinServerDialog, type WelcomePopupData } from "@/components/join-server-dialog"
 
-const ServerButton = ({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
+const ServerButton = memo(({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
     const { unreadCountsByServer } = useNotifications()
 
@@ -107,9 +107,9 @@ const ServerButton = ({ server, isActive = false, onClick }: { server: Server; i
             </div>
         </div>
     )
-}
+})
 
-const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick?: () => void }) => {
+const HomeButton = memo(({ isActive = false, onClick }: { isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
     const actions = useServer(state => state.actions)
     const { unreadCount } = useNotifications()
@@ -211,7 +211,7 @@ const HomeButton = ({ isActive = false, onClick }: { isActive?: boolean, onClick
             </div>
         </div>
     )
-}
+})
 
 const sampleInvites = [
     "wLedDuEphwwvxLS-ftFb4mcXhqu4jwkYtIM4txCx2V8",

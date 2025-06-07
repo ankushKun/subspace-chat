@@ -5,13 +5,12 @@ import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { type Profile, type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
 import { Download, Home, Plus, Sparkles, Users, WalletCards } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, uploadFileTurbo } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { FileDropzone } from "@/components/ui/file-dropzone"
 import { toast } from "sonner"
-import { uploadFileAR } from "@/lib/utils"
 import { usePWA } from "@/hooks/use-pwa"
 import { JoinServerDialog, type WelcomePopupData } from "@/components/join-server-dialog"
 
@@ -231,7 +230,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
     const [createError, setCreateError] = useState("")
 
     const subspace = useSubspace()
-    const { address } = useWallet()
+    const { address, jwk, connectionStrategy } = useWallet()
     const { actions: serverActions, serversJoined } = useServer()
 
     const handleCreateServer = async () => {
@@ -268,7 +267,7 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: WelcomePo
                 })
 
                 try {
-                    iconId = await uploadFileAR(serverIcon)
+                    iconId = await (connectionStrategy == ConnectionStrategies.ScannedJWK ? uploadFileTurbo(serverIcon, jwk) : uploadFileTurbo(serverIcon))
                     toast.dismiss()
                     toast.success("Icon uploaded successfully", {
                         richColors: true,

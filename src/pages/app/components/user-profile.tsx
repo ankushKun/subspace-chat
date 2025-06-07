@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings, LogOut, User, Edit2, Save, X, Upload, Camera } from "lucide-react"
-import { cn, shortenAddress, uploadFileAR } from "@/lib/utils"
+import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import useSubspace, { useProfile, useServer } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog"
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { useWallet } from "@/hooks/use-wallet"
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { NavLink } from "react-router"
 import type { Profile } from "@/types/subspace"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -19,7 +19,7 @@ interface UserProfileProps {
 }
 
 export default function UserProfile({ className }: UserProfileProps) {
-    const { address, actions: walletActions } = useWallet()
+    const { address, actions: walletActions, connectionStrategy, jwk } = useWallet()
     const { profiles, actions: profileActions } = useProfile()
     const { servers, activeServerId, actions: serverActions } = useServer()
     const subspace = useSubspace()
@@ -131,7 +131,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                 try {
                     setIsUploadingPfp(true)
                     toast.loading("Uploading profile picture to Arweave...")
-                    const pfpId = await uploadFileAR(profilePicFile)
+                    const pfpId = await (connectionStrategy == ConnectionStrategies.ScannedJWK ? uploadFileTurbo(profilePicFile, jwk) : uploadFileTurbo(profilePicFile))
 
                     if (pfpId) {
                         toast.dismiss()

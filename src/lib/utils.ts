@@ -4,6 +4,8 @@ import Arweave from "arweave";
 import type { JWKInterface } from "arweave/web/lib/wallet";
 import { Constants } from "./constants";
 import type { AoFetchResponse } from "ao-fetch";
+import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
+
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -61,5 +63,27 @@ export async function uploadFileAR(file: File, jwk?: JWKInterface) {
   }
 }
 
-export function uploadFileTurbo(file: File) {
+export async function uploadFileTurbo(file: File, jwk?: JWKInterface) {
+  const signer = jwk ? new ArweaveSigner(jwk) : new ArconnectSigner(window.arweaveWallet)
+  try {
+    const turbo = TurboFactory.authenticated({ signer })
+    const res = await turbo.uploadFile({
+      fileStreamFactory: () => file.stream(),
+      fileSizeFactory: () => file.size,
+      dataItemOpts: {
+        tags: [
+          { name: Constants.TagNames.AppName, value: Constants.TagValues.AppName },
+          { name: Constants.TagNames.AppVersion, value: Constants.TagValues.AppVersion },
+          { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.UploadFileTurbo },
+          { name: "Content-Type", value: file.type ?? "application/octet-stream" },
+          { name: "Name", value: file.name ?? "unknown" },
+        ],
+      }
+    })
+    console.log("Uploaded file to Turbo:", res)
+    return res.id;
+  } catch (error) {
+    Logger.error("uploadFileTurbo", { json: error });
+    return undefined
+  }
 }

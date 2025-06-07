@@ -12,10 +12,10 @@ import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, Comma
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
-import { useWallet } from "@/hooks/use-wallet"
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import { useProfile } from "@/hooks/subspace"
-import { uploadFileAR, cn } from "@/lib/utils"
+import { cn, uploadFileTurbo } from "@/lib/utils"
 import type { Server, Role, ServerMember, Member } from "@/types/subspace"
 import { Permission, getPermissions, hasPermission } from "@/types/subspace"
 
@@ -137,7 +137,7 @@ export default function ServerSettings({
     onCreateChannel
 }: ServerSettingsProps) {
     const subspace = useSubspace()
-    const { address } = useWallet()
+    const { address, jwk, connectionStrategy } = useWallet()
     const { actions } = useServer()
     const { profiles } = useProfile()
 
@@ -564,7 +564,7 @@ export default function ServerSettings({
                 })
 
                 try {
-                    const uploadedIconId = await uploadFileAR(serverIcon)
+                    const uploadedIconId = await (connectionStrategy == ConnectionStrategies.ScannedJWK ? uploadFileTurbo(serverIcon, jwk) : uploadFileTurbo(serverIcon))
                     if (uploadedIconId) {
                         iconId = uploadedIconId
                         toast.dismiss()

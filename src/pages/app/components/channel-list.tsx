@@ -586,7 +586,6 @@ export default function ChannelList({ setScreen, ...props }: React.HTMLAttribute
             <div className="mb-4 p-0 flex flex-col justify-center items-center relative">
                 <ServerSettings
                     server={server}
-                    isServerOwner={isServerOwner}
                     onCreateCategory={() => setCreateCategoryOpen(true)}
                     onCreateChannel={(categoryId) => {
                         setTargetCategoryId(categoryId || null)

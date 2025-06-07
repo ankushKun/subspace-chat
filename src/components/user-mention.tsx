@@ -1,7 +1,16 @@
 import { useProfile, useServer } from "@/hooks/subspace"
 import useSubspace from "@/hooks/subspace"
 import { useWallet } from "@/hooks/use-wallet"
-import { shortenAddress } from "@/lib/utils"
+import {
+    shortenAddress,
+    userHasPermission,
+    canManageUserRoles,
+    canAssignRole,
+    canRemoveOwnRole,
+    canManageRoleAssignments,
+    canRemoveRoleFromUser
+} from "@/lib/utils"
+import { Permission } from "@/types/subspace"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -29,8 +38,9 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
     const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname : null
     const member = server ? server?.members.find(m => m.userId === userId) : null
 
-    // Check if current user is server owner
-    const isServerOwner = server?.owner === address
+    // Check if current user can manage roles for this specific user (includes self-management)
+    const canManageRoles = server && address ? userHasPermission(server, address, Permission.MANAGE_ROLES) : false
+    const canManageThisUsersRoles = server && address ? canManageRoleAssignments(server, address, userId) : false
 
     const profile = profiles[userId]
     const primaryName = profile?.primaryName || null;
@@ -53,15 +63,23 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
             .sort((a, b) => a.orderId - b.orderId) // Sort by order (higher roles first)
     }
 
-    // Get available roles for assignment (roles the user doesn't have)
+    // Get available roles for assignment (roles the user doesn't have and can be assigned)
     const getAvailableRoles = () => {
-        if (!server || !server.roles || !member) {
+        if (!server || !server.roles || !member || !address) {
             return []
         }
 
         const userRoleIds = member.roles || []
         return server.roles
-            .filter(role => !userRoleIds.includes(role.roleId))
+            .filter(role => {
+                // User doesn't have this role
+                if (userRoleIds.includes(role.roleId)) {
+                    return false
+                }
+
+                // Check if current user can assign this role to this user
+                return canManageThisUsersRoles && canAssignRole(server, address, role.roleId)
+            })
             .sort((a, b) => a.orderId - b.orderId)
     }
 
@@ -341,8 +359,8 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                                                 Roles
                                             </span>
-                                            {/* Only show the add role button to server owners */}
-                                            {isServerOwner && (
+                                            {/* Only show the add role button if user can manage this user's roles */}
+                                            {canManageThisUsersRoles && (
                                                 <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
                                                     <PopoverTrigger asChild>
                                                         <Button
@@ -434,8 +452,8 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                                                                 className="w-2.5 h-2.5 rounded-full absolute inset-0 group-hover:opacity-0 transition-opacity"
                                                                 style={{ backgroundColor: role.color }}
                                                             />
-                                                            {/* X button - only visible on hover for server owners */}
-                                                            {isServerOwner && (
+                                                            {/* X button - only visible on hover for users who can remove this specific role */}
+                                                            {(server && address && canRemoveRoleFromUser(server, address, userId, role.roleId)) && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"

@@ -43,7 +43,7 @@ export type Member = {
 export enum Permission {
     SEND_MESSAGES = 1 << 0, // 1
     MANAGE_NICKNAMES = 1 << 1, // 2
-    DELETE_MESSAGES = 1 << 2, // 4
+    MANAGE_MESSAGES = 1 << 2, // 4
     KICK_MEMBERS = 1 << 3, // 8
     BAN_MEMBERS = 1 << 4, // 16
     MANAGE_CHANNELS = 1 << 5, // 32

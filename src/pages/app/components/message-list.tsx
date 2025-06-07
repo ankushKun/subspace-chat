@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check, UsersRound } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cn, shortenAddress } from "@/lib/utils"
+import { cn, shortenAddress, userHasPermission, isServerOwner as checkIsServerOwner } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
+import { Permission } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -192,10 +193,11 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     // Check if current user can edit (only message author)
     const canEdit = message.authorId === address
 
-    // Check if current user can delete (message author OR server owner)
+    // Check if current user can delete using permission system
     const currentServer = activeServerId ? servers[activeServerId] : null
-    const isServerOwner = currentServer?.owner === address
-    const canDelete = message.authorId === address || isServerOwner
+    const isServerOwner = checkIsServerOwner(currentServer, address)
+    const hasDeletePermission = userHasPermission(currentServer, address, Permission.MANAGE_MESSAGES)
+    const canDelete = message.authorId === address || isServerOwner || hasDeletePermission
 
     function copyFingerprint() {
         navigator.clipboard.writeText(message.messageTxId)
@@ -240,7 +242,15 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
                     variant="ghost"
                     className="h-8 w-8 p-0 hover:bg-muted text-destructive hover:text-destructive"
                     onClick={onDelete}
-                    title={isServerOwner && message.authorId !== address ? "Delete as server owner" : "Delete message"}
+                    title={
+                        message.authorId === address
+                            ? "Delete message"
+                            : isServerOwner
+                                ? "Delete as server owner"
+                                : hasDeletePermission
+                                    ? "Delete with message management permission"
+                                    : "Delete message"
+                    }
                 >
                     <Trash2 className="w-4 h-4" />
                 </Button>

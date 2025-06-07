@@ -15,13 +15,26 @@ import useSubspace from "@/hooks/subspace"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { useServer } from "@/hooks/subspace/server"
 import { useProfile } from "@/hooks/subspace"
-import { cn, uploadFileTurbo } from "@/lib/utils"
+import {
+    cn,
+    uploadFileTurbo,
+    canManageServer,
+    isServerOwner as checkIsServerOwner,
+    userHasPermission,
+    canManageUserRoles,
+    canAssignRole,
+    canRemoveOwnRole,
+    canEditRole,
+    canDeleteRole,
+    canMoveRole,
+    canManageRoleAssignments,
+    canRemoveRoleFromUser
+} from "@/lib/utils"
 import type { Server, Role, ServerMember, Member } from "@/types/subspace"
 import { Permission, getPermissions, hasPermission } from "@/types/subspace"
 
 interface ServerSettingsProps {
     server: Server
-    isServerOwner: boolean
     onCreateCategory: () => void
     onCreateChannel: (categoryId?: number) => void
 }
@@ -132,7 +145,6 @@ const sortMembersByPriority = (members: Member[], profiles: Record<string, any>)
 
 export default function ServerSettings({
     server,
-    isServerOwner,
     onCreateCategory,
     onCreateChannel
 }: ServerSettingsProps) {
@@ -140,6 +152,12 @@ export default function ServerSettings({
     const { address, jwk, connectionStrategy } = useWallet()
     const { actions } = useServer()
     const { profiles } = useProfile()
+
+    // Calculate permissions for current user
+    const isServerOwner = checkIsServerOwner(server, address)
+    const canManageServerSettings = canManageServer(server, address)
+    const canManageRoles = userHasPermission(server, address, Permission.MANAGE_ROLES) || isServerOwner
+    const canManageChannels = userHasPermission(server, address, Permission.MANAGE_CHANNELS) || isServerOwner
 
     // Main settings dialog state
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -643,7 +661,16 @@ export default function ServerSettings({
         // No change
         if (source.index === destination.index) return
 
-        if (!server?.serverId) return
+        if (!server?.serverId || !address) return
+
+        // Check if user can move this role
+        const roleToMove = roles[source.index]
+        const newOrderId = destination.index + 1
+
+        if (!canMoveRole(server, address, roleToMove.roleId, newOrderId)) {
+            toast.error("You cannot move this role to that position (insufficient hierarchy)")
+            return
+        }
 
         // Reorder roles array
         const newRoles = Array.from(roles)
@@ -690,6 +717,11 @@ export default function ServerSettings({
     }
 
     const handleMobileRoleSelect = (role: Role) => {
+        // Only allow selecting roles that the user can edit
+        if (address && !canEditRole(server, address, role.roleId)) {
+            toast.error("You cannot edit this role (insufficient hierarchy)")
+            return
+        }
         setSelectedRole(role)
         setShowMobileRoleDetails(true)
     }
@@ -812,7 +844,7 @@ export default function ServerSettings({
                                     </div>
                                 )}
                             </div>
-                            {isServerOwner && (
+                            {(address && selectedRole && canRemoveRoleFromUser(server, address, member.userId, selectedRole.roleId)) && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -829,17 +861,24 @@ export default function ServerSettings({
         )
     }
 
-    // Get available members (those who don't already have the selected role)
+    // Get available members (those who don't already have the selected role and can be managed)
     const getAvailableMembers = () => {
-        if (!selectedRole) return []
+        if (!selectedRole || !address) return []
 
         const availableMembers = allServerMembers.filter(member => {
             try {
-                return !member.roles.includes(selectedRole.roleId)
+                // Check if member doesn't have the role
+                const hasRole = member.roles.includes(selectedRole.roleId)
+                if (hasRole) return false
+
+                // Check if current user can manage this member's roles and assign this specific role
+                return canManageRoleAssignments(server, address, member.userId) &&
+                    canAssignRole(server, address, selectedRole.roleId)
             } catch (error) {
-                // If parsing fails, assume no roles and include the member
+                // If parsing fails, assume no roles and include the member (but still check hierarchy)
                 console.warn("Failed to parse member roles:", error)
-                return true
+                return canManageRoleAssignments(server, address, member.userId) &&
+                    canAssignRole(server, address, selectedRole.roleId)
             }
         })
 
@@ -877,8 +916,8 @@ export default function ServerSettings({
                         </div>
                     </DropdownMenuItem>
 
-                    {/* Create Category - Only for owner */}
-                    {isServerOwner && (
+                    {/* Create Category - Only for users with manage channels permission */}
+                    {canManageChannels && (
                         <DropdownMenuItem
                             onClick={onCreateCategory}
                             className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md transition-colors"
@@ -891,8 +930,8 @@ export default function ServerSettings({
                         </DropdownMenuItem>
                     )}
 
-                    {/* Create Channel - Only for owner */}
-                    {isServerOwner && (
+                    {/* Create Channel - Only for users with manage channels permission */}
+                    {canManageChannels && (
                         <DropdownMenuItem
                             onClick={() => onCreateChannel()}
                             className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md transition-colors"
@@ -908,8 +947,8 @@ export default function ServerSettings({
                     {/* Separator */}
                     <DropdownMenuSeparator className="my-2" />
 
-                    {/* Server Settings - Only for owner */}
-                    {isServerOwner && (
+                    {/* Server Settings - Only for users with manage server permission */}
+                    {canManageServerSettings && (
                         <DropdownMenuItem
                             onClick={() => setSettingsOpen(true)}
                             className="cursor-pointer flex items-center gap-3 p-3 text-sm hover:bg-accent/40 rounded-md transition-colors"
@@ -1255,7 +1294,7 @@ export default function ServerSettings({
                                                                                         key={role.roleId}
                                                                                         draggableId={`role-${role.roleId}`}
                                                                                         index={index}
-                                                                                        isDragDisabled={updatingRoles.includes(role.roleId)}
+                                                                                        isDragDisabled={updatingRoles.includes(role.roleId) || (address && !canEditRole(server, address, role.roleId))}
                                                                                     >
                                                                                         {(provided, snapshot) => (
                                                                                             <div
@@ -1322,14 +1361,16 @@ export default function ServerSettings({
                                                                         />
                                                                         <h4 className="font-semibold truncate">{selectedRole.name}</h4>
                                                                     </div>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() => openDeleteRole(selectedRole)}
-                                                                        className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                                                                    >
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </Button>
+                                                                    {(address && canDeleteRole(server, address, selectedRole.roleId)) && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            onClick={() => openDeleteRole(selectedRole)}
+                                                                            className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </Button>
+                                                                    )}
                                                                 </div>
 
                                                                 <div className="px-4 pb-3">
@@ -1466,7 +1507,7 @@ export default function ServerSettings({
                                                                                             {permission === Permission.MANAGE_CHANNELS && "Allows members to create, edit, or delete channels."}
                                                                                             {permission === Permission.MANAGE_ROLES && "Allows members to create new roles and edit or delete roles lower than their highest role."}
                                                                                             {permission === Permission.MANAGE_SERVER && "Allows members to change the server's name and other settings."}
-                                                                                            {permission === Permission.DELETE_MESSAGES && "Allows members to delete messages from other users."}
+                                                                                            {permission === Permission.MANAGE_MESSAGES && "Allows members to delete messages from other users."}
                                                                                             {permission === Permission.KICK_MEMBERS && "Allows members to remove other members from this server."}
                                                                                             {permission === Permission.BAN_MEMBERS && "Allows members to permanently ban other members from this server."}
                                                                                             {permission === Permission.ADMINISTRATOR && "Members with this permission will have every permission and also bypass all channel specific permissions."}
@@ -1555,7 +1596,7 @@ export default function ServerSettings({
                                                                                     key={role.roleId}
                                                                                     draggableId={`role-${role.roleId}`}
                                                                                     index={index}
-                                                                                    isDragDisabled={updatingRoles.includes(role.roleId)}
+                                                                                    isDragDisabled={updatingRoles.includes(role.roleId) || (address && !canEditRole(server, address, role.roleId))}
                                                                                 >
                                                                                     {(provided, snapshot) => (
                                                                                         <div
@@ -1566,7 +1607,14 @@ export default function ServerSettings({
                                                                                                 selectedRole?.roleId === role.roleId && "bg-background border-border/50 shadow-sm",
                                                                                                 snapshot.isDragging && "opacity-90 shadow-lg ring-1 ring-primary/30"
                                                                                             )}
-                                                                                            onClick={() => setSelectedRole(role)}
+                                                                                            onClick={() => {
+                                                                                                // Only allow selecting roles that the user can edit
+                                                                                                if (address && !canEditRole(server, address, role.roleId)) {
+                                                                                                    toast.error("You cannot edit this role (insufficient hierarchy)")
+                                                                                                    return
+                                                                                                }
+                                                                                                setSelectedRole(role)
+                                                                                            }}
                                                                                         >
                                                                                             <div className="flex items-center gap-3">
                                                                                                 <div
@@ -1632,15 +1680,17 @@ export default function ServerSettings({
                                                                                 )}
                                                                             </Button>
                                                                         )}
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            onClick={() => openDeleteRole(selectedRole)}
-                                                                            className="text-destructive hover:text-destructive"
-                                                                        >
-                                                                            <Trash2 className="w-4 h-4 mr-2" />
-                                                                            Delete Role
-                                                                        </Button>
+                                                                        {(address && canDeleteRole(server, address, selectedRole.roleId)) && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() => openDeleteRole(selectedRole)}
+                                                                                className="text-destructive hover:text-destructive"
+                                                                            >
+                                                                                <Trash2 className="w-4 h-4 mr-2" />
+                                                                                Delete Role
+                                                                            </Button>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1758,7 +1808,7 @@ export default function ServerSettings({
                                                                                             {permission === Permission.MANAGE_CHANNELS && "Allows members to create, edit, or delete channels."}
                                                                                             {permission === Permission.MANAGE_ROLES && "Allows members to create new roles and edit or delete roles lower than their highest role."}
                                                                                             {permission === Permission.MANAGE_SERVER && "Allows members to change the server's name and other settings."}
-                                                                                            {permission === Permission.DELETE_MESSAGES && "Allows members to delete messages from other users."}
+                                                                                            {permission === Permission.MANAGE_MESSAGES && "Allows members to edit and delete messages from other users."}
                                                                                             {permission === Permission.KICK_MEMBERS && "Allows members to remove other members from this server."}
                                                                                             {permission === Permission.BAN_MEMBERS && "Allows members to permanently ban other members from this server."}
                                                                                             {permission === Permission.ADMINISTRATOR && "Members with this permission will have every permission and also bypass all channel specific permissions."}
@@ -1803,7 +1853,7 @@ export default function ServerSettings({
                                                                                 <div className="text-sm text-muted-foreground">
                                                                                     {roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}
                                                                                 </div>
-                                                                                {isServerOwner && (
+                                                                                {(canManageRoles && selectedRole && address && canAssignRole(server, address, selectedRole.roleId)) && (
                                                                                     <Button
                                                                                         variant="outline"
                                                                                         size="sm"

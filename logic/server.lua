@@ -9,7 +9,7 @@ PROFILES = "J-GI_SARbZ8O0km4JiE2lu2KJdZIWMo53X3HrqusXjY"
 server_name = server_name or Name or (Owner:sub(1, 4) .. "..." .. Owner:sub(-4) .. "'s Server")
 server_icon = server_icon or "W11lwYHNY5Ag2GsNXvn_PF9qEnqZ8c_Qgp7RqulbyE4"
 
-version = "0.0.3"
+version = "0.0.5"
 
 -- easily read from the database
 function SQLRead(query, ...)
@@ -376,7 +376,7 @@ db:exec([[
 Permissions = {
     SEND_MESSAGES = 1 << 0,    -- 1
     MANAGE_NICKNAMES = 1 << 1, -- 2
-    DELETE_MESSAGES = 1 << 2,  -- 4
+    MANAGE_MESSAGES = 1 << 2,  -- 4
     KICK_MEMBERS = 1 << 3,     -- 8
     BAN_MEMBERS = 1 << 4,      -- 16
     MANAGE_CHANNELS = 1 << 5,  -- 32
@@ -410,6 +410,10 @@ function GetRole(roleId)
 end
 
 function MemberHasPermission(member, perm)
+    if not member then
+        return false
+    end
+
     if isOwner(member.userId) then
         return true
     end
@@ -420,11 +424,121 @@ function MemberHasPermission(member, perm)
     end
     for _, roleId in ipairs(roles) do
         local role = GetRole(roleId)
-        if role and HasPermission(role.permissions, perm) then
-            return true
+        if role then
+            -- Administrator permission grants all other permissions
+            if HasPermission(role.permissions, Permissions.ADMINISTRATOR) then
+                return true
+            end
+            -- Check for the specific permission
+            if HasPermission(role.permissions, perm) then
+                return true
+            end
         end
     end
     return false
+end
+
+-- Get the highest role order for a user (lower orderId = higher hierarchy)
+function GetUserHighestRoleOrder(userId)
+    local member = GetProfile(userId)
+    if not member then
+        return nil
+    end
+
+    if isOwner(userId) then
+        return 0 -- Server owner has highest possible hierarchy
+    end
+
+    local roles = json.decode(member.roles or "[]") or {}
+    if #roles == 0 then
+        return nil -- No roles
+    end
+
+    local highestOrder = nil
+    for _, roleId in ipairs(roles) do
+        local role = GetRole(roleId)
+        if role then
+            if highestOrder == nil or role.orderId < highestOrder then
+                highestOrder = role.orderId
+            end
+        end
+    end
+
+    return highestOrder
+end
+
+-- Check if user A can manage user B's roles
+function CanManageUserRoles(userA, userB)
+    if isOwner(userA) then
+        return true -- Server owner can manage anyone
+    end
+
+    if userA == userB then
+        return false -- Users cannot manage their own roles through this system
+    end
+
+    local orderA = GetUserHighestRoleOrder(userA)
+    local orderB = GetUserHighestRoleOrder(userB)
+
+    -- If userA has no roles, they can't manage anyone
+    if orderA == nil then
+        return false
+    end
+
+    -- If userB has no roles, userA can manage them (as long as userA has roles)
+    if orderB == nil then
+        return true
+    end
+
+    -- userA can only manage userB if userA has strictly higher hierarchy (lower orderId)
+    return orderA < orderB
+end
+
+-- Check if user can assign a specific role
+function CanAssignRole(userId, roleId)
+    if isOwner(userId) then
+        return true -- Server owner can assign any role
+    end
+
+    local userHighestOrder = GetUserHighestRoleOrder(userId)
+    if userHighestOrder == nil then
+        return false -- User has no roles, can't assign anything
+    end
+
+    local role = GetRole(roleId)
+    if not role then
+        return false -- Role doesn't exist
+    end
+
+    -- User can only assign roles that are lower in hierarchy (higher orderId)
+    return userHighestOrder < role.orderId
+end
+
+-- Check if user can remove a specific role from themselves
+function CanRemoveOwnRole(userId, roleId)
+    if isOwner(userId) then
+        return true -- Server owner can do anything
+    end
+
+    local member = GetProfile(userId)
+    if not member then
+        return false
+    end
+
+    local roles = json.decode(member.roles or "[]") or {}
+    if #roles <= 1 then
+        return false -- Don't allow removing the last/only role
+    end
+
+    local userHighestOrder = GetUserHighestRoleOrder(userId)
+    local role = GetRole(roleId)
+
+    if not role or userHighestOrder == nil then
+        return false
+    end
+
+    -- User cannot remove their highest role
+    return role.orderId > userHighestOrder
 end
 
 -- Record for original id and delegated id (addresses)
@@ -507,7 +621,8 @@ end)
 app.post("/update-server", function(req, res)
     local userId = req.msg.From
     userId = TranslateDelegation(userId)
-    assert(isOwner(userId), "You are not the owner of this server")
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_SERVER)
+    assert(hasPermission, "You dont have permission to manage the server")
     local name = VarOrNil(req.body.name)
     local icon = VarOrNil(req.body.icon)
 
@@ -518,9 +633,10 @@ app.post("/update-server", function(req, res)
 end)
 
 app.post("/create-category", function(req, res)
-    local id = req.msg.From
-    id = TranslateDelegation(id)
-    assert(isOwner(id), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local name = req.body.name
     local orderId = req.body.orderId or 0
 
@@ -572,9 +688,10 @@ app.post("/create-category", function(req, res)
 end)
 
 app.post("/update-category", function(req, res)
-    local from = req.msg.From
-    from = TranslateDelegation(from)
-    assert(isOwner(from), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local categoryId = req.body.categoryId
     local name = VarOrNil(req.body.name)
     local orderId = VarOrNil(req.body.orderId)
@@ -662,9 +779,10 @@ app.post("/update-category", function(req, res)
 end)
 
 app.post("/delete-category", function(req, res)
-    local from = req.msg.From
-    from = TranslateDelegation(from)
-    assert(isOwner(from), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local categoryId = req.body.categoryId
     local rows_updated = SQLWrite("DELETE FROM categories WHERE categoryId = ?", categoryId)
     if rows_updated == 1 then
@@ -682,9 +800,10 @@ end)
 ------------------------------------------------------------------------
 
 app.post("/create-channel", function(req, res)
-    local from = req.msg.From
-    from = TranslateDelegation(from)
-    assert(isOwner(from), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local name = req.body.name
     local categoryId = VarOrNil(req.body.parentCategoryId)
     local orderId = tonumber(req.body.orderId) or 0
@@ -779,9 +898,10 @@ app.post("/create-channel", function(req, res)
 end)
 
 app.post("/update-channel", function(req, res)
-    local from = req.msg.From
-    from = TranslateDelegation(from)
-    assert(isOwner(from), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local channelId = req.body.channelId
     local name = VarOrNil(req.body.name)
     local categoryId = VarOrNil(req.body.parentCategoryId)
@@ -978,9 +1098,10 @@ app.post("/update-channel", function(req, res)
 end)
 
 app.post("/delete-channel", function(req, res)
-    local from = req.msg.From
-    from = TranslateDelegation(from)
-    assert(isOwner(from), "You are not the owner of this server")
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local hasPermission = MemberHasPermission(GetProfile(userId), Permissions.MANAGE_CHANNELS)
+    assert(hasPermission, "You dont have permission to manage channels")
     local channelId = req.body.channelId
     local rows_updated = SQLWrite("DELETE FROM channels WHERE channelId = ?", channelId)
     if rows_updated == 1 then
@@ -1136,11 +1257,19 @@ app.post("/send-message", function(req, res)
 
     -- print(attachments)
 
-    -- check if author is a member of the server
+    -- check if author is a member of the server and has permission to send messages
     local profile = GetProfile(authorId)
     if not profile then
         res:status(403):json({
             error = "You are not a member of this server"
+        })
+        return
+    end
+
+    local hasPermission = MemberHasPermission(profile, Permissions.SEND_MESSAGES)
+    if not hasPermission then
+        res:status(403):json({
+            error = "You dont have permission to send messages"
         })
         return
     end
@@ -1259,8 +1388,9 @@ end)
 
 -- This would be update-member later
 app.post("/update-nickname", function(req, res)
-    local userId = req.msg.From
-    userId = TranslateDelegation(userId)
+    local requesterId = req.msg.From
+    requesterId = TranslateDelegation(requesterId)
+    local targetUserId = VarOrNil(req.body.userId) or requesterId -- If no userId specified, update own nickname
     local nickname = VarOrNil(req.body.nickname)
 
     if not nickname then
@@ -1270,25 +1400,47 @@ app.post("/update-nickname", function(req, res)
         return
     end
 
-    local profile = GetProfile(userId)
-    if not profile then
+    local requesterProfile = GetProfile(requesterId)
+    if not requesterProfile then
         res:status(403):json({
             error = "You are not a member of this server"
         })
         return
     end
 
-    -- Check if member exists
-    local member = SQLRead("SELECT * FROM members WHERE userId = ?", userId)
+    -- Check permissions: users can always update their own nickname,
+    -- or users with MANAGE_NICKNAMES can update others' nicknames
+    local canUpdateNickname = (targetUserId == requesterId) or
+        isOwner(requesterId) or
+        MemberHasPermission(requesterProfile, Permissions.MANAGE_NICKNAMES)
+
+    if not canUpdateNickname then
+        res:status(403):json({
+            error = "You dont have permission to manage nicknames"
+        })
+        return
+    end
+
+    -- Check if target user is a member
+    local targetProfile = GetProfile(targetUserId)
+    if not targetProfile then
+        res:status(404):json({
+            error = "Target user is not a member of this server"
+        })
+        return
+    end
+
+    -- Check if member exists in database
+    local member = SQLRead("SELECT * FROM members WHERE userId = ?", targetUserId)
     if not member or #member == 0 then
         -- Auto-register the member if they don't exist
-        SQLWrite("INSERT INTO members (userId, nickname) VALUES (?, ?)", userId, nickname)
+        SQLWrite("INSERT INTO members (userId, nickname) VALUES (?, ?)", targetUserId, nickname)
         res:json({})
         return
     end
 
     -- Update the nickname
-    local rows_updated = SQLWrite("UPDATE members SET nickname = ? WHERE userId = ?", nickname, userId)
+    local rows_updated = SQLWrite("UPDATE members SET nickname = ? WHERE userId = ?", nickname, targetUserId)
     if rows_updated == 1 then
         res:json({})
     else
@@ -1302,10 +1454,9 @@ app.post("/delete-message", function(req, res)
     local messageId = req.body.messageId
     local deleter = req.msg.From
     deleter = TranslateDelegation(deleter)
-    local force_delete = isOwner(deleter)
 
     local profile = GetProfile(deleter)
-    if not force_delete and not profile then
+    if not profile then
         res:status(403):json({
             error = "You are not a member of this server"
         })
@@ -1315,7 +1466,13 @@ app.post("/delete-message", function(req, res)
     local original_message = SQLRead("SELECT * FROM messages WHERE messageId = ?", messageId)
     if #original_message == 1 then
         original_message = original_message[1]
-        if force_delete or (original_message.authorId == deleter) then
+
+        -- Check if user can delete: message author, server owner, or has DELETE_MESSAGES permission
+        local isMessageAuthor = original_message.authorId == deleter
+        local isServerOwner = isOwner(deleter)
+        local hasDeletePermission = MemberHasPermission(profile, Permissions.MANAGE_MESSAGES)
+
+        if isMessageAuthor or isServerOwner or hasDeletePermission then
             local rows_updated = SQLWrite("DELETE FROM messages WHERE messageId = ?", messageId)
             if rows_updated == 1 then
                 res:json({})
@@ -1326,7 +1483,7 @@ app.post("/delete-message", function(req, res)
             end
         else
             res:status(403):json({
-                error = "You are not the author of this message"
+                error = "You dont have permission to delete this message"
             })
         end
     else
@@ -1396,13 +1553,34 @@ app.post("/create-role", function(req, res)
     local permissions = VarOrNil(req.body.permissions) or 1
     local orderId
 
-    -- put the new role at bottom by default
-    local c_roles = SQLRead("SELECT COUNT(*) as count FROM roles")[1].count
-    orderId = c_roles + 1
+    -- Determine where the role can be placed based on hierarchy
+    if isOwner(userId) then
+        -- Server owner can create roles anywhere, default to bottom
+        local c_roles = SQLRead("SELECT COUNT(*) as count FROM roles")[1].count
+        orderId = c_roles + 1
+    else
+        -- Non-owners must create roles below their highest role
+        local userHighestOrder = GetUserHighestRoleOrder(userId)
+        if userHighestOrder == nil then
+            res:status(403):json({
+                error = "You must have a role to create new roles"
+            })
+            return
+        end
+
+        -- New role must be positioned below (higher orderId than) user's highest role
+        -- Place it right after the user's highest role
+        orderId = userHighestOrder + 1
+
+        -- Shift all existing roles at and below this position down by 1
+        SQLWrite("UPDATE roles SET orderId = orderId + 1 WHERE orderId >= ?", orderId)
+    end
 
     local rows_updated = SQLWrite("INSERT INTO roles (name, color, permissions, orderId) VALUES (?, ?, ?, ?)", name,
         color, permissions, orderId)
     if rows_updated == 1 then
+        -- Resequence to ensure clean ordering
+        resequence_roles()
         res:json({})
     else
         res:status(500):json({
@@ -1435,10 +1613,32 @@ app.post("/update-role", function(req, res)
 
     role = role[1]
 
+    -- Check hierarchy: user can only edit roles below their highest role
+    if not isOwner(userId) then
+        local userHighestOrder = GetUserHighestRoleOrder(userId)
+        if userHighestOrder == nil or role.orderId <= userHighestOrder then
+            res:status(403):json({
+                error = "You cannot edit this role (role is equal to or higher than your highest role)"
+            })
+            return
+        end
+    end
+
     local name = VarOrNil(req.body.name) or role.name
     local color = VarOrNil(req.body.color) or role.color
     local permissions = tonumber(VarOrNil(req.body.permissions) or role.permissions)
     local orderId = tonumber(VarOrNil(req.body.orderId) or role.orderId)
+
+    -- Check if user is trying to move role to a position above their highest role
+    if not isOwner(userId) and orderId then
+        local userHighestOrder = GetUserHighestRoleOrder(userId)
+        if userHighestOrder ~= nil and orderId <= userHighestOrder then
+            res:status(403):json({
+                error = "You cannot move this role above your highest role"
+            })
+            return
+        end
+    end
 
     db:exec("BEGIN TRANSACTION")
     local success = true
@@ -1512,6 +1712,26 @@ app.post("/delete-role", function(req, res)
 
     local roleId = req.body.roleId
 
+    -- Check hierarchy: user can only delete roles below their highest role
+    if not isOwner(userId) then
+        local role = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+        if not role or #role == 0 then
+            res:status(404):json({
+                error = "Role not found"
+            })
+            return
+        end
+
+        role = role[1]
+        local userHighestOrder = GetUserHighestRoleOrder(userId)
+        if userHighestOrder == nil or role.orderId <= userHighestOrder then
+            res:status(403):json({
+                error = "You cannot delete this role (role is equal to or higher than your highest role)"
+            })
+            return
+        end
+    end
+
     db:exec("BEGIN TRANSACTION")
     local success = true
 
@@ -1568,6 +1788,33 @@ app.post("/assign-role", function(req, res)
     local userIdToUpdate = req.body.userId
     local roleId = req.body.roleId
 
+    -- Check permissions based on whether user is assigning to themselves or others
+    if userId == userIdToUpdate then
+        -- Self-assignment: user can assign roles below their hierarchy to themselves
+        if not CanAssignRole(userId, roleId) then
+            res:status(403):json({
+                error = "You cannot assign this role to yourself (role is higher than your highest role)"
+            })
+            return
+        end
+    else
+        -- Assigning to others: check if the requesting user can manage the target user's roles
+        if not CanManageUserRoles(userId, userIdToUpdate) then
+            res:status(403):json({
+                error = "You cannot manage roles for this user (insufficient hierarchy)"
+            })
+            return
+        end
+
+        -- Check if the requesting user can assign this specific role
+        if not CanAssignRole(userId, roleId) then
+            res:status(403):json({
+                error = "You cannot assign this role (role is higher than your highest role)"
+            })
+            return
+        end
+    end
+
     local member = GetProfile(userIdToUpdate)
     if not member then
         res:status(404):json({
@@ -1622,6 +1869,39 @@ app.post("/unassign-role", function(req, res)
 
     local userIdToUpdate = req.body.userId
     local roleId = req.body.roleId
+
+    -- Check if user is trying to remove their own role
+    if userId == userIdToUpdate then
+        if not CanRemoveOwnRole(userId, roleId) then
+            res:status(403):json({
+                error = "You cannot remove your highest role or your only role"
+            })
+            return
+        end
+    else
+        -- Check if the requesting user can manage the target user's roles
+        if not CanManageUserRoles(userId, userIdToUpdate) then
+            res:status(403):json({
+                error = "You cannot manage roles for this user (insufficient hierarchy)"
+            })
+            return
+        end
+
+        -- Check if the requesting user can manage this specific role (it must be below their hierarchy)
+        local requestingUserHighestOrder = GetUserHighestRoleOrder(userId)
+        if not isOwner(userId) and requestingUserHighestOrder ~= nil then
+            local roleToRemove = SQLRead("SELECT * FROM roles WHERE roleId = ?", roleId)
+            if roleToRemove and #roleToRemove > 0 then
+                local role = roleToRemove[1]
+                if role.orderId <= requestingUserHighestOrder then
+                    res:status(403):json({
+                        error = "You cannot remove this role (role is equal to or higher than your highest role)"
+                    })
+                    return
+                end
+            end
+        end
+    end
 
     local member = GetProfile(userIdToUpdate)
     if not member then

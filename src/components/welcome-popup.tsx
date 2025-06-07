@@ -38,7 +38,7 @@ export default function WelcomePopup({ isOpen, onClose, data }: WelcomePopupProp
                         <CheckCircle className="w-8 h-8 text-green-500" />
                     </div>
 
-                    <DialogTitle className="text-xl font-semibold">
+                    <DialogTitle className="text-3xl font-semibold text-center">
                         Welcome to {data.serverName}!
                     </DialogTitle>
 

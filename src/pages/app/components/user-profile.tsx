@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
-import { NavLink } from "react-router"
+import { Link, NavLink } from "react-router"
 import type { Profile } from "@/types/subspace"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import ArioBadge from "@/components/ario-badhe"
 
 interface UserProfileProps {
     className?: string
@@ -28,6 +29,12 @@ export default function UserProfile({ className }: UserProfileProps) {
     const [profileDialogOpen, setProfileDialogOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+
+    // Nickname prompt dialog state
+    const [nicknamePromptOpen, setNicknamePromptOpen] = useState(false)
+    const [promptNickname, setPromptNickname] = useState("")
+    const [isSavingPromptNickname, setIsSavingPromptNickname] = useState(false)
+    const [hasBeenPromptedForNickname, setHasBeenPromptedForNickname] = useState(false)
 
     // Form state
     const [editedNickname, setEditedNickname] = useState("")
@@ -53,6 +60,19 @@ export default function UserProfile({ className }: UserProfileProps) {
     const profile = profiles[address] ? profiles[address] : null
     const server = activeServerId ? servers[activeServerId] : null
     const serverNickname = server && Object.prototype.toString.call(server.members) == "[object Array]" ? server?.members?.find(m => m.userId === address)?.nickname : null
+
+    // Check if we should show the nickname prompt
+    useEffect(() => {
+        if (activeServerId && address && !profile?.primaryName && !serverNickname && !nicknamePromptOpen && !profileDialogOpen && !hasBeenPromptedForNickname) {
+            setNicknamePromptOpen(true)
+            setHasBeenPromptedForNickname(true)
+        }
+    }, [activeServerId, address, profile?.primaryName, serverNickname, nicknamePromptOpen, profileDialogOpen, hasBeenPromptedForNickname])
+
+    // Reset the prompt flag when switching servers or when a nickname is set
+    useEffect(() => {
+        setHasBeenPromptedForNickname(false)
+    }, [activeServerId, serverNickname])
 
     // Initialize form state when dialog opens
     useEffect(() => {
@@ -190,6 +210,38 @@ export default function UserProfile({ className }: UserProfileProps) {
             toast.error("Failed to update profile")
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    const handleSavePromptNickname = async () => {
+        if (!activeServerId || !address || !promptNickname.trim()) return
+
+        setIsSavingPromptNickname(true)
+        try {
+            const success = await subspace.server.updateMember({
+                serverId: activeServerId,
+                nickname: promptNickname.trim()
+            })
+
+            if (success) {
+                toast.success("Nickname set successfully!")
+                // Update local state
+                const updatedMembers = server?.members.map(member =>
+                    member.userId === address
+                        ? { ...member, nickname: promptNickname.trim() }
+                        : member
+                ) || []
+                serverActions.updateServerMembers(activeServerId, updatedMembers)
+                setNicknamePromptOpen(false)
+                setPromptNickname("")
+            } else {
+                toast.error("Failed to set nickname")
+            }
+        } catch (error) {
+            console.error("Error setting nickname:", error)
+            toast.error("Failed to set nickname")
+        } finally {
+            setIsSavingPromptNickname(false)
         }
     }
 
@@ -537,6 +589,65 @@ export default function UserProfile({ className }: UserProfileProps) {
                         <DialogClose className="cursor-pointer">
                             Close
                         </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Nickname Prompt Dialog */}
+            <Dialog open={nicknamePromptOpen} onOpenChange={setNicknamePromptOpen}>
+                <DialogContent className="max-w-md w-[95vw] sm:w-full" removeCloseButton>
+                    <DialogHeader>
+                        <DialogTitle>Set Your Nickname</DialogTitle>
+                        <DialogDescription>
+                            <div>
+                                You've joined <strong>{server?.name}</strong>! Set a nickname to personalize your presence on this server.
+                            </div>
+                            <div className="flex items-center gap-1 mt-2">
+                                <ArioBadge className="w-5 h-5" />
+                                You can also set a primary name for your profile at
+                                <Link to="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">arns.ar.io</Link>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="prompt-nickname">Server Nickname</Label>
+                            <Input
+                                id="prompt-nickname"
+                                value={promptNickname}
+                                onChange={(e) => setPromptNickname(e.target.value)}
+                                placeholder="Enter your nickname"
+                                className="w-full"
+                                maxLength={50}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && promptNickname.trim()) {
+                                        handleSavePromptNickname()
+                                    }
+                                }}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                This nickname will only be visible to members of this server.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setNicknamePromptOpen(false)}
+                            disabled={isSavingPromptNickname}
+                            className="w-full sm:w-auto"
+                        >
+                            Skip for now
+                        </Button>
+                        <Button
+                            onClick={handleSavePromptNickname}
+                            disabled={!promptNickname.trim() || isSavingPromptNickname}
+                            className="w-full sm:w-auto"
+                        >
+                            {isSavingPromptNickname ? "Setting..." : "Set Nickname"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

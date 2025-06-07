@@ -41,8 +41,8 @@ export default function SubspaceLanding() {
                 <div className="font-vipnagorgialla tracking-wider text-xs sm:text-sm md:text-xl scale-y-130 mt-2.5 drop-shadow-xl">Intergalactic Communicator</div>
             </div>
             <div className="flex -mt-22 flex-col h- mx-auto overflow-x-clip max-w-screen min-w-screen z-20 items-center justify-start gap-2">
-                <img draggable={false} className="absolute w-80 right-[8vw] -translate-y-36 z-20 invert dark:invert-0 drop-shadow-xl" src={chk} />
-                <img draggable={false} src={isMobile ? s2 : s1} className="w-[90vw] overflow-clip -rotate-12 md:rotate-0 md:w-[80vw] rounded-xl object-cover drop-shadow-2xl" />
+                <img draggable={false} className="absolute w-80 right-[6vw] md:right-[8vw] -translate-y-36 z-20 invert dark:invert-0 drop-shadow-xl" src={chk} />
+                <img draggable={false} src={isMobile ? s2 : s1} className="w-[90vw] overflow-clip -rotate-12 md:rotate-0 md:w-[80vw] rounded-xl object-cover drop-shadow-2xl drop-shadow-black" />
             </div>
             <div className="flex flex-col items-center justify-center gap-2 my-52 pb-14">
                 {(() => {
@@ -55,11 +55,11 @@ export default function SubspaceLanding() {
                 {/* <div className="flex flex-col items-center justify-center gap-2">
                     <div className="font-ka text-3xl tracking-widest">Subspace</div>
                 </div> */}
-                <div className="flex flex-col items-center justify-center gap-2">
+                <div className="flex flex-col items-center text-white text-center justify-center gap-2">
                     <div className="font-ka tracking-widest">powered by <Link draggable={false} target="_blank" to="https://x.com/aoTheComputer" className="hover:underline underline-offset-8 hover:text-white">aoTheComputer</Link></div>
                 </div>
                 {/* @ts-ignore */}
-                <div className="text-xs text-white/60 font-vipnagorgialla text-left md:text-center">v{__VERSION__}</div>
+                <div className="text-xs text-white/60 font-vipnagorgialla text-center">v{__VERSION__}</div>
             </div>
         </div>
     )

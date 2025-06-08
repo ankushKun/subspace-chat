@@ -2,7 +2,7 @@ import React from "react";
 import type { Components } from "react-markdown";
 import { cn } from "./utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import UserMention from "@/components/user-mention";
+import ProfilePopover from "@/components/profile-popover";
 import ChannelMention from "@/components/channel-mention";
 import { ServerInviteEmbed } from "@/components/server-invite-embed";
 import { OpenGraphEmbed } from "@/components/open-graph-embed";
@@ -63,7 +63,7 @@ export const mdComponents: Components = {
             const mention = currentMentions[index];
             if (!mention) return <>{children}</>;
 
-            return <UserMention userId={mention.id} side="bottom" align="start" showAt={true}
+            return <ProfilePopover userId={mention.id} side="bottom" align="start" showAt={true}
                 renderer={(text) => <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
                     @{text}
                 </span>} />

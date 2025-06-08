@@ -203,15 +203,18 @@ export default function App() {
 
   // Update notification counts when joined servers change
   useEffect(() => {
-    if (address) {
-      serverActions.setActiveServerId(null)
-      serverActions.setActiveChannelId(null)
-    }
     if (address && serversJoined[address]) {
       const userServers = Array.isArray(serversJoined[address]) ? serversJoined[address] : []
       notificationActions.updateUnreadCounts(userServers)
     }
   }, [address, serversJoined])
+
+  useEffect(() => {
+    if (address) {
+      serverActions.setActiveServerId(null)
+      serverActions.setActiveChannelId(null)
+    }
+  }, [address])
 
   useEffect(() => {
     (async () => {

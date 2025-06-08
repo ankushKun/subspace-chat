@@ -13,7 +13,7 @@ import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeKatex from "rehype-katex"
 import { mdComponents, setCurrentMentions, JoinServerDialogContext } from "@/lib/md-components"
-import UserMention from "@/components/user-mention"
+import ProfilePopover from "@/components/profile-popover"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import InboxComponent from "@/components/inbox"
@@ -398,7 +398,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: HTMLAttribu
 
                 {/* Author name and content preview */}
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <UserMention
+                    <ProfilePopover
                         side="top"
                         align="start"
                         userId={replyToMessage.authorId}
@@ -531,7 +531,7 @@ const MessageItem = ({
             )}
             <div className="flex gap-1">
                 {/* Avatar or timestamp spacer */}
-                <UserMention side="right" align="start" userId={message.authorId} renderer={() => <div className="w-14 flex-shrink-0 flex justify-center cursor-pointer h-fit">
+                <ProfilePopover side="right" align="start" userId={message.authorId} renderer={() => <div className="w-14 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {(showAvatar || message.replyTo) ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
@@ -545,7 +545,7 @@ const MessageItem = ({
                 <div className="flex-1 min-w-0 m-0 my-1 p-0">
                     {(showAvatar || message.replyTo) && (
                         <div className="flex items-baseline gap-2">
-                            <UserMention side="bottom" align="start" userId={message.authorId} renderer={(text) =>
+                            <ProfilePopover side="bottom" align="start" userId={message.authorId} renderer={(text) =>
                                 <span
                                     className="hover:underline cursor-pointer font-medium"
                                     style={{

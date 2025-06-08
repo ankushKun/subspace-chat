@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Crown, Users, Search, MoreHorizontal, UserPlus, Settings, ChevronDown, ChevronRight, UsersRound } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ServerMember, Role } from "@/types/subspace"
-import UserMention from "@/components/user-mention"
+import ProfilePopover from "@/components/profile-popover"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 const MemberAvatar = ({
@@ -65,7 +65,7 @@ const MemberItem = ({
 
     return (
         <div className="relative group">
-            <UserMention userId={member.userId} side={isMobile ? "bottom" : "left"} align="start" renderer={(displayName) =>
+            <ProfilePopover userId={member.userId} side={isMobile ? "bottom" : "left"} align="start" renderer={(displayName) =>
                 <Button
                     variant="ghost"
                     size="sm"

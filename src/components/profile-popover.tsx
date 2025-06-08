@@ -15,13 +15,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ArioBadge from "./ario-badhe";
-import { Check, Copy, Shield, Loader2, Plus, X } from "lucide-react";
+import { Check, Copy, Shield, Loader2, Plus, X, Pencil } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useCallback } from "react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { NavLink } from "react-router"
 
-export default function UserMention({ userId, showAt = true, side = "bottom", align = "center", renderer }:
+export default function ProfilePopover({ userId, showAt = true, side = "bottom", align = "center", renderer }:
     { userId: string; showAt?: boolean, side?: "top" | "left" | "bottom" | "right", align?: "start" | "center" | "end", renderer: (text: string) => React.ReactNode }) {
     const subspace = useSubspace()
     const { address } = useWallet()
@@ -271,14 +272,26 @@ export default function UserMention({ userId, showAt = true, side = "bottom", al
                         {/* Header with gradient background */}
                         <div className="h-16 bg-gradient-to-r from-primary/30 via-accent to-primary/30 relative">
                             <div className="absolute inset-0 bg-background/10"></div>
-                            {/* Refresh indicator */}
-                            {isRefreshing && (
-                                <div className="absolute top-2 right-2">
-                                    <div className="w-6 h-6 rounded-full bg-background/20 backdrop-blur-sm flex items-center justify-center">
+                            {/* Refresh indicator or Edit button */}
+                            <div className="absolute top-2 right-2">
+                                <div className="w-6 h-6 rounded-full bg-background/20 backdrop-blur-sm flex items-center justify-center">
+                                    {isRefreshing ? (
                                         <Loader2 className="w-3 h-3 animate-spin text-foreground/70" />
-                                    </div>
+                                    ) : userId === address ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="w-3 h-3 p-0 hover:text-primary"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                // TODO: Add edit profile functionality
+                                            }}
+                                        >
+                                            <Pencil className="w-3 h-3 text-foreground/70" />
+                                        </Button>
+                                    ) : null}
                                 </div>
-                            )}
+                            </div>
                         </div>
 
                         {/* Profile content */}

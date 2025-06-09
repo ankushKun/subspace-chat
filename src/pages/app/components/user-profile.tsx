@@ -14,6 +14,7 @@ import { Link, NavLink } from "react-router"
 import type { Profile } from "@/types/subspace"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import ArioBadge from "@/components/ario-badhe"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface UserProfileProps {
     className?: string
@@ -24,6 +25,9 @@ export default function UserProfile({ className }: UserProfileProps) {
     const { profiles, actions: profileActions } = useProfile()
     const { servers, activeServerId, actions: serverActions } = useServer()
     const subspace = useSubspace()
+
+    // Selected server state
+    const [selectedServerId, setSelectedServerId] = useState<string | null>(activeServerId || null)
 
     // Profile dialog state
     const [profileDialogOpen, setProfileDialogOpen] = useState(false)
@@ -41,6 +45,13 @@ export default function UserProfile({ className }: UserProfileProps) {
     const [profilePicFile, setProfilePicFile] = useState<File | null>(null)
     const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
     const [isUploadingPfp, setIsUploadingPfp] = useState(false)
+
+    // Update selected server when dialog opens or active server changes
+    useEffect(() => {
+        if (profileDialogOpen && activeServerId) {
+            setSelectedServerId(activeServerId)
+        }
+    }, [profileDialogOpen, activeServerId])
 
     useEffect(() => {
         if (address) {
@@ -74,16 +85,35 @@ export default function UserProfile({ className }: UserProfileProps) {
         setHasBeenPromptedForNickname(false)
     }, [activeServerId, serverNickname])
 
-    // Initialize form state when dialog opens
+    // Get the selected server's nickname
+    const getSelectedServerNickname = () => {
+        if (!selectedServerId || !servers[selectedServerId]) return ""
+        return servers[selectedServerId].members?.find(m => m.userId === address)?.nickname || ""
+    }
+
+    // Initialize form state when dialog opens or server changes
     useEffect(() => {
-        if (profileDialogOpen) {
-            setEditedNickname(serverNickname || "")
+        if (profileDialogOpen || selectedServerId) {
+            setEditedNickname(getSelectedServerNickname())
             setProfilePicFile(null)
             setProfilePicPreview(null)
             setIsUploadingPfp(false)
             setIsEditing(false)
         }
-    }, [profileDialogOpen, serverNickname])
+    }, [profileDialogOpen, selectedServerId])
+
+    // Update edited nickname when server changes or editing starts
+    useEffect(() => {
+        setEditedNickname(getSelectedServerNickname())
+    }, [selectedServerId, isEditing])
+
+    const handleCancelEdit = () => {
+        setIsEditing(false)
+        setEditedNickname(getSelectedServerNickname())
+        setProfilePicFile(null)
+        setProfilePicPreview(null)
+        setIsUploadingPfp(false)
+    }
 
     // Get display name
     const getDisplayName = () => {
@@ -183,20 +213,20 @@ export default function UserProfile({ className }: UserProfileProps) {
             }
 
             // Update server nickname if changed
-            if (activeServerId && editedNickname !== serverNickname) {
+            if (selectedServerId && editedNickname !== serverNickname) {
                 const success = await subspace.server.updateMember({
-                    serverId: activeServerId,
+                    serverId: selectedServerId,
                     nickname: editedNickname
                 })
                 if (success) {
                     toast.success("Nickname updated successfully")
                     // Update local state
-                    const updatedMembers = server?.members.map(member =>
+                    const updatedMembers = servers[selectedServerId].members.map(member =>
                         member.userId === address
                             ? { ...member, nickname: editedNickname }
                             : member
                     ) || []
-                    serverActions.updateServerMembers(activeServerId, updatedMembers)
+                    serverActions.updateServerMembers(selectedServerId, updatedMembers)
                 } else {
                     toast.error("Failed to update nickname")
                 }
@@ -243,14 +273,6 @@ export default function UserProfile({ className }: UserProfileProps) {
         } finally {
             setIsSavingPromptNickname(false)
         }
-    }
-
-    const handleCancelEdit = () => {
-        setIsEditing(false)
-        setEditedNickname(serverNickname || "")
-        setProfilePicFile(null)
-        setProfilePicPreview(null)
-        setIsUploadingPfp(false)
     }
 
     if (!address) return null
@@ -397,10 +419,9 @@ export default function UserProfile({ className }: UserProfileProps) {
                         <Tabs defaultValue="global" className="w-full">
                             <TabsList className="grid w-full grid-cols-2">
                                 <TabsTrigger value="global" className="text-xs sm:text-sm">Global Profile</TabsTrigger>
-                                <TabsTrigger value="server" disabled={!activeServerId} className="text-xs sm:text-sm">
+                                <TabsTrigger value="server" className="text-xs sm:text-sm">
                                     <span className="hidden sm:inline">Server Profile</span>
                                     <span className="sm:hidden">Server</span>
-                                    {!activeServerId && <span className="ml-1 text-xs">(No server)</span>}
                                 </TabsTrigger>
                             </TabsList>
 
@@ -531,12 +552,39 @@ export default function UserProfile({ className }: UserProfileProps) {
                             </TabsContent>
 
                             <TabsContent value="server" className="space-y-6 mt-6">
-                                {activeServerId && server ? (
+                                {/* Server Selector */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="server-selector" className="text-base font-medium">
+                                        Select Server
+                                    </Label>
+                                    <Select
+                                        value={selectedServerId || undefined}
+                                        onValueChange={(value) => setSelectedServerId(value)}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Choose a server" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(servers).map(([id, server]) => (
+                                                <SelectItem key={id} value={id}>
+                                                    {server.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {Object.keys(servers).length === 0 && (
+                                        <p className="text-sm text-muted-foreground mt-2">
+                                            You haven't joined any servers yet. Join a server to set server-specific nicknames.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {selectedServerId && servers[selectedServerId] ? (
                                     <>
                                         {/* Server Info */}
                                         <div className="p-3 bg-muted/30 rounded-md border">
-                                            <h3 className="font-medium text-sm text-muted-foreground">Current Server</h3>
-                                            <p className="text-base font-medium break-all">{server.name}</p>
+                                            <h3 className="font-medium text-sm text-muted-foreground">Selected Server</h3>
+                                            <p className="text-base font-medium break-all">{servers[selectedServerId].name}</p>
                                         </div>
 
                                         {/* Server Nickname Section */}
@@ -555,14 +603,14 @@ export default function UserProfile({ className }: UserProfileProps) {
                                             ) : (
                                                 <div className="p-3 bg-muted/30 rounded-md border">
                                                     <p className="text-sm break-all">
-                                                        {serverNickname || (
+                                                        {getSelectedServerNickname() || (
                                                             <span className="text-muted-foreground italic">No nickname set</span>
                                                         )}
                                                     </p>
                                                 </div>
                                             )}
                                             <p className="text-xs text-muted-foreground">
-                                                This nickname will only be visible to members of {server.name}.
+                                                This nickname will only be visible to members of {servers[selectedServerId].name}.
                                             </p>
                                         </div>
 
@@ -577,7 +625,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                 ) : (
                                     <div className="text-center py-8">
                                         <p className="text-muted-foreground">
-                                            Join a server to manage server-specific profile settings.
+                                            Select a server to view and manage server-specific profile settings.
                                         </p>
                                     </div>
                                 )}

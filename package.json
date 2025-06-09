@@ -71,6 +71,7 @@
     "react-swipeable": "^7.0.2",
     "recharts": "^2.15.3",
     "rehype-katex": "^7.0.1",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",

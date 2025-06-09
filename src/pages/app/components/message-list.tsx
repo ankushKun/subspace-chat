@@ -11,6 +11,7 @@ import { Permission } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkBreaks from "remark-breaks"
 import rehypeKatex from "rehype-katex"
 import { mdComponents, setCurrentMentions, JoinServerDialogContext } from "@/lib/md-components"
 import ProfilePopover from "@/components/profile-popover"
@@ -323,7 +324,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                 <div className="text-sm text-foreground leading-relaxed break-words markdown">
                     <Markdown skipHtml
                         components={mdComponents}
-                        remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
+                        remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
                         {preProcessContent(content)}
                     </Markdown>
                 </div>

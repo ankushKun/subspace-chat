@@ -29,6 +29,8 @@ import type { Tag } from "@/types/ao"
 import Picker from '@emoji-mart/react'
 import data from '@emoji-mart/data'
 import type { Emoji } from "emoji-mart"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Constants } from "@/lib/constants"
 
 
 
@@ -368,6 +370,19 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                                     </DialogContent>
                                                 </Dialog>
 
+                                            </div>
+                                        case "tenor":
+                                            return <div>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <img src={attachment.replace("tenor:", "")} alt="Attachment" className="max-w-128 cursor-pointer max-h-64 object-cover rounded" />
+                                                    </DialogTrigger>
+                                                    <DialogContent removeCloseButton className="bg-transparent outline-0 backdrop-blur-xs border-0 shadow-none max-w-screen max-h-screen items-center justify-center p-0">
+                                                        <div className="max-w-[80vw] max-h-[80vh] w-screen h-full">
+                                                            <img src={attachment.replace("tenor:", "")} alt="Attachment" className="w-full h-full object-contain" />
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
                                             </div>
                                         default:
                                             return <div className="flex items-center justify-center gap-1 w-fit my-1 border p-1 rounded py-1.5 bg-muted/70 hover:bg-muted/50 transition-all duration-100">
@@ -882,6 +897,18 @@ interface MessageInputProps {
     messagesInChannel?: Message[];
 }
 
+type TenorGif = {
+    id: string
+    media_formats: {
+        gif: {
+            url: string
+        }
+        tinygif: {
+            url: string
+        }
+    }
+}
+
 const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     onSendMessage,
     replyingTo,
@@ -904,10 +931,25 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const [attachmentDataType, setAttachmentDataType] = useState("")
     const [attachmentError, setAttachmentError] = useState<string | null>(null)
     const [isValidatingTxId, setIsValidatingTxId] = useState(false)
+    const [gifSearchQuery, setGifSearchQuery] = useState("")
+    const [tenorResponse, setTenorResponse] = useState<TenorGif[]>([])
 
     function formatTxId(txId: string) {
         return (txId.startsWith("https://") ? txId.split("/").pop() : txId).trim()
     }
+
+    useEffect(() => {
+        if (!gifSearchQuery) return
+
+        // debounce the search
+        const timeout = setTimeout(() => {
+            fetch(`https://tenor.googleapis.com/v2/search?q=${gifSearchQuery}&key=${Constants.TKey}&client_key=SubspaceGifSearch&limit=50`)
+                .then(res => res.json()).then(data => {
+                    setTenorResponse(data.results)
+                })
+        }, 500)
+        return () => clearTimeout(timeout)
+    }, [gifSearchQuery])
 
     useEffect(() => {
         if (!attachmentDataTxId) {
@@ -1862,12 +1904,46 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                         <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="border border-primary/30 rounded-xl overflow-clip p-0 min-w-fit" align="end" alignOffset={-48} sideOffset={28}>
-                                    <Picker
-                                        data={data} onEmojiSelect={(emoji: EmEmojiProps) => {
-                                            console.log(emoji)
-                                            setMessage(prev => prev + emoji.native)
-                                        }} />
+                                <PopoverContent className="border border-primary/20 rounded overflow-clip p-1.5 w-full min-w-80 min-h-96" align="end" alignOffset={-48} sideOffset={28}>
+                                    <Tabs>
+                                        <TabsList className="grid w-full grid-cols-2 bg-transparent">
+                                            <TabsTrigger value="emojis">Emojis</TabsTrigger>
+                                            <TabsTrigger value="gifs">GIFs</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="emojis">
+                                            <Picker
+                                                searchPosition="static"
+                                                previewPosition="none"
+                                                data={data} onEmojiSelect={(emoji: EmEmojiProps) => {
+                                                    console.log(emoji)
+                                                    setMessage(prev => prev + emoji.native)
+                                                }} />
+                                        </TabsContent>
+                                        <TabsContent value="gifs" className="px-1">
+                                            <Input placeholder="Search for a GIF" className="!outline-0 !ring-0 border-0 mb-2" onChange={(e) => {
+                                                // debounce the search
+                                                setGifSearchQuery(e.target.value)
+                                            }} />
+                                            <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-96 p-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                                                {tenorResponse.map((gif) => (
+                                                    <img
+                                                        key={gif.id}
+                                                        src={gif.media_formats.tinygif.url}
+                                                        alt={gif.id}
+                                                        className="w-full h-auto object-contain rounded-sm cursor-pointer hover:opacity-80 transition-opacity"
+                                                        onClick={() => {
+                                                            // set attachment and send
+                                                            setAttachments(prev => [...prev, `tenor:${gif.media_formats.gif.url}`])
+                                                            // click send button after the state updates and attachments are set
+                                                            setTimeout(() => {
+                                                                document.getElementById("send-button")?.click()
+                                                            }, 50)
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </TabsContent>
+                                    </Tabs>
                                 </PopoverContent>
                             </Popover>
 
@@ -1875,6 +1951,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             {(
                                 <Button
                                     size="sm"
+                                    id="send-button"
                                     className={cn(
                                         "h-8 w-8 p-0 transition-all duration-200",
                                         "bg-primary hover:bg-primary/90 text-primary-foreground",

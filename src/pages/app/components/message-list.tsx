@@ -1841,21 +1841,21 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
                         {/* Right actions */}
                         <div className="flex items-center gap-1">
-                            {/* <Button
+                            <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
                                 disabled={disabled}
                             >
                                 <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button> */}
+                            </Button>
 
                             {/* Send button - only show when there's content */}
                             {(
                                 <Button
                                     size="sm"
                                     className={cn(
-                                        "h-8 w-8 p-0 ml-2 transition-all duration-200",
+                                        "h-8 w-8 p-0 transition-all duration-200",
                                         "bg-primary hover:bg-primary/90 text-primary-foreground",
                                         "shadow-lg shadow-primary/20 hover:shadow-primary/30",
                                         "hover:scale-105 active:scale-95"

@@ -356,25 +356,31 @@ export default function App() {
     };
   }, [subspace, serverActions, notificationActions]);
 
-  if (isMobile) return (
-    <>
-      <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} onServerJoined={showWelcome} />
-      {/* Welcome Popup for Mobile */}
-      {welcomeData && (
-        <WelcomePopup
-          isOpen={showWelcomePopup}
-          onClose={hideWelcome}
-          data={welcomeData}
-        />
-      )}
-    </>
-  )
+  // CRITICAL FIX: Move useCallback hooks before any conditional returns to ensure consistent hook order
+  const memoizedShowWelcome = useCallback(showWelcome, [showWelcome])
+  const memoizedToggleMemberList = useCallback(() => setShowMemberList(!showMemberList), [showMemberList])
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileLayout connected={connected} activeServerId={activeServerId} activeChannelId={activeChannelId} onServerJoined={memoizedShowWelcome} />
+        {/* Welcome Popup for Mobile */}
+        {welcomeData && (
+          <WelcomePopup
+            isOpen={showWelcomePopup}
+            onClose={hideWelcome}
+            data={welcomeData}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="flex flex-row items-start justify-start h-screen overflow-x-hidden">
       <title>{title}</title>
       <>
-        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={useCallback(showWelcome, [showWelcome])} />
+        <ServerList className="w-[80px] min-w-[80px] max-w-[80px] h-full flex-shrink-0" onServerJoined={memoizedShowWelcome} />
         {connected && <div className="hidden sm:flex flex-col h-full overflow-hidden min-w-fit">{activeServerId ? (
           <ChannelList className="w-[160px] sm:w-[200px] md:w-[240px] lg:w-[280px] xl:w-[320px] 2xl:w-[350px] min-w-[160px] max-w-[350px] overflow-y-auto overflow-x-hidden" />
         ) : (
@@ -386,7 +392,7 @@ export default function App() {
       {connected && address ? (
         <MessageList
           className="grow h-full overflow-hidden min-w-0"
-          onToggleMemberList={useCallback(() => setShowMemberList(!showMemberList), [showMemberList])}
+          onToggleMemberList={memoizedToggleMemberList}
           showMemberList={showMemberList}
         />
       ) : (
@@ -419,19 +425,21 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
   onServerJoined: (data: WelcomePopupData) => void
 }) {
   const [screen, setScreen] = useState<Screens>(Screens.Left)
+
+  // FIX 1: Remove trackMouse to prevent mouse movement tracking on mobile
+  // FIX 2: Increase delta to make swipes less sensitive 
   const handlers = useSwipeable({
-    // onSwiped: (eventData) => console.log("User Swiped!", eventData),
     preventScrollOnSwipe: false,
     swipeDuration: 1000,
-    trackMouse: true,
-    delta: 50,
+    trackMouse: false, // CRITICAL FIX: This was causing massive performance issues
+    delta: 80, // Increased from 50 to make swipes less sensitive
     onSwipedLeft: () => {
       if (screen === Screens.Right) return
       if (!connected || !activeServerId || !activeChannelId) return
-      setScreen((screen) => screen === Screens.Left ? Screens.Middle : Screens.Right)
+      setScreen((prevScreen) => prevScreen === Screens.Left ? Screens.Middle : Screens.Right)
     },
     onSwipedRight: () => {
-      setScreen((screen) => screen === Screens.Right ? Screens.Middle : Screens.Left)
+      setScreen((prevScreen) => prevScreen === Screens.Right ? Screens.Middle : Screens.Left)
     }
   });
 
@@ -439,14 +447,20 @@ function MobileLayout({ connected, activeServerId, activeChannelId, onServerJoin
     console.log("screen", screen)
   }, [screen])
 
+  // FIX 3: Handle screen transitions without circular dependencies
   useEffect(() => {
-    if (!activeChannelId || !activeServerId) setScreen(Screens.Left)
+    if (!activeChannelId || !activeServerId) {
+      setScreen(Screens.Left)
+    }
   }, [activeChannelId, activeServerId])
 
   useEffect(() => {
-    if (activeChannelId) setScreen(Screens.Middle)
-  }, [activeChannelId])
+    if (activeChannelId && activeServerId) {
+      setScreen(Screens.Middle)
+    }
+  }, [activeChannelId, activeServerId])
 
+  // FIX 4: Memoize viewport height calculation to prevent unnecessary recalculations
   const viewportHeight = useMemo(() => {
     return window.innerHeight
   }, [])

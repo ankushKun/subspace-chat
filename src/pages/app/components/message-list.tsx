@@ -883,6 +883,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
     const [attachments, setAttachments] = useState<(File | string)[]>([])
+    const [isSending, setIsSending] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mentionsInputRef = useRef<any>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
@@ -936,19 +937,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
     // Expose focus and blur methods to parent component
     React.useImperativeHandle(ref, () => ({
-        focus: () => {
-            // Don't autofocus on mobile devices
-            if (isMobile || isMobileDevice) return
-
-            // Focus the MentionsInput by finding its textarea element
-            const mentionsContainer = mentionsInputRef.current
-            if (mentionsContainer) {
-                const textarea = mentionsContainer.querySelector('textarea')
-                if (textarea) {
-                    textarea.focus()
-                }
-            }
-        },
+        focus: focusTextarea,
         blur: () => {
             // Blur the MentionsInput by finding its textarea element
             const mentionsContainer = mentionsInputRef.current
@@ -1223,36 +1212,45 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
     const handleSend = async () => {
         if (!message.trim() && attachments.length === 0) return
+        if (isSending) return // Prevent multiple concurrent sends
 
-        let attachmentIds: string[] = []
-        if (attachments.length > 0) {
-            for (const attachment of attachments) {
-                if (typeof attachment == "string") {
-                    attachmentIds.push(attachment)
-                }
-                else {
-                    if (attachment.size > 1024 * 100) {
-                        toast.error("File size must be less than 100KB")
-                        return
+        setIsSending(true)
+
+        try {
+            let attachmentIds: string[] = []
+            if (attachments.length > 0) {
+                for (const attachment of attachments) {
+                    if (typeof attachment == "string") {
+                        attachmentIds.push(attachment)
                     }
-                    const uploadId = await uploadFileTurbo(attachment, (connectionStrategy == ConnectionStrategies.ScannedJWK) ? jwk : null)
-                    if (!uploadId) {
-                        toast.error("Failed to upload file")
-                        return
+                    else {
+                        if (attachment.size > 1024 * 100) {
+                            toast.error("File size must be less than 100KB")
+                            return
+                        }
+                        const uploadId = await uploadFileTurbo(attachment, (connectionStrategy == ConnectionStrategies.ScannedJWK) ? jwk : null)
+                        if (!uploadId) {
+                            toast.error("Failed to upload file")
+                            return
+                        }
+                        attachmentIds.push(`${attachment.type}:${uploadId}`)
                     }
-                    attachmentIds.push(`${attachment.type}:${uploadId}`)
                 }
             }
 
-        }
+            onSendMessage(message.trim(), attachmentIds)
+            setMessage("")
+            setAttachments([])
+            setIsTyping(false)
 
-        onSendMessage(message.trim(), attachmentIds)
-        setMessage("")
-        setAttachments([])
-        setIsTyping(false)
-
-        if (replyingTo && onCancelReply) {
-            onCancelReply()
+            if (replyingTo && onCancelReply) {
+                onCancelReply()
+            }
+        } catch (error) {
+            console.error("Error sending message:", error)
+            toast.error("Failed to send message")
+        } finally {
+            setIsSending(false)
         }
     }
 
@@ -1264,13 +1262,31 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             } else {
                 // Enter without Shift sends the message
                 e.preventDefault()
-                handleSend()
+                if (!isSending) { // Only send if not already sending
+                    handleSend()
+                }
             }
         }
     }
 
     const handleFileUpload = (e: React.MouseEvent<HTMLButtonElement>) => {
         fileInputRef.current?.click()
+    }
+
+    // Helper function to focus the textarea
+    const focusTextarea = () => {
+        // Don't autofocus on mobile devices
+        if (isMobile || isMobileDevice) return
+
+        setTimeout(() => {
+            const mentionsContainer = mentionsInputRef.current
+            if (mentionsContainer) {
+                const textarea = mentionsContainer.querySelector('textarea')
+                if (textarea) {
+                    textarea.focus()
+                }
+            }
+        }, 100)
     }
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1291,6 +1307,8 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                     }
                 }
                 setAttachments(prev => [...prev, ...files])
+                // Focus textarea after adding attachments
+                focusTextarea()
             }
         } else {
             toast.error("You can only upload up to 3 files at a time")
@@ -1427,6 +1445,8 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                                                     setAttachmentError(null)
                                                                     setAttachmentDataType("")
                                                                     document.getElementById("attachment-popover-close")?.click()
+                                                                    // Focus textarea after adding attachment
+                                                                    setTimeout(focusTextarea, 200)
                                                                 }}>
                                                                     Add Attachment
                                                                 </Button>
@@ -1448,6 +1468,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         {/* Text input */}
                         <div className="flex relative items-center min-h-[20px] z-0 grow" ref={mentionsInputRef}>
                             <MentionsInput
+                                id="message-input-textarea"
                                 autoFocus={!isMobile}
                                 value={message}
                                 onChange={(event, newValue) => handleTyping(newValue)}
@@ -1648,9 +1669,13 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                         "hover:scale-105 active:scale-95"
                                     )}
                                     onClick={handleSend}
-                                    disabled={disabled || !(message.trim() || attachments.length > 0)}
+                                    disabled={disabled || !(message.trim() || attachments.length > 0) || isSending}
                                 >
-                                    <Send className="w-4 h-4" />
+                                    {isSending ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Send className="w-4 h-4" />
+                                    )}
                                 </Button>
                             )}
                         </div>

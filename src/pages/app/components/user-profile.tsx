@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Settings, LogOut, User, Edit2, Save, X, Upload, Camera, Import, Check, CheckCircle2 } from "lucide-react"
+import { Settings, LogOut, User, Edit2, Save, X, Upload, Camera, Import, Check, CheckCircle2, Image } from "lucide-react"
 import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import useSubspace, { useProfile, useServer } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -540,6 +540,12 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                     {profile?.pfp === id && <CheckCircle2 className="w-4 h-4 text-green-500 absolute top-1 right-1" />}
                                                 </div>
                                             ))}
+                                            <div className="flex items-center justify-center gap-2 cursor-default rounded-md p-2 bg-primary/5 relative">
+                                                <p className="truncate">Bazar (coming soon)</p>
+                                            </div>
+                                            <div className="flex items-center justify-center gap-2 cursor-default rounded-md p-2 bg-primary/5 relative">
+                                                <p className="truncate">Velocity (coming soon)</p>
+                                            </div>
                                         </div>
                                     </div>}
                                 </div>

@@ -58,6 +58,7 @@ export class Constants {
     static readonly SERVER_SOURCE = `${Constants.AOXPRESS_SOURCE}\n\n${__SERVER_SRC__}`;
 
     static readonly CuEndpoints = [
+        // "https://cu.randao.net/",
         "https://cu.arnode.asia",
         "https://cu.ardrive.io",
     ]

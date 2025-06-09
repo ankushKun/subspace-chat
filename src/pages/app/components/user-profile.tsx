@@ -534,13 +534,13 @@ export default function UserProfile({ className }: UserProfileProps) {
                                             </p>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Primary names cannot be edited here. Manage them on the ArNS registry.
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        Primary names can be bought from the <Link to="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ArNS registry</Link> <ArioBadge className="w-4 h-4" />
                                     </p>
                                 </div>
 
                                 {/* Wallet Address Section */}
-                                <div className="space-y-2">
+                                {/* <div className="space-y-2">
                                     <Label className="text-base font-medium">Wallet Address</Label>
                                     <div className="p-3 bg-muted/30 rounded-md border">
                                         <p className="text-sm font-mono break-all">{address}</p>
@@ -548,7 +548,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                                     <p className="text-xs text-muted-foreground">
                                         Your unique wallet address on the Arweave network.
                                     </p>
-                                </div>
+                                </div> */}
                             </TabsContent>
 
                             <TabsContent value="server" className="space-y-6 mt-6">
@@ -582,10 +582,10 @@ export default function UserProfile({ className }: UserProfileProps) {
                                 {selectedServerId && servers[selectedServerId] ? (
                                     <>
                                         {/* Server Info */}
-                                        <div className="p-3 bg-muted/30 rounded-md border">
+                                        {/* <div className="p-3 bg-muted/30 rounded-md border">
                                             <h3 className="font-medium text-sm text-muted-foreground">Selected Server</h3>
                                             <p className="text-base font-medium break-all">{servers[selectedServerId].name}</p>
-                                        </div>
+                                        </div> */}
 
                                         {/* Server Nickname Section */}
                                         <div className="space-y-2">

@@ -31,7 +31,7 @@ export function OpenGraphEmbed({ url, className }: OpenGraphEmbedProps) {
             )}
         >
             <Globe className="w-3 h-3 text-muted-foreground group-hover:text-foreground transition-colors flex-shrink-0" />
-            <span className="text-muted-foreground group-hover:text-foreground transition-colors truncate">
+            <span className="text-muted-foreground group-hover:text-foreground transition-colors whitespace-normal break-after-all truncate">
                 {displayUrl}
             </span>
             <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors flex-shrink-0" />

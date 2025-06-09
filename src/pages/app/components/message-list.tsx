@@ -337,7 +337,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
         <div className="space-y-">
             {/* Message text */}
             {content && (
-                <div className={cn("text-base text-foreground leading-relaxed break-words markdown", isEmojiOnly ? "text-4xl" : "")}>
+                <div className={cn("text-base whitespace-normal break-after-all max-w-[80vw] md:max-w-full text-foreground leading-relaxed break-words markdown", isEmojiOnly ? "text-4xl" : "")}>
                     <Markdown skipHtml
                         components={mdComponents}
                         remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
@@ -361,7 +361,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                             return <div>
                                                 <Dialog>
                                                     <DialogTrigger asChild>
-                                                        <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="max-w-128 cursor-pointer max-h-64 object-cover rounded" />
+                                                        <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="max-w-40 md:max-w-128 cursor-pointer max-h-64 object-cover rounded" />
                                                     </DialogTrigger>
                                                     <DialogContent removeCloseButton className="bg-transparent outline-0 backdrop-blur-xs border-0 shadow-none max-w-screen max-h-screen items-center justify-center p-0">
                                                         <div className="max-w-[80vw] max-h-[80vh] w-screen h-full">
@@ -375,7 +375,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                             return <div>
                                                 <Dialog>
                                                     <DialogTrigger asChild>
-                                                        <img src={attachment.replace("tenor:", "")} alt="Attachment" className="max-w-128 cursor-pointer max-h-64 object-cover rounded" />
+                                                        <img src={attachment.replace("tenor:", "")} alt="Attachment" className="max-w-40 md:max-w-128 cursor-pointer max-h-64 object-cover rounded" />
                                                     </DialogTrigger>
                                                     <DialogContent removeCloseButton className="bg-transparent outline-0 backdrop-blur-xs border-0 shadow-none max-w-screen max-h-screen items-center justify-center p-0">
                                                         <div className="max-w-[80vw] max-h-[80vh] w-screen h-full">
@@ -387,7 +387,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                         default:
                                             return <div className="flex items-center justify-center gap-1 w-fit my-1 border p-1 rounded py-1.5 bg-muted/70 hover:bg-muted/50 transition-all duration-100">
                                                 <FileQuestion className="w-5 h-5" />
-                                                <div className="text-xs cursor-pointer text-muted-foreground truncate w-fit hover:underline flex items-center gap-1 hover:text-primary"
+                                                <div className="text-xs cursor-pointer w-40 md:w-fit whitespace-normal break-after-all text-muted-foreground truncate hover:underline flex items-center gap-1 hover:text-primary"
                                                     onClick={() => {
                                                         // copy the id
                                                         navigator.clipboard.writeText(attachment.split(":")[1])
@@ -395,7 +395,7 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                                     }}
                                                 >
                                                     <LinkIcon className="w-4 h-4" />
-                                                    <span className="text-xs truncate w-fit">{attachment.split(":")[1]}</span>
+                                                    <span className="text-xs truncate whitespace-normal break-after-all">{attachment.split(":")[1]}</span>
                                                 </div>
                                             </div>
                                     }
@@ -1423,7 +1423,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     }
 
     return (
-        <div className="relative">
+        <div className="relative max-w-screen">
             {/* Reply indicator */}
             {replyingTo && (
                 <div className="mx-3 sm:mx-4 p-2 sm:p-3 -mb-3 sm:-mb-4 bg-muted/30 rounded-t-lg border border-border/50 border-b-0">
@@ -1930,7 +1930,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                                         key={gif.id}
                                                         src={gif.media_formats.tinygif.url}
                                                         alt={gif.id}
-                                                        className="w-full h-auto object-contain rounded-sm cursor-pointer hover:opacity-80 transition-opacity"
+                                                        className="w-36 md:w-full h-auto object-contain rounded-sm cursor-pointer hover:opacity-80 transition-opacity"
                                                         onClick={() => {
                                                             // set attachment and send
                                                             setAttachments(prev => [...prev, `tenor:${gif.media_formats.gif.url}`])

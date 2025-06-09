@@ -1,6 +1,7 @@
 import { Logger } from "@/lib/utils";
 import { aofetch } from "ao-fetch";
 import { Constants } from "../constants";
+import { ANT } from "@ar.io/sdk"
 
 import type { ConnectionManager } from ".";
 import type { Profile, SubspaceNotification, DelegationDetails } from "@/types/subspace";
@@ -57,7 +58,20 @@ export class User {
                 return res.name
             }
         } catch (e) {
-            console.log('[getPrimaryName] Error:', e)
+            Logger.error("getPrimaryName", e)
+            return null;
+        }
+        return null;
+    }
+
+    async getPrimaryLogo({ userId }: { userId: string }) {
+        try {
+            const primaryName = await this.connectionManager.ario.getPrimaryName({ address: userId })
+            const ant = ANT.init({ processId: primaryName.processId })
+            const logo = await ant.getLogo()
+            return logo
+        } catch (e) {
+            Logger.error("getPrimaryLogo", e)
             return null;
         }
         return null;

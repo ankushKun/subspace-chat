@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Settings, LogOut, User, Edit2, Save, X, Upload, Camera } from "lucide-react"
+import { Settings, LogOut, User, Edit2, Save, X, Upload, Camera, Import, Check, CheckCircle2 } from "lucide-react"
 import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import useSubspace, { useProfile, useServer } from "@/hooks/subspace"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -42,9 +42,10 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     // Form state
     const [editedNickname, setEditedNickname] = useState("")
-    const [profilePicFile, setProfilePicFile] = useState<File | null>(null)
+    const [profilePicFile, setProfilePicFile] = useState<File | string | null>(null)
     const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
     const [isUploadingPfp, setIsUploadingPfp] = useState(false)
+    const [importOptions, setImportOptions] = useState<Record<string, string>>({})
 
     // Update selected server when dialog opens or active server changes
     useEffect(() => {
@@ -62,6 +63,11 @@ export default function UserProfile({ className }: UserProfileProps) {
             })
             subspace.user.getPrimaryName({ userId: address }).then(data => {
                 if (data) {
+                    subspace.user.getPrimaryLogo({ userId: address }).then(logo => {
+                        if (logo) {
+                            setImportOptions(prev => ({ ...prev, "ArNS": logo }))
+                        }
+                    })
                     profileActions.updateProfile(address, { primaryName: data } as any)
                 }
             })
@@ -181,8 +187,13 @@ export default function UserProfile({ className }: UserProfileProps) {
                 try {
                     setIsUploadingPfp(true)
                     toast.loading("Uploading profile picture to Arweave...")
-                    const pfpId = await (connectionStrategy == ConnectionStrategies.ScannedJWK ? uploadFileTurbo(profilePicFile, jwk) : uploadFileTurbo(profilePicFile))
-
+                    let pfpId: string | null = null;
+                    if (typeof profilePicFile == "string") {
+                        pfpId = profilePicFile
+                    }
+                    else {
+                        pfpId = await (connectionStrategy == ConnectionStrategies.ScannedJWK ? uploadFileTurbo(profilePicFile, jwk) : uploadFileTurbo(profilePicFile))
+                    }
                     if (pfpId) {
                         toast.dismiss()
                         toast.loading("Updating profile...")
@@ -489,26 +500,48 @@ export default function UserProfile({ className }: UserProfileProps) {
                                         </div>
                                         <div className="flex-1 text-center sm:text-left">
                                             <h3 className="text-lg font-semibold">Profile Picture</h3>
-                                            <p className="text-sm text-muted-foreground">
+                                            {!profilePicFile && <p className="text-sm text-muted-foreground">
                                                 {isEditing
                                                     ? "Click on your avatar to upload a new profile picture (max 100KB)"
                                                     : "Your profile picture is visible across all servers"
                                                 }
-                                            </p>
+                                            </p>}
                                             {isEditing && (
                                                 <div className="space-y-1 mt-1">
-                                                    <p className="text-xs text-muted-foreground">
+                                                    {!profilePicFile && <p className="text-xs text-muted-foreground">
                                                         Supported formats: PNG, JPEG • Max size: 100KB
-                                                    </p>
-                                                    {profilePicFile && (
+                                                    </p>}
+                                                    {profilePicFile && typeof profilePicFile == "object" && (
                                                         <p className="text-xs text-green-600 dark:text-green-400">
                                                             Selected: {profilePicFile.name} ({formatFileSize(profilePicFile.size)})
+                                                        </p>
+                                                    )}
+                                                    {profilePicFile && typeof profilePicFile == "string" && (
+                                                        <p className="text-xs text-green-600 dark:text-green-400 truncate whitespace-normal">
+                                                            Selected: {profilePicFile}
                                                         </p>
                                                     )}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
+                                    {isEditing && <div>
+                                        <div>Import from other apps</div>
+                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                            {Object.entries(importOptions).map(([source, id]) => (
+                                                <div key={id} data-selected={profile?.pfp === id}
+                                                    className="flex items-center gap-2 cursor-pointer rounded-md p-2 bg-primary/10 hover:bg-primary/20 data-[selected=true]:bg-primary/20 transition-colors duration-150 border border-transparent hover:border-primary/40  relative"
+                                                    onClick={() => {
+                                                        setProfilePicPreview(`https://arweave.net/${id}`)
+                                                        setProfilePicFile(id)
+                                                    }}>
+                                                    <img src={`https://arweave.net/${id}`} alt={source} className="w-10 h-10 rounded-full" />
+                                                    <p className="truncate">{source}</p>
+                                                    {profile?.pfp === id && <CheckCircle2 className="w-4 h-4 text-green-500 absolute top-1 right-1" />}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>}
                                 </div>
 
                                 {/* Primary Name Section */}

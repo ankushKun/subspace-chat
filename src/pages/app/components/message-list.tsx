@@ -894,45 +894,84 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const [attachmentDataTxId, setAttachmentDataTxId] = useState("")
     const [attachmentDataType, setAttachmentDataType] = useState("")
     const [attachmentError, setAttachmentError] = useState<string | null>(null)
+    const [isValidatingTxId, setIsValidatingTxId] = useState(false)
 
     function formatTxId(txId: string) {
         return (txId.startsWith("https://") ? txId.split("/").pop() : txId).trim()
     }
 
     useEffect(() => {
-        if (!attachmentDataTxId) return
-        console.log(attachmentDataTxId)
+        if (!attachmentDataTxId) {
+            setAttachmentError(null)
+            setAttachmentDataType("")
+            setIsValidatingTxId(false)
+            return
+        }
+
+        const formattedTxId = formatTxId(attachmentDataTxId)
+
+        // Reset states
         setAttachmentError(null)
         setAttachmentDataType("")
-        // url -> https://domain.tld/<txid> or just txid
-        const formattedTxId = formatTxId(attachmentDataTxId)
-        if (formattedTxId.length != 43) return setAttachmentError("Invalid TxID")
 
-        runGQLQuery(`query {
-  transactions(ids: "${formattedTxId}") {
-    edges {
-      node {
-        tags {
-          name
-          value
+        // Basic validation
+        if (formattedTxId.length !== 43) {
+            setAttachmentError("Invalid transaction ID format. Must be 43 characters long.")
+            setIsValidatingTxId(false)
+            return
         }
-      }
-    }
-  }
-}`).then(res => {
-            const edges = res.data.transactions.edges
-            console.log(edges)
-            if (edges.length === 0) return
-            const tags = edges[0].node.tags
-            const attachmentType = tags.find((tag: Tag) => tag.name === "Content-Type")?.value as string
-            console.log(attachmentType)
-            setAttachmentDataType(attachmentType)
-            if (attachmentType.includes("image")) {
-                setAttachmentError(null)
-            } else {
-                setAttachmentError("TxID filetype is not image")
-            }
-        })
+
+        // Start loading
+        setIsValidatingTxId(true)
+
+        // Add a small delay to prevent too many rapid requests
+        const validationTimeout = setTimeout(() => {
+            runGQLQuery(`query {
+                transactions(ids: "${formattedTxId}") {
+                    edges {
+                        node {
+                            tags {
+                                name
+                                value
+                            }
+                        }
+                    }
+                }
+            }`).then(res => {
+                const edges = res.data?.transactions?.edges
+
+                if (!edges || edges.length === 0) {
+                    setAttachmentError("Transaction not found on Arweave network")
+                    setIsValidatingTxId(false)
+                    return
+                }
+
+                const tags = edges[0].node.tags
+                const attachmentType = tags.find((tag: Tag) => tag.name === "Content-Type")?.value as string
+
+                if (!attachmentType) {
+                    setAttachmentError("No content type found for this transaction")
+                    setIsValidatingTxId(false)
+                    return
+                }
+
+                setAttachmentDataType(attachmentType)
+
+                // For now, we support images and will show generic file preview for others
+                if (!attachmentType.startsWith("image/")) {
+                    // Still allow non-images but show a note
+                    console.log("Non-image attachment type:", attachmentType)
+                }
+
+                setIsValidatingTxId(false)
+            }).catch(error => {
+                console.error("Error validating TxID:", error)
+                setAttachmentError("Failed to validate transaction. Please try again.")
+                setIsValidatingTxId(false)
+            })
+        }, 500) // 500ms delay to prevent rapid fire requests
+
+        return () => clearTimeout(validationTimeout)
     }, [attachmentDataTxId])
 
     // Expose focus and blur methods to parent component
@@ -1416,7 +1455,15 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                             <span className="text-sm text-muted-foreground hover:text-foreground">Upload File</span>
                                         </Button>
 
-                                        <Dialog>
+                                        <Dialog onOpenChange={(open) => {
+                                            if (!open) {
+                                                // Clear form when dialog closes
+                                                setAttachmentDataTxId("")
+                                                setAttachmentError(null)
+                                                setAttachmentDataType("")
+                                                setIsValidatingTxId(false)
+                                            }
+                                        }}>
                                             <DialogTrigger>
                                                 <Button variant="ghost" className="w-full justify-start"
                                                     onClick={(e) => {
@@ -1424,38 +1471,171 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                                     }}
                                                 >
                                                     <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                                    <span className="text-sm text-muted-foreground hover:text-foreground">Insert DataTxId</span>
+                                                    <span className="text-sm text-muted-foreground hover:text-foreground">Arweave TXN</span>
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent>
-                                                <DialogHeader>
-                                                    <DialogTitle>Insert DataTxId</DialogTitle>
+                                            <DialogContent className="sm:max-w-md">
+                                                <DialogHeader className="space-y-3">
+                                                    <DialogTitle className="flex items-center gap-2 text-xl">
+                                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                                                            <Paperclip className="w-4 h-4 text-primary" />
+                                                        </div>
+                                                        Attach from Arweave
+                                                    </DialogTitle>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Enter an Arweave transaction ID to attach data from the permaweb
+                                                    </p>
                                                 </DialogHeader>
-                                                <div className="flex flex-col gap-2">
-                                                    <Input type="text" placeholder="DataTxId" onChange={(e) => {
-                                                        setAttachmentDataTxId(e.target.value)
-                                                    }} />
-                                                    {
-                                                        attachmentDataTxId && !attachmentError && (<>
-                                                            {attachmentDataType && <>
-                                                                <img src={`https://arweave.net/${formatTxId(attachmentDataTxId)}`} alt="Attachment" className="w-full h-full object-cover rounded" />
-                                                                <Button className="w-fit ml-auto" onClick={() => {
-                                                                    setAttachments(prev => [...prev, `${attachmentDataType}:${formatTxId(attachmentDataTxId)}`])
-                                                                    setAttachmentDataTxId("")
-                                                                    setAttachmentError(null)
-                                                                    setAttachmentDataType("")
-                                                                    document.getElementById("attachment-popover-close")?.click()
-                                                                    // Focus textarea after adding attachment
-                                                                    setTimeout(focusTextarea, 200)
-                                                                }}>
-                                                                    Add Attachment
-                                                                </Button>
-                                                            </>}
-                                                        </>)
-                                                    }
-                                                    {
-                                                        attachmentDataTxId && attachmentError && (<>{attachmentError}</>)
-                                                    }
+                                                <div className="space-y-4">
+                                                    {/* Input Section */}
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-medium text-foreground">
+                                                            Transaction ID
+                                                        </label>
+                                                        <div className="relative">
+                                                            <Input
+                                                                type="text"
+                                                                placeholder="Enter 43-character Arweave TxID or URL"
+                                                                value={attachmentDataTxId}
+                                                                onChange={(e) => setAttachmentDataTxId(e.target.value)}
+                                                                className="pr-10 font-mono text-sm"
+                                                            />
+                                                            {isValidatingTxId && (
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Status Section */}
+                                                    {attachmentDataTxId && (
+                                                        <div className="space-y-3">
+                                                            {/* Loading State */}
+                                                            {isValidatingTxId && (
+                                                                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                                                                    <Loader2 className="w-5 h-5 animate-spin text-primary flex-shrink-0" />
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-sm font-medium text-foreground">
+                                                                            Validating transaction...
+                                                                        </p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            Checking if the TxID exists and retrieving metadata
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Error State */}
+                                                            {attachmentError && (
+                                                                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                                                                    <div className="w-5 h-5 rounded-full bg-destructive/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                        <span className="text-destructive text-xs font-bold">!</span>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-sm font-medium text-destructive">
+                                                                            Validation Error
+                                                                        </p>
+                                                                        <p className="text-xs text-destructive/80">
+                                                                            {attachmentError}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Success State with Preview */}
+                                                            {attachmentDataType && !attachmentError && (
+                                                                <div className="space-y-3">
+                                                                    {/* Success indicator */}
+                                                                    <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                                                                        <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                                                                            <Check className="w-3 h-3 text-green-600" />
+                                                                        </div>
+                                                                        <div className="space-y-1">
+                                                                            <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                                                                                Transaction found
+                                                                            </p>
+                                                                            <p className="text-xs text-green-600/80 dark:text-green-400/80">
+                                                                                Content type: {attachmentDataType}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Preview */}
+                                                                    {attachmentDataType.startsWith('image/') ? (
+                                                                        <div className="relative group">
+                                                                            <div className="relative overflow-hidden rounded-lg border border-border/50 bg-muted/30">
+                                                                                <img
+                                                                                    src={`https://arweave.net/${formatTxId(attachmentDataTxId)}`}
+                                                                                    alt="Attachment preview"
+                                                                                    className="w-full max-h-48 object-cover transition-transform duration-200 group-hover:scale-105"
+                                                                                    onError={(e) => {
+                                                                                        setAttachmentError("Failed to load image preview")
+                                                                                    }}
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                                                                            </div>
+                                                                            <div className="absolute bottom-2 left-2 right-2">
+                                                                                <div className="flex items-center gap-2 text-xs text-white/90 bg-black/50 backdrop-blur-sm rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                                                    <LinkIcon className="w-3 h-3" />
+                                                                                    <span className="font-mono truncate">{formatTxId(attachmentDataTxId)}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/50 transition-colors">
+                                                                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0">
+                                                                                <FileIcon className="w-5 h-5 text-primary" />
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm font-medium text-foreground truncate">
+                                                                                    {attachmentDataType}
+                                                                                </p>
+                                                                                <p className="text-xs text-muted-foreground font-mono truncate">
+                                                                                    {formatTxId(attachmentDataTxId)}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Add Button */}
+                                                                    <Button
+                                                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-200 hover:scale-[1.02]"
+                                                                        onClick={() => {
+                                                                            setAttachments(prev => [...prev, `${attachmentDataType}:${formatTxId(attachmentDataTxId)}`])
+                                                                            setAttachmentDataTxId("")
+                                                                            setAttachmentError(null)
+                                                                            setAttachmentDataType("")
+                                                                            document.getElementById("attachment-popover-close")?.click()
+                                                                            // Focus textarea after adding attachment
+                                                                            setTimeout(focusTextarea, 200)
+                                                                            toast.success("Attachment added successfully")
+                                                                        }}
+                                                                    >
+                                                                        <Plus className="w-4 h-4 mr-2" />
+                                                                        Add Attachment
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Help Text */}
+                                                    {!attachmentDataTxId && (
+                                                        <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/30">
+                                                            <HelpCircle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-medium text-muted-foreground">
+                                                                    How to use:
+                                                                </p>
+                                                                <ul className="text-xs text-muted-foreground/80 space-y-0.5">
+                                                                    <li>• Paste a 43-character Arweave transaction ID</li>
+                                                                    <li>• Or paste a full Arweave URL</li>
+                                                                    <li>• We'll validate and preview the content</li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </DialogContent>
                                         </Dialog>

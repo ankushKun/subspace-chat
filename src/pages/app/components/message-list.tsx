@@ -1282,6 +1282,11 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             setAttachments([])
             setIsTyping(false)
 
+            // Clear the file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
+            }
+
             if (replyingTo && onCancelReply) {
                 onCancelReply()
             }
@@ -1330,18 +1335,20 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
-        // TODO: Implement file upload to Arweave
+
+        // Clear the input immediately to allow selecting the same file again
+        e.target.value = ""
+
         console.log('Files selected:', files)
         if (attachments.length < 3) {
             if (attachments.length + files.length > 3) {
                 toast.error("You can only upload up to 3 files at a time")
-                e.preventDefault()
+                return
             } else {
                 // 100kb check
                 for (const file of files) {
                     if (file.size > 1024 * 100) {
                         toast.error("File size must be less than 100KB")
-                        e.preventDefault()
                         return
                     }
                 }
@@ -1351,7 +1358,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             }
         } else {
             toast.error("You can only upload up to 3 files at a time")
-            e.preventDefault()
             return
         }
     }
@@ -1417,7 +1423,13 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                         size="icon"
                                         variant="destructive"
                                         className="w-5 h-5 p-0.5 !bg-destructive/70 hover:!bg-destructive transition-all duration-100 rounded-md !aspect-square absolute -top-0.5 -right-0.5 group-hover:opacity-100 opacity-0"
-                                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                                        onClick={() => {
+                                            setAttachments(prev => prev.filter((_, i) => i !== index))
+                                            // Clear file input when removing attachments
+                                            if (fileInputRef.current) {
+                                                fileInputRef.current.value = ""
+                                            }
+                                        }}
                                     >
                                         {/* <Plus className="w-3 h-3 rotate-45" /> */}
                                         <Trash2 className="w-3 h-3 stroke-black" />

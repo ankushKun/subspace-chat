@@ -26,6 +26,11 @@ import { Link } from "react-router"
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { PopoverClose } from "@radix-ui/react-popover"
 import type { Tag } from "@/types/ao"
+import Picker from '@emoji-mart/react'
+import data from '@emoji-mart/data'
+import type { Emoji } from "emoji-mart"
+
+
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
@@ -322,11 +327,15 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
         return processedContent;
     }
 
+    // emoji only or multiple emojis upto 10
+    const isEmojiOnly = /^\p{Emoji}{1,10}$/u.test(content)
+
+
     return (
         <div className="space-y-">
             {/* Message text */}
             {content && (
-                <div className="text-sm text-foreground leading-relaxed break-words markdown">
+                <div className={cn("text-base text-foreground leading-relaxed break-words markdown", isEmojiOnly ? "text-4xl" : "")}>
                     <Markdown skipHtml
                         components={mdComponents}
                         remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeKatex]} disallowedElements={["img"]}>
@@ -1841,14 +1850,26 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
                         {/* Right actions */}
                         <div className="flex items-center gap-1">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
-                                disabled={disabled}
-                            >
-                                <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button>
+
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0 hover:bg-muted rounded-md transition-colors"
+                                        disabled={disabled}
+                                    >
+                                        <Smile className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="border border-primary/30 rounded-xl overflow-clip p-0 min-w-fit" align="end" alignOffset={-48} sideOffset={28}>
+                                    <Picker
+                                        data={data} onEmojiSelect={(emoji: EmEmojiProps) => {
+                                            console.log(emoji)
+                                            setMessage(prev => prev + emoji.native)
+                                        }} />
+                                </PopoverContent>
+                            </Popover>
 
                             {/* Send button - only show when there's content */}
                             {(

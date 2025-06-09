@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@font-face {
+  font-family: 'EmojiMart';
+  src: url('./assets/fonts/twemoji.mozilla.ttf') format('truetype');
+  /* Emoji unicode blocks */
+  unicode-range: U+1F300-1F5FF, U+1F600-1F64F, U+1F680-1F6FF, U+2600-26FF;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 html {
@@ -8,6 +15,7 @@ html {
   width: 100vw;
   white-space: normal;
   white-space-collapse: normal;
+  font-family: EmojiMart, sans-serif;
 }
 
 @font-face {

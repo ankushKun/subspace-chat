@@ -3,9 +3,9 @@ import { useServer } from "@/hooks/subspace/server"
 import React, { useEffect, useState, useMemo, useRef, type HTMLAttributes } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check, UsersRound } from "lucide-react"
+import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check, UsersRound, HardDriveUpload, FileIcon, FileQuestion, LinkIcon } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cn, shortenAddress, userHasPermission, isServerOwner as checkIsServerOwner } from "@/lib/utils"
+import { cn, shortenAddress, userHasPermission, isServerOwner as checkIsServerOwner, uploadFileTurbo } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Permission } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
@@ -15,12 +15,15 @@ import remarkBreaks from "remark-breaks"
 import rehypeKatex from "rehype-katex"
 import { mdComponents, setCurrentMentions, JoinServerDialogContext } from "@/lib/md-components"
 import ProfilePopover from "@/components/profile-popover"
-import { useWallet } from "@/hooks/use-wallet"
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import InboxComponent from "@/components/inbox"
 import NoChannel from "./no-channel"
 import { useIsMobile, useIsMobileDevice } from "@/hooks/use-mobile"
 import { JoinServerDialog } from "@/components/join-server-dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Link } from "react-router"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
@@ -332,12 +335,49 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
 
             {/* Attachments */}
             {parsedAttachments.length > 0 && (
-                <div className="space-y-">
+                <div className="space-y-2">
                     {parsedAttachments.map((attachment: string, index: number) => (
-                        <div key={index} className="bg-muted/30 rounded-lg p- border border-border/50">
-                            <div className="text-sm text-muted-foreground">
+                        <div key={index} className="w-fit">
+                            {
+                                (() => {
+                                    switch (attachment.split(":")[0]) {
+                                        case "image/png":
+                                        case "image/jpeg":
+                                        case "image/gif":
+                                        case "image/webp":
+                                            return <div>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="max-w-128 cursor-pointer max-h-64 object-cover rounded" />
+                                                    </DialogTrigger>
+                                                    <DialogContent removeCloseButton className="bg-transparent outline-0 backdrop-blur-xs border-0 shadow-none max-w-screen max-h-screen items-center justify-center p-0">
+                                                        <div className="max-w-[80vw] max-h-[80vh] h-screen w-screen">
+                                                            <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="w-fit h-fit object-contain" />
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+
+                                            </div>
+                                        default:
+                                            return <div className="flex items-center justify-center gap-1 w-fit my-1 border p-1 rounded py-1.5 bg-muted/70 hover:bg-muted/50 transition-all duration-100">
+                                                <FileQuestion className="w-5 h-5" />
+                                                <div className="text-xs cursor-pointer text-muted-foreground truncate w-fit hover:underline flex items-center gap-1 hover:text-primary"
+                                                    onClick={() => {
+                                                        // copy the id
+                                                        navigator.clipboard.writeText(attachment.split(":")[1])
+                                                        toast.success("Copied to clipboard")
+                                                    }}
+                                                >
+                                                    <LinkIcon className="w-4 h-4" />
+                                                    <span className="text-xs truncate w-fit">{attachment.split(":")[1]}</span>
+                                                </div>
+                                            </div>
+                                    }
+                                })()
+                            }
+                            {/* <div className="text-sm text-muted-foreground">
                                 Attachment: {attachment}
-                            </div>
+                            </div> */}
                         </div>
                     ))}
                 </div>
@@ -838,13 +878,14 @@ const MessageInput = React.forwardRef<MessageInputRef, {
 }, ref) => {
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
-    const [attachments, setAttachments] = useState<string[]>([])
+    const [attachments, setAttachments] = useState<File[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mentionsInputRef = useRef<any>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
     const { profiles } = useProfile()
     const isMobile = useIsMobile()
     const isMobileDevice = useIsMobileDevice()
+    const { connectionStrategy, jwk } = useWallet()
 
     // Expose focus and blur methods to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1133,10 +1174,27 @@ const MessageInput = React.forwardRef<MessageInputRef, {
         return servers[activeServerId]?.channels.find(c => c.channelId === activeChannelId)
     }, [servers, activeServerId, activeChannelId])
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!message.trim() && attachments.length === 0) return
 
-        onSendMessage(message.trim(), attachments)
+        let attachmentIds: string[] = []
+        if (attachments.length > 0) {
+            for (const attachment of attachments) {
+                if (attachment.size > 1024 * 100) {
+                    toast.error("File size must be less than 100KB")
+                    return
+                }
+                const uploadId = await uploadFileTurbo(attachment, (connectionStrategy == ConnectionStrategies.ScannedJWK) ? jwk : null)
+                if (!uploadId) {
+                    toast.error("Failed to upload file")
+                    return
+                }
+                attachmentIds.push(`${attachment.type}:${uploadId}`)
+            }
+
+        }
+
+        onSendMessage(message.trim(), attachmentIds)
         setMessage("")
         setAttachments([])
         setIsTyping(false)
@@ -1159,7 +1217,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
         }
     }
 
-    const handleFileUpload = () => {
+    const handleFileUpload = (e: React.MouseEvent<HTMLButtonElement>) => {
         fileInputRef.current?.click()
     }
 
@@ -1167,6 +1225,26 @@ const MessageInput = React.forwardRef<MessageInputRef, {
         const files = Array.from(e.target.files || [])
         // TODO: Implement file upload to Arweave
         console.log('Files selected:', files)
+        if (attachments.length < 3) {
+            if (attachments.length + files.length > 3) {
+                toast.error("You can only upload up to 3 files at a time")
+                e.preventDefault()
+            } else {
+                // 100kb check
+                for (const file of files) {
+                    if (file.size > 1024 * 100) {
+                        toast.error("File size must be less than 100KB")
+                        e.preventDefault()
+                        return
+                    }
+                }
+                setAttachments(prev => [...prev, ...files])
+            }
+        } else {
+            toast.error("You can only upload up to 3 files at a time")
+            e.preventDefault()
+            return
+        }
     }
 
     const handleTyping = (value: string) => {
@@ -1209,47 +1287,65 @@ const MessageInput = React.forwardRef<MessageInputRef, {
             {/* Main input container */}
             <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-3 sm:pt-4">
                 <div className={cn(
-                    "relative flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
+                    "relative flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 transition-all duration-200",
                     "hover:border-border focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/10",
                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 focus-within:before:opacity-100 before:transition-opacity before:duration-300 before:rounded-lg",
                     replyingTo && "rounded-t-none border-t-0 before:rounded-t-none"
                 )}>
                     {/* Attachment previews */}
                     {attachments.length > 0 && (
-                        <div className="p-2 sm:p-3 border-b border-border/30">
-                            <div className="flex flex-wrap gap-2">
-                                {attachments.map((attachment, index) => (
-                                    <div key={index} className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
-                                        <Paperclip className="w-3 h-3 text-muted-foreground" />
-                                        <span className="text-xs text-muted-foreground">{attachment}</span>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-4 w-4 p-0 hover:bg-muted"
-                                            onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
-                                        >
-                                            <Plus className="w-3 h-3 rotate-45" />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="flex flex-row w-full grow flex-wrap items-center justify-start gap-2 p-2 sm:p-3 border-b border-border/30">
+                            {attachments.map((attachment, index) => (
+                                <div key={index} className="flex items-center gap-2 rounded-md max-w-20 !aspect-square relative group">
+                                    {/* <span className="text-xs text-muted-foreground">{attachment}</span> */}
+                                    {["image/png", "image/jpeg", "image/gif", "image/webp"].includes(attachment.type) ?
+                                        <img src={URL.createObjectURL(attachment)} alt="Attachment" className="w-full h-full object-cover rounded-md" />
+                                        : <div className="flex flex-col items-center gap-2 border border-border/50 rounded-md aspect-square">
+                                            <FileIcon className="w-16 h-16 text-muted-foreground" />
+                                            <span className="text-[10px] mx-auto px-0.5 text-center text-muted-foreground truncate max-w-20 w-fit">{attachment.name}</span>
+                                        </div>}
+                                    <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        className="w-5 h-5 p-0.5 !bg-destructive/70 hover:!bg-destructive transition-all duration-100 rounded-md !aspect-square absolute -top-0.5 -right-0.5 group-hover:opacity-100 opacity-0"
+                                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                                    >
+                                        {/* <Plus className="w-3 h-3 rotate-45" /> */}
+                                        <Trash2 className="w-3 h-3 stroke-black" />
+                                    </Button>
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {/* Input area */}
-                    <div className="flex items-center justify-center grow gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-3 relative z-10">
+                    <div className="flex items-center justify-center grow w-full gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-3 relative z-10">
                         {/* Left actions */}
                         <div className="flex items-center gap-1">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 hover:bg-muted rounded transition-colors"
-                                onClick={handleFileUpload}
-                                // disabled={disabled}
-                                disabled
-                            >
-                                <Plus className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                            </Button>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0 hover:bg-muted rounded transition-colors"
+                                    // onClick={handleFileUpload}
+                                    >
+                                        <Plus className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="p-1 flex flex-col gap-1 w-fit">
+                                    <Button variant="ghost" className="w-full"
+                                        onClick={handleFileUpload}
+                                    >
+                                        <HardDriveUpload className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                        <span className="text-sm text-muted-foreground hover:text-foreground">Upload File</span>
+                                    </Button>
+                                    <Button variant="ghost" className="w-full">
+                                        <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                        <span className="text-sm text-muted-foreground hover:text-foreground">Insert DataTxId</span>
+                                    </Button>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         {/* Text input */}
@@ -1468,9 +1564,10 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         ref={fileInputRef}
                         type="file"
                         multiple
+                        maxLength={3 - attachments.length}
                         className="hidden"
                         onChange={handleFileChange}
-                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                        accept="image/*,video/*,.pdf,.txt"
                     />
                 </div>
             </div>

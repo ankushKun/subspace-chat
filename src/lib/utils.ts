@@ -26,6 +26,18 @@ export class Logger {
   }
 }
 
+export async function runGQLQuery(query: string) {
+  const response = await fetch("https://arnode.asia/graphql", {
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+    },
+    "body": JSON.stringify({ query }),
+    "method": "POST",
+  });
+  return response.json()
+}
+
 export function fileToUint8Array(file: File): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

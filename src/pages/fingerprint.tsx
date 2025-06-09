@@ -10,18 +10,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useParams, useNavigate } from "react-router";
 import viewBlock from "@/assets/logos/viewblock.ico"
 import aolink from "@/assets/logos/aolink.svg"
-
-async function runGQLQuery(query: string) {
-    const response = await fetch("https://arnode.asia/graphql", {
-        "headers": {
-            "accept": "*/*",
-            "content-type": "application/json",
-        },
-        "body": JSON.stringify({ query }),
-        "method": "POST",
-    });
-    return response.json()
-}
+import { runGQLQuery } from "@/lib/utils";
 
 export default function Fingerprint() {
     const { fingerprint } = useParams()

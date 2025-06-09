@@ -49,7 +49,7 @@ export class MessageManager {
     }
 
     async sendMessage({ serverId, channelId, content, attachments = [], replyTo }: { serverId: string, channelId: number, content: string, attachments?: string[], replyTo?: number }): Promise<boolean> {
-        const body = { channelId, content, attachments: JSON.stringify(attachments) }
+        const body = { channelId, content: content || "", attachments: JSON.stringify(attachments) }
         if (replyTo) body['replyTo'] = replyTo
 
         const path = `${serverId}/send-message`

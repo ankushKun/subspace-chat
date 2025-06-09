@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoreHorizontal, Reply, Edit, Trash2, Pin, Smile, Hash, Send, Plus, Paperclip, Gift, Mic, Bell, BellOff, Users, Search, Inbox, HelpCircle, AtSign, Loader2, CornerDownRight, CornerDownLeft, CornerLeftDown, Fingerprint, Check, UsersRound, HardDriveUpload, FileIcon, FileQuestion, LinkIcon } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cn, shortenAddress, userHasPermission, isServerOwner as checkIsServerOwner, uploadFileTurbo } from "@/lib/utils"
+import { cn, shortenAddress, userHasPermission, isServerOwner as checkIsServerOwner, uploadFileTurbo, runGQLQuery } from "@/lib/utils"
 import type { Message } from "@/types/subspace"
 import { Permission } from "@/types/subspace"
 import { Mention, MentionsInput } from "react-mentions"
@@ -23,7 +23,9 @@ import { useIsMobile, useIsMobileDevice } from "@/hooks/use-mobile"
 import { JoinServerDialog } from "@/components/join-server-dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Link } from "react-router"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { PopoverClose } from "@radix-ui/react-popover"
+import type { Tag } from "@/types/ao"
 
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
@@ -351,8 +353,8 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
                                                         <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="max-w-128 cursor-pointer max-h-64 object-cover rounded" />
                                                     </DialogTrigger>
                                                     <DialogContent removeCloseButton className="bg-transparent outline-0 backdrop-blur-xs border-0 shadow-none max-w-screen max-h-screen items-center justify-center p-0">
-                                                        <div className="max-w-[80vw] max-h-[80vh] h-screen w-screen">
-                                                            <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="w-fit h-fit object-contain" />
+                                                        <div className="max-w-[80vw] max-h-[80vh] w-screen h-full">
+                                                            <img src={`https://arweave.net/${attachment.split(":")[1]}`} alt="Attachment" className="w-full h-full object-contain" />
                                                         </div>
                                                     </DialogContent>
                                                 </Dialog>
@@ -863,13 +865,15 @@ interface MessageInputRef {
     blur: () => void;
 }
 
-const MessageInput = React.forwardRef<MessageInputRef, {
+interface MessageInputProps {
     onSendMessage: (content: string, attachments?: string[]) => void;
     replyingTo?: Message | null;
     onCancelReply?: () => void;
     disabled?: boolean;
     messagesInChannel?: Message[];
-}>(({
+}
+
+const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     onSendMessage,
     replyingTo,
     onCancelReply,
@@ -878,7 +882,7 @@ const MessageInput = React.forwardRef<MessageInputRef, {
 }, ref) => {
     const [message, setMessage] = useState("")
     const [isTyping, setIsTyping] = useState(false)
-    const [attachments, setAttachments] = useState<File[]>([])
+    const [attachments, setAttachments] = useState<(File | string)[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mentionsInputRef = useRef<any>(null)
     const { activeServerId, activeChannelId, servers } = useServer()
@@ -886,6 +890,49 @@ const MessageInput = React.forwardRef<MessageInputRef, {
     const isMobile = useIsMobile()
     const isMobileDevice = useIsMobileDevice()
     const { connectionStrategy, jwk } = useWallet()
+    const [attachmentDataTxId, setAttachmentDataTxId] = useState("")
+    const [attachmentDataType, setAttachmentDataType] = useState("")
+    const [attachmentError, setAttachmentError] = useState<string | null>(null)
+
+    function formatTxId(txId: string) {
+        return (txId.startsWith("https://") ? txId.split("/").pop() : txId).trim()
+    }
+
+    useEffect(() => {
+        if (!attachmentDataTxId) return
+        console.log(attachmentDataTxId)
+        setAttachmentError(null)
+        setAttachmentDataType("")
+        // url -> https://domain.tld/<txid> or just txid
+        const formattedTxId = formatTxId(attachmentDataTxId)
+        if (formattedTxId.length != 43) return setAttachmentError("Invalid TxID")
+
+        runGQLQuery(`query {
+  transactions(ids: "${formattedTxId}") {
+    edges {
+      node {
+        tags {
+          name
+          value
+        }
+      }
+    }
+  }
+}`).then(res => {
+            const edges = res.data.transactions.edges
+            console.log(edges)
+            if (edges.length === 0) return
+            const tags = edges[0].node.tags
+            const attachmentType = tags.find((tag: Tag) => tag.name === "Content-Type")?.value as string
+            console.log(attachmentType)
+            setAttachmentDataType(attachmentType)
+            if (attachmentType.includes("image")) {
+                setAttachmentError(null)
+            } else {
+                setAttachmentError("TxID filetype is not image")
+            }
+        })
+    }, [attachmentDataTxId])
 
     // Expose focus and blur methods to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1180,16 +1227,21 @@ const MessageInput = React.forwardRef<MessageInputRef, {
         let attachmentIds: string[] = []
         if (attachments.length > 0) {
             for (const attachment of attachments) {
-                if (attachment.size > 1024 * 100) {
-                    toast.error("File size must be less than 100KB")
-                    return
+                if (typeof attachment == "string") {
+                    attachmentIds.push(attachment)
                 }
-                const uploadId = await uploadFileTurbo(attachment, (connectionStrategy == ConnectionStrategies.ScannedJWK) ? jwk : null)
-                if (!uploadId) {
-                    toast.error("Failed to upload file")
-                    return
+                else {
+                    if (attachment.size > 1024 * 100) {
+                        toast.error("File size must be less than 100KB")
+                        return
+                    }
+                    const uploadId = await uploadFileTurbo(attachment, (connectionStrategy == ConnectionStrategies.ScannedJWK) ? jwk : null)
+                    if (!uploadId) {
+                        toast.error("Failed to upload file")
+                        return
+                    }
+                    attachmentIds.push(`${attachment.type}:${uploadId}`)
                 }
-                attachmentIds.push(`${attachment.type}:${uploadId}`)
             }
 
         }
@@ -1297,13 +1349,13 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         <div className="flex flex-row w-full grow flex-wrap items-center justify-start gap-2 p-2 sm:p-3 border-b border-border/30">
                             {attachments.map((attachment, index) => (
                                 <div key={index} className="flex items-center gap-2 rounded-md max-w-20 !aspect-square relative group">
-                                    {/* <span className="text-xs text-muted-foreground">{attachment}</span> */}
-                                    {["image/png", "image/jpeg", "image/gif", "image/webp"].includes(attachment.type) ?
-                                        <img src={URL.createObjectURL(attachment)} alt="Attachment" className="w-full h-full object-cover rounded-md" />
+                                    {["image/png", "image/jpeg", "image/gif", "image/webp"].includes(typeof attachment == "string" ? attachment.split(":")[0] : attachment.type) ?
+                                        <img src={typeof attachment == "string" ? `https://arweave.net/${formatTxId(attachment.split(":")[1])}` : URL.createObjectURL(attachment)} alt="Attachment" className="w-full h-full object-cover rounded-md" />
                                         : <div className="flex flex-col items-center gap-2 border border-border/50 rounded-md aspect-square">
                                             <FileIcon className="w-16 h-16 text-muted-foreground" />
-                                            <span className="text-[10px] mx-auto px-0.5 text-center text-muted-foreground truncate max-w-20 w-fit">{attachment.name}</span>
+                                            <span className="text-[10px] mx-auto px-0.5 text-center text-muted-foreground truncate max-w-20 w-fit">{typeof attachment == "string" ? attachment.split(":")[1] : attachment.name}</span>
                                         </div>}
+
                                     <Button
                                         size="icon"
                                         variant="destructive"
@@ -1333,17 +1385,62 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                                         <Plus className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="p-1 flex flex-col gap-1 w-fit">
-                                    <Button variant="ghost" className="w-full"
-                                        onClick={handleFileUpload}
-                                    >
-                                        <HardDriveUpload className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                        <span className="text-sm text-muted-foreground hover:text-foreground">Upload File</span>
-                                    </Button>
-                                    <Button variant="ghost" className="w-full">
-                                        <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                        <span className="text-sm text-muted-foreground hover:text-foreground">Insert DataTxId</span>
-                                    </Button>
+                                <PopoverContent className="p-0 flex flex-col gap-1 w-fit bg-background"
+                                    align="start" sideOffset={22} alignOffset={-12}>
+                                    <div className="bg-primary/5 p-1 rounded-md w-fit flex flex-col gap-1">
+                                        <Button variant="ghost" className="w-full justify-start"
+                                            onClick={(e) => {
+                                                handleFileUpload(e);
+                                                document.getElementById("attachment-popover-close")?.click()
+                                            }}
+                                        >
+                                            <HardDriveUpload className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                            <span className="text-sm text-muted-foreground hover:text-foreground">Upload File</span>
+                                        </Button>
+
+                                        <Dialog>
+                                            <DialogTrigger>
+                                                <Button variant="ghost" className="w-full justify-start"
+                                                    onClick={(e) => {
+                                                        // document.getElementById("attachment-popover-close")?.click()
+                                                    }}
+                                                >
+                                                    <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                                    <span className="text-sm text-muted-foreground hover:text-foreground">Insert DataTxId</span>
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>Insert DataTxId</DialogTitle>
+                                                </DialogHeader>
+                                                <div className="flex flex-col gap-2">
+                                                    <Input type="text" placeholder="DataTxId" onChange={(e) => {
+                                                        setAttachmentDataTxId(e.target.value)
+                                                    }} />
+                                                    {
+                                                        attachmentDataTxId && !attachmentError && (<>
+                                                            {attachmentDataType && <>
+                                                                <img src={`https://arweave.net/${formatTxId(attachmentDataTxId)}`} alt="Attachment" className="w-full h-full object-cover rounded" />
+                                                                <Button className="w-fit ml-auto" onClick={() => {
+                                                                    setAttachments(prev => [...prev, `${attachmentDataType}:${formatTxId(attachmentDataTxId)}`])
+                                                                    setAttachmentDataTxId("")
+                                                                    setAttachmentError(null)
+                                                                    setAttachmentDataType("")
+                                                                    document.getElementById("attachment-popover-close")?.click()
+                                                                }}>
+                                                                    Add Attachment
+                                                                </Button>
+                                                            </>}
+                                                        </>)
+                                                    }
+                                                    {
+                                                        attachmentDataTxId && attachmentError && (<>{attachmentError}</>)
+                                                    }
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
+                                    </div>
+                                    <PopoverClose className="hidden" id="attachment-popover-close" />
                                 </PopoverContent>
                             </Popover>
                         </div>
@@ -1564,10 +1661,9 @@ const MessageInput = React.forwardRef<MessageInputRef, {
                         ref={fileInputRef}
                         type="file"
                         multiple
-                        maxLength={3 - attachments.length}
                         className="hidden"
                         onChange={handleFileChange}
-                        accept="image/*,video/*,.pdf,.txt"
+                        accept="image/*"
                     />
                 </div>
             </div>
@@ -1727,7 +1823,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
     }, [servers, activeServerId])
 
     const handleSendMessage = async (content: string, attachments: string[] = []) => {
-        if (!activeServerId || !hasActiveChannel || !content.trim()) return
+        if (!activeServerId || !hasActiveChannel) return
+        if (!content.trim() && attachments.length == 0) return
 
         try {
             const success = await subspace.server.message.sendMessage({

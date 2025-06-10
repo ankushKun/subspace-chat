@@ -27,6 +27,13 @@ export default defineConfig({
         url: "https://subspace.ar.io",
         description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",
         siteName: "Subspace",
+      },
+      twitter: {
+        card: "summary",
+        image: "https://subspace.ar.io/s.png",
+        imageAlt: "Subspace Communicator",
+        title: "Subspace",
+        description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",
       }
     }),
     VitePWA({

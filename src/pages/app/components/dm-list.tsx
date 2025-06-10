@@ -167,7 +167,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                     data-active={showFriends}
                     variant="ghost"
                     size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:!bg-primary/80 data-[active=true]:!text-primary-foreground rounded-md transition-colors"
+                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:!bg-primary/20 data-[active=true]:!bg-primary/80 data-[active=true]:!text-primary-foreground rounded-md transition-colors"
                     onClick={() => {
                         uiActions.setShowFriends(true)
                         uiActions.setShowUsers(false)

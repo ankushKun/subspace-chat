@@ -4,12 +4,13 @@ import { shortenAddress } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { UserCheck, UserPlus, Clock, X, Check, Loader2 } from "lucide-react"
+import { UserCheck, UserPlus, Clock, X, Check, Loader2, MoreVertical, UserMinus2Icon, MessageCircleIcon } from "lucide-react"
 import { useState, useMemo, useCallback, memo } from "react"
 import { toast } from "sonner"
 import useSubspace from "@/hooks/subspace"
 import type { Friend } from "@/types/subspace"
 import InboxComponent from "@/components/inbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 function FriendList() {
     const { profiles, actions: profileActions } = useProfile()
@@ -180,51 +181,73 @@ function FriendList() {
 
                 {/* Actions */}
                 {showActions && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                         {actionType === 'accept' && (
                             <>
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="w-7 h-7"
+                                    variant="outline"
+                                    className="h-8 items-center justify-center bg-background hover:!bg-green-400/20 transition-colors"
                                     onClick={() => handleAcceptRequest(userId)}
                                     disabled={actionLoading === userId}
-                                    title="Accept friend request"
                                 >
+                                    Accept
                                     {actionLoading === userId ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                     ) : (
-                                        <Check className="w-3 h-3 text-green-600" />
+                                        <Check className="w-4 h-4 stroke-green-500 transition-colors" />
                                     )}
                                 </Button>
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="w-7 h-7"
+                                    variant="outline"
+                                    className="h-8 items-center justify-center bg-background hover:!bg-red-400/20 transition-colors"
                                     onClick={() => handleRejectRequest(userId)}
                                     disabled={actionLoading === userId}
-                                    title="Reject friend request"
                                 >
-                                    <X className="w-3 h-3 text-red-600" />
+                                    Cancel
+                                    <X className="w-4 h-4 stroke-red-500 transition-colors" />
                                 </Button>
                             </>
                         )}
-                        {actionType === 'remove' && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="w-7 h-7"
-                                onClick={() => handleRemoveFriend(userId)}
-                                disabled={actionLoading === userId}
-                                title="Remove friend"
-                            >
-                                {actionLoading === userId ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                    <X className="w-3 h-3 text-muted-foreground hover:text-red-600" />
-                                )}
-                            </Button>
-                        )}
+                        {actionType == "remove" && <>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 items-center justify-center bg-background"
+                                    >
+                                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="p-2 text-sm flex flex-col gap-2 bg-background w-fit" side="bottom" align="end">
+
+                                    <Button
+                                        variant="ghost"
+                                        className="h-8 items-center justify-start bg-background hover:!bg-primary/20 transition-colors"
+                                        disabled={actionLoading === userId}
+                                    >
+                                        <MessageCircleIcon className="w-4 h-4" />
+                                        Send DM
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-8 items-center justify-start bg-background text-destructive hover:!bg-destructive/20 transition-colors"
+                                        onClick={() => handleRemoveFriend(userId)}
+                                        disabled={actionLoading === userId}
+                                    >
+                                        {actionLoading === userId ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                        ) : (
+                                            <UserMinus2Icon className="w-4 h-4" />
+                                        )}
+                                        Remove Friend
+                                    </Button>
+
+                                </PopoverContent>
+                            </Popover>
+                        </>}
+                        {/* {actionType === 'remove' && (
+                        )} */}
                     </div>
                 )}
             </div>

@@ -65,7 +65,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                         if (data) {
                             subspace.user.getPrimaryLogo({ userId: address }).then(logo => {
                                 if (logo) {
-                                    setImportOptions(prev => ({ ...prev, "Primary Logo": logo }))
+                                    setImportOptions(prev => ({ ...prev, "ArNS Logo": logo }))
                                 }
                             })
                             profileActions.updateProfile(address, { primaryName: data } as any)

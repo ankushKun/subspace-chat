@@ -25,6 +25,59 @@ export default function Invite() {
     // Check if user has already joined this server
     const isAlreadyMember = connected && address && invite && Array.isArray(serversJoined[address]) && serversJoined[address].includes(invite)
 
+    // Function to update meta tags dynamically
+    const updateMetaTags = (serverInfo: ServerDetailsResponse | null) => {
+        const title = serverInfo
+            ? `Join ${serverInfo.name} - Subspace`
+            : 'Join Server - Subspace'
+
+        const description = serverInfo
+            ? `You've been invited to join ${serverInfo.name} on Subspace. ${serverInfo.member_count} ${serverInfo.member_count === 1 ? 'member' : 'members'} are already chatting!`
+            : 'You\'ve been invited to join a server on Subspace - a communication app built on a permanent, censorship resistant network.'
+
+        const imageUrl = serverInfo?.icon
+            ? `https://arweave.net/${serverInfo.icon}`
+            : 'https://subspace.ar.io/s.png'
+
+        // Update document title
+        document.title = title
+
+        // Update or create meta tags
+        const updateMetaTag = (property: string, content: string) => {
+            let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement
+            if (!meta) {
+                meta = document.createElement('meta')
+                meta.setAttribute('property', property)
+                document.head.appendChild(meta)
+            }
+            meta.setAttribute('content', content)
+        }
+
+        const updateMetaTagName = (name: string, content: string) => {
+            let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement
+            if (!meta) {
+                meta = document.createElement('meta')
+                meta.setAttribute('name', name)
+                document.head.appendChild(meta)
+            }
+            meta.setAttribute('content', content)
+        }
+
+        // Update OpenGraph tags
+        updateMetaTag('og:title', title)
+        updateMetaTag('og:description', description)
+        updateMetaTag('og:image', imageUrl)
+        updateMetaTag('og:url', window.location.href)
+
+        // Update Twitter tags
+        updateMetaTagName('twitter:title', title)
+        updateMetaTagName('twitter:description', description)
+        updateMetaTagName('twitter:image', imageUrl)
+
+        // Update standard meta description
+        updateMetaTagName('description', description)
+    }
+
     useEffect(() => {
         if (!invite) {
             setError("Invalid invite link")
@@ -34,6 +87,11 @@ export default function Invite() {
 
         fetchServerInfo()
     }, [invite])
+
+    useEffect(() => {
+        // Update meta tags when server info changes
+        updateMetaTags(serverInfo)
+    }, [serverInfo])
 
     const fetchServerInfo = async () => {
         if (!invite) return
@@ -116,7 +174,16 @@ export default function Invite() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-background/90 relative overflow-hidden p-4">
-            <title>{serverInfo ? `Join ${getDisplayName()} - Subspace` : 'Join Server - Subspace'}</title>
+            {/* Default meta tags - will be updated dynamically when server info loads */}
+            <title>You've been invited to join a server - Subspace</title>
+            <meta name="description" content="You've been invited to join a server on Subspace - a communication app built on a permanent, censorship resistant network." />
+            <meta property="og:title" content="You've been invited to join a server - Subspace" />
+            <meta property="og:description" content="You've been invited to join a server on Subspace - a communication app built on a permanent, censorship resistant network." />
+            <meta property="og:image" content="https://subspace.ar.io/s.png" />
+            <meta property="og:url" content={window.location.href} />
+            <meta name="twitter:title" content="You've been invited to join a server - Subspace" />
+            <meta name="twitter:description" content="You've been invited to join a server on Subspace - a communication app built on a permanent, censorship resistant network." />
+            <meta name="twitter:image" content="https://subspace.ar.io/s.png" />
 
             {/* Background decorative elements */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(120,119,198,0.1),transparent_50%)] pointer-events-none" />

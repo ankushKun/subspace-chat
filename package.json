@@ -100,6 +100,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5",
+    "vite-plugin-open-graph": "^2.0.6",
     "vite-plugin-pwa": "^1.0.0"
   }
 }

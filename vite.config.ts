@@ -29,8 +29,8 @@ export default defineConfig({
         siteName: "Subspace",
       },
       twitter: {
-        card: "summary",
-        image: "https://subspace.ar.io/s.png",
+        card: "summary_large_image",
+        image: "https://subspace.ar.io/x_banner.png",
         imageAlt: "Subspace Communicator",
         title: "Subspace",
         description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",

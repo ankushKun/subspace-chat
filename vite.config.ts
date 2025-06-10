@@ -23,7 +23,7 @@ export default defineConfig({
       basic: {
         title: "Subspace",
         type: "website",
-        image: "https://subspace.ar.io/s.png",
+        image: "https://subspace.ar.io/x_banner.png",
         url: "https://subspace.ar.io",
         description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",
         siteName: "Subspace",

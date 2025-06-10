@@ -4,7 +4,7 @@ import { Constants } from "../constants";
 import { ANT } from "@ar.io/sdk"
 
 import type { ConnectionManager } from ".";
-import type { Profile, SubspaceNotification, DelegationDetails, Friend } from "@/types/subspace";
+import type { Profile, SubspaceNotification, DelegationDetails, Friend, InitiateDmResponse, SendDmResponse, GetDmsResponse } from "@/types/subspace";
 
 
 export class User {
@@ -331,6 +331,107 @@ export class User {
         } else {
             Logger.error("removeFriend", res);
             return false;
+        }
+    }
+
+    // DM management
+
+    async initiateDm({ friendId }: { friendId: string }): Promise<InitiateDmResponse | null> {
+        const path = `${Constants.Profiles}/initiate-dm`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { friendId },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.InitiateDm },
+            ]
+        })
+
+        if (res.status == 200) {
+            return res.json as InitiateDmResponse;
+        } else {
+            Logger.error("initiateDm", res);
+            return null;
+        }
+    }
+
+    async sendDm({
+        friendId,
+        content,
+        attachments,
+        replyTo
+    }: {
+        friendId: string;
+        content: string;
+        attachments?: string;
+        replyTo?: number;
+    }): Promise<SendDmResponse | null> {
+        const path = `${Constants.Profiles}/send-dm`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: {
+                friendId,
+                content,
+                attachments: attachments || "[]",
+                replyTo: replyTo?.toString()
+            },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.SendDm },
+            ]
+        })
+
+        if (res.status == 200) {
+            return res.json as SendDmResponse;
+        } else {
+            Logger.error("sendDm", res);
+            return null;
+        }
+    }
+
+    async getDms({
+        userId,
+        friendId,
+        limit,
+        before,
+        after
+    }: {
+        userId: string;
+        friendId?: string;
+        limit?: number;
+        before?: number;
+        after?: number;
+    }): Promise<GetDmsResponse | null> {
+        // Note: This calls the user's DM process, not the profiles process
+        // We need to get the user's dmProcess first
+        const profile = await this.getProfile({ userId });
+        if (!profile || !profile.dmProcess) {
+            Logger.error("getDms", { error: "User has no DM process" });
+            return null;
+        }
+
+        const path = `${profile.dmProcess}/get-dms`
+        const res = await aofetch(path, {
+            method: "GET",
+            body: {
+                userId,
+                friendId,
+                limit: limit?.toString(),
+                before: before?.toString(),
+                after: after?.toString()
+            },
+            AO: this.connectionManager.getAo()
+        })
+
+        if (res.status == 200) {
+            return res.json as GetDmsResponse;
+        } else {
+            Logger.error("getDms", res);
+            return null;
         }
     }
 

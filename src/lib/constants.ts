@@ -48,6 +48,9 @@ export class Constants {
         RejectFriendRequest: "Reject-Friend-Request",
         RemoveFriend: "Remove-Friend",
 
+        InitiateDm: "Initiate-Dm",
+        SendDm: "Send-Dm",
+
         UploadFileAR: "Upload-File-AR",
         UploadFileTurbo: "Upload-File-Turbo",
     };

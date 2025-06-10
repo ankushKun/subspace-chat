@@ -294,9 +294,9 @@ function GetProfile(userId)
     return nil
 end
 
-function UpdateProfile(userId, username, pfp)
-    SQLWrite("INSERT OR REPLACE INTO profiles (userId, username, pfp) VALUES (?, ?, ?)",
-        userId, username, pfp)
+function UpdateProfile(userId, username, pfp, dmProcess)
+    SQLWrite("INSERT OR REPLACE INTO profiles (userId, username, pfp, dmProcess) VALUES (?, ?, ?, ?)",
+        userId, username, pfp, dmProcess)
 end
 
 function UpdateServers(userId, servers)
@@ -866,6 +866,209 @@ app.post("/remove-friend", function(req, res)
     res:json({})
 end)
 
+---------------------------------------------------------
+--- DMs
+
+--- Retrieving DM messages should be done from the dmProcess
+
+app.post("/initiate-dm", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    if not IsFriend(userId, friendId) then
+        res:status(400):json({
+            error = "Not friends"
+        })
+        return
+    end
+
+    -- check if both user have a dmProcess
+    if profile.dmProcess == "" then
+        -- spawn and set a dmProcess
+        ao.spawn(ao.env.Module.Id, {
+            -- Data = [[boot_ran = true]],
+            Tags = {
+                Authority = "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY",
+                ["On-Boot"] = "uwajf5JfJhGjFKe7ZdLmUPY2-bRkqnAhfO3fvdr2Uj0"
+            }
+        })
+
+        local spawnRes = Receive({ Action = "Spawned" })
+        if not spawnRes or not spawnRes['Process'] then
+            res:status(500):json({
+                error = "Failed to spawn DM process for user"
+            })
+            return
+        end
+        local dmProcess = spawnRes['Process']
+        print("Spawned dmProcess for " .. userId .. ": " .. dmProcess)
+        profile.dmProcess = dmProcess
+        UpdateProfile(userId, profile.username, profile.pfp, dmProcess)
+
+        ao.send({
+            Target = dmProcess,
+            Action = "Set-Owner",
+            Data = userId
+        })
+    end
+
+    if friendProfile.dmProcess == "" then
+        -- spawn and set a dmProcess
+        ao.spawn(ao.env.Module.Id, {
+            -- Data = [[boot_ran = true]],
+            Tags = {
+                Authority = "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY",
+                ["On-Boot"] = "uwajf5JfJhGjFKe7ZdLmUPY2-bRkqnAhfO3fvdr2Uj0"
+            }
+        })
+
+        local spawnRes = Receive({ Action = "Spawned" })
+        if not spawnRes or not spawnRes['Process'] then
+            res:status(500):json({
+                error = "Failed to spawn DM process for friend"
+            })
+            return
+        end
+        local dmProcess = spawnRes['Process']
+        print("Spawned dmProcess for " .. friendId .. ": " .. dmProcess)
+        friendProfile.dmProcess = dmProcess
+        UpdateProfile(friendId, friendProfile.username, friendProfile.pfp, dmProcess)
+
+        ao.send({
+            Target = dmProcess,
+            Action = "Set-Owner",
+            Data = friendId
+        })
+    end
+
+    res:json({
+        dmProcess = profile.dmProcess,
+        friendDmProcess = friendProfile.dmProcess
+    })
+end)
+
+app.post("/send-dm", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    -- check if friendId is a friend
+    if not IsFriend(userId, friendId) then
+        res:status(400):json({
+            error = "Not friends"
+        })
+        return
+    end
+
+    local senderDmProcess = profile.dmProcess
+    local receiverDmProcess = friendProfile.dmProcess
+
+    if senderDmProcess == "" then
+        res:status(400):json({
+            error = "Sender dmProcess not found, initiate dm first"
+        })
+        return
+    end
+
+    if receiverDmProcess == "" then
+        res:status(400):json({
+            error = "Receiver dmProcess not found, initiate dm first"
+        })
+        return
+    end
+
+    local replyTo = VarOrNil(req.body.replyTo)
+    local timestamp = req.msg.Timestamp
+    local content = tostring(req.body.content)
+    local attachments = tostring(req.body.attachments)
+
+    ao.send({
+        Target = senderDmProcess,
+        Action = "Add-DM-Message",
+        Data = json.encode({
+            -- dm message data
+            withUser = friendId,
+            author = userId,
+            content = content,
+            attachments = attachments,
+            replyTo = tostring(replyTo),
+            timestamp = timestamp
+        })
+    })
+
+    ao.send({
+        Target = receiverDmProcess,
+        Action = "Add-DM-Message",
+        Data = json.encode({
+            -- dm message data
+            withUser = userId,
+            author = userId, -- FIX: Author should always be the sender
+            content = content,
+            attachments = attachments,
+            replyTo = tostring(replyTo),
+            timestamp = timestamp
+        })
+    })
+
+    local senderRes = Receive({ Action = "Add-DM-Response-" .. userId })
+    local receiverRes = Receive({ Action = "Add-DM-Response-" .. friendId })
+
+    if not senderRes or not senderRes['Data'] or senderRes['Data'] ~= "OK" then
+        res:status(500):json({
+            status = "Error sender process",
+            error  = senderRes['Tags'].Error
+        })
+        return
+    end
+
+    if not receiverRes or not receiverRes['Data'] or receiverRes['Data'] ~= "OK" then
+        res:status(500):json({
+            status = "Error receiver process",
+            error = receiverRes['Tags'].Error
+        })
+        return
+    end
+
+    res:json({
+        senderMessageId = senderRes.Tags.MessageId,
+        receiverMessageId = receiverRes.Tags.MessageId,
+    })
+end)
 
 -- Add a handler for receiving notification data from servers
 Handlers.add("Add-Notification", function(msg)

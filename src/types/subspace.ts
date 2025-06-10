@@ -104,6 +104,7 @@ export type Profile = {
     friends: Friend[];
     primaryName?: string | null;
     originalId?: string;
+    dmProcess?: string;
 }
 
 export type SubspaceNotification = {
@@ -165,4 +166,54 @@ export type VersionResponse = {
 
 export type ErrorResponse = {
     error: string;
+}
+
+// DM Types
+export type DmMessage = {
+    id: number;
+    withUser: string;
+    author: string;
+    content: string;
+    attachments: string;
+    timestamp: number;
+    replyTo: number | null;
+    messageId: number;
+    messageTxId: string;
+    edited: number;
+    replyToMessage?: {
+        id: number;
+        content: string;
+        author: string;
+        timestamp: number;
+        edited: number;
+        attachments: string;
+    };
+}
+
+export type DmConversation = {
+    withUser: string;
+    author: string;
+    content: string;
+    attachments: string;
+    timestamp: number;
+    messageId: number;
+    messageTxId: string;
+    edited: number;
+    messageCount: number;
+}
+
+export type GetDmsResponse = {
+    messages?: DmMessage[];
+    withUser?: string;
+    conversations?: DmConversation[];
+}
+
+export type InitiateDmResponse = {
+    dmProcess: string;
+    friendDmProcess: string;
+}
+
+export type SendDmResponse = {
+    senderMessageId: string;
+    receiverMessageId: string;
 }

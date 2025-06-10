@@ -1,4 +1,4 @@
-import { UserPlus } from "lucide-react"
+import { UserPlus, Users2 } from "lucide-react"
 
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import UserProfile from "./user-profile";
 import InboxComponent from "@/components/inbox";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Screens } from "..";
+import { useUI } from "@/hooks/use-ui";
+import { useServer } from "@/hooks/subspace";
 
 type DirectMessage = {
     userId: string;
@@ -101,7 +104,8 @@ const DMItem = ({
 export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
     const [searchQuery, setSearchQuery] = useState("")
     const isMobile = useIsMobile()
-
+    const { actions: uiActions, showFriends } = useUI()
+    const { actions: serverActions } = useServer()
     // Mock DMs data - replace with real data from your state management
     const mockDMs: DirectMessage[] = [
         {
@@ -146,7 +150,7 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                 props.className
             )}>
             {/* Header */}
-            <div className="mb-2 p-4 flex flex-col justify-center items-start relative">
+            <div className="mb-0 p-4 flex flex-col justify-center items-start relative">
                 <div className="flex items-center gap-2 w-full">
                     <MessageCircle className="w-5 h-5 text-muted-foreground" />
                     <h2 className="text-lg font-semibold text-foreground">
@@ -157,31 +161,40 @@ export default function DMList(props: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-border to-transparent absolute bottom-0" />
             </div>
 
-            {/* Search and actions */}
-            <div className="px-2 space-y-2">
+            {/* Friends tab */}
+            <div className="p-2">
                 <Button
-                    disabled
+                    data-active={showFriends}
                     variant="ghost"
                     size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:!bg-primary/80 data-[active=true]:!text-primary-foreground rounded-md transition-colors"
+                    onClick={() => {
+                        uiActions.setShowFriends(true)
+                        uiActions.setShowUsers(false)
+                        uiActions.setShowSettings(false)
+                        serverActions.setActiveServerId(null)
+                        serverActions.setActiveChannelId(null)
+                    }}
                 >
-                    <Search className="w-4 h-4 mr-2" />
-                    Find or start a conversation
+                    <Users2 className="w-4 h-4 mr-2" />
+                    Friends
                 </Button>
             </div>
 
-            {/* Quick actions */}
-            <div className="p-2 border-border/30 border-b">
-                <Button
-                    disabled
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-8 px-2 justify-start text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-                >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Friend
-                </Button>
+            {/* Search and actions */}
+            <div className="px-2 space-y-2">
+                <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                        type="text"
+                        placeholder="Find or start a conversation"
+                        className="w-full h-8 pl-8 pr-2 text-sm bg-muted/50 border border-border/30 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors placeholder:text-muted-foreground"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
             </div>
+
 
             {/* DMs list */}
             <div className="flex-1 overflow-y-auto space-y-1 px-2">

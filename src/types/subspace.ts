@@ -89,11 +89,19 @@ export type Server = {
     members?: ServerMember[];
 }
 
+export type Friend = {
+    userId1: string;
+    userId2: string;
+    user1Accepted: number;
+    user2Accepted: number;
+}
+
 export type Profile = {
     userId: string;
     // username: string;
     pfp: string;
     serversJoined: string[];
+    friends: Friend[];
     primaryName?: string | null;
     originalId?: string;
 }

@@ -4,7 +4,7 @@ import { Constants } from "../constants";
 import { ANT } from "@ar.io/sdk"
 
 import type { ConnectionManager } from ".";
-import type { Profile, SubspaceNotification, DelegationDetails } from "@/types/subspace";
+import type { Profile, SubspaceNotification, DelegationDetails, Friend } from "@/types/subspace";
 
 
 export class User {
@@ -36,6 +36,22 @@ export class User {
                 }
             } else {
                 profile.serversJoined = [];
+            }
+
+            // Ensure friends is always a Friend array
+            if (profile.friends) {
+                if (typeof profile.friends === 'string') {
+                    try {
+                        const parsed = JSON.parse(profile.friends);
+                        profile.friends = Array.isArray(parsed) ? parsed : [];
+                    } catch {
+                        profile.friends = [];
+                    }
+                } else if (!Array.isArray(profile.friends)) {
+                    profile.friends = [];
+                }
+            } else {
+                profile.friends = [];
             }
 
             try {
@@ -231,4 +247,91 @@ export class User {
             return false;
         }
     }
+
+    // friend management
+
+    async sendFriendRequest({ friendId }: { friendId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/send-friend-request`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { friendId },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.SendFriendRequest },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("sendFriendRequest", res);
+            return false;
+        }
+    }
+
+    async acceptFriendRequest({ friendId }: { friendId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/accept-friend-request`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { friendId },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.AcceptFriendRequest },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("acceptFriendRequest", res);
+            return false;
+        }
+    }
+
+    async rejectFriendRequest({ friendId }: { friendId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/reject-friend-request`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { friendId },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.RejectFriendRequest },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("rejectFriendRequest", res);
+            return false;
+        }
+    }
+
+    async removeFriend({ friendId }: { friendId: string }): Promise<boolean> {
+        const path = `${Constants.Profiles}/remove-friend`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { friendId },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.RemoveFriend },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("removeFriend", res);
+            return false;
+        }
+    }
+
 }

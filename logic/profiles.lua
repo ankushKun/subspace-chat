@@ -62,8 +62,115 @@ function migrate_tables()
             print("Migrating profiles table...")
             db:exec([[
                 ALTER TABLE profiles RENAME COLUMN id TO userId;
-                ALTER TABLE profiles RENAME COLUMN servers_joined TO serversJoined;
             ]])
+        end
+
+        -- Migrate serversJoined from JSON column to separate table
+        if column_exists("profiles", "serversJoined") then
+            print("Migrating serversJoined data to new table structure...")
+
+            -- Get all profiles with serversJoined data
+            local profiles_with_servers = SQLRead(
+                "SELECT userId, serversJoined FROM profiles WHERE serversJoined IS NOT NULL AND serversJoined != '' AND serversJoined != '{}'")
+
+            for _, profile in ipairs(profiles_with_servers) do
+                if profile.serversJoined and profile.serversJoined ~= "" and profile.serversJoined ~= "{}" and profile.serversJoined ~= "[]" then
+                    -- Try to decode the JSON array/object
+                    local success, servers = pcall(json.decode, profile.serversJoined)
+                    if success then
+                        if type(servers) == "table" then
+                            -- Handle both array format [] and object format {}
+                            if servers[1] then
+                                -- Array format
+                                for _, serverId in ipairs(servers) do
+                                    if serverId and serverId ~= "" then
+                                        SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)",
+                                            profile.userId, serverId)
+                                    end
+                                end
+                            else
+                                -- Object format - iterate over keys/values
+                                for serverId, _ in pairs(servers) do
+                                    if serverId and serverId ~= "" then
+                                        SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)",
+                                            profile.userId, serverId)
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        print("Failed to decode serversJoined JSON for user: " .. tostring(profile.userId))
+                    end
+                end
+            end
+
+            -- Recreate the profiles table with new structure (remove serversJoined, add dmProcess)
+            print("Updating profiles table structure...")
+
+            local success, error_msg = pcall(function()
+                db:exec(string.format([[
+                    CREATE TABLE profiles_new (
+                        userId TEXT PRIMARY KEY,
+                        username TEXT DEFAULT "",
+                        pfp TEXT DEFAULT "%s",
+                        dmProcess TEXT DEFAULT ""
+                    );
+                ]], DEFAULT_PFP))
+
+                db:exec(string.format([[
+                    INSERT INTO profiles_new (userId, username, pfp, dmProcess)
+                    SELECT userId,
+                           COALESCE(username, '') as username,
+                           COALESCE(pfp, '%s') as pfp,
+                           '' as dmProcess
+                    FROM profiles;
+                ]], DEFAULT_PFP))
+
+                db:exec("DROP TABLE profiles;")
+                db:exec("ALTER TABLE profiles_new RENAME TO profiles;")
+            end)
+
+            if success then
+                print("Successfully updated profiles table structure")
+            else
+                print("Error updating profiles table structure: " .. tostring(error_msg))
+            end
+
+            print("Completed migration of serversJoined data and updated profiles table structure")
+        end
+    end
+
+    -- Additional check: if profiles table still has serversJoined column after migration, force structure update
+    if table_exists("profiles") and column_exists("profiles", "serversJoined") then
+        print("Profiles table still has serversJoined column, forcing structure update...")
+
+        local success, error_msg = pcall(function()
+            db:exec(string.format([[
+                CREATE TABLE profiles_temp (
+                    userId TEXT PRIMARY KEY,
+                    username TEXT DEFAULT "",
+                    pfp TEXT DEFAULT "%s",
+                    dmProcess TEXT DEFAULT ""
+                );
+            ]], DEFAULT_PFP))
+
+            db:exec(string.format([[
+                INSERT INTO profiles_temp (userId, username, pfp, dmProcess)
+                SELECT userId,
+                       COALESCE(username, '') as username,
+                       COALESCE(pfp, '%s') as pfp,
+                       '' as dmProcess
+                FROM profiles;
+            ]], DEFAULT_PFP))
+
+            db:exec("DROP TABLE profiles;")
+            db:exec("ALTER TABLE profiles_temp RENAME TO profiles;")
+        end)
+
+        if success then
+            print("Successfully forced profiles table structure update")
+        else
+            print("Error in forced profiles table structure update: " .. tostring(error_msg))
         end
     end
 
@@ -97,12 +204,53 @@ function VarOrNil(var)
     return var ~= "" and var or nil
 end
 
+-- Helper function to get servers joined by a user
+function GetServersJoined(userId)
+    local servers = SQLRead("SELECT serverId FROM serversJoined WHERE userId = ?", userId)
+    local serverIds = {}
+    for _, server in ipairs(servers) do
+        table.insert(serverIds, server.serverId)
+    end
+    return serverIds
+end
+
+-- Helper function to add a user to a server
+function AddUserToServer(userId, serverId)
+    SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)", userId, serverId)
+end
+
+-- Helper function to remove a user from a server
+function RemoveUserFromServer(userId, serverId)
+    return SQLWrite("DELETE FROM serversJoined WHERE userId = ? AND serverId = ?", userId, serverId)
+end
+
+-- Helper function to check if user is in a server
+function IsUserInServer(userId, serverId)
+    local result = SQLRead("SELECT COUNT(*) as count FROM serversJoined WHERE userId = ? AND serverId = ?", userId,
+        serverId)
+    return result[1] and result[1].count > 0
+end
+
 db:exec([[
     CREATE TABLE IF NOT EXISTS profiles (
         userId TEXT PRIMARY KEY,
         username TEXT DEFAULT "",
         pfp TEXT DEFAULT "4mDPmblDGphIFa3r4tfE_o26m0PtfLftlzqscnx-ASo",
-        serversJoined TEXT DEFAULT "[]"
+        dmProcess TEXT DEFAULT ""
+    );
+
+    CREATE TABLE IF NOT EXISTS serversJoined (
+        userId TEXT NOT NULL,
+        serverId TEXT NOT NULL,
+        PRIMARY KEY (userId, serverId)
+    );
+
+    CREATE TABLE IF NOT EXISTS friends (
+        userId1 TEXT NOT NULL,
+        userId2 TEXT NOT NULL,
+        user1Accepted INTEGER DEFAULT 1,
+        user2Accepted INTEGER DEFAULT 0,
+        PRIMARY KEY (userId1, userId2)
     );
 
     CREATE TABLE IF NOT EXISTS notifications (
@@ -147,31 +295,18 @@ function GetProfile(userId)
 end
 
 function UpdateProfile(userId, username, pfp)
-    local profile = GetProfile(userId)
-    local serversJoined = "[]"
-
-    -- Preserve serversJoined from existing profile
-    if profile and profile.serversJoined then
-        serversJoined = profile.serversJoined
-    end
-
-    SQLWrite("INSERT OR REPLACE INTO profiles (userId, username, pfp, serversJoined) VALUES (?, ?, ?, ?)",
-        userId, username, pfp, serversJoined)
+    SQLWrite("INSERT OR REPLACE INTO profiles (userId, username, pfp) VALUES (?, ?, ?)",
+        userId, username, pfp)
 end
 
 function UpdateServers(userId, servers)
-    local profile = GetProfile(userId)
-    local username = nil
-    local pfp = DEFAULT_PFP
+    -- First, remove all existing server associations for this user
+    SQLWrite("DELETE FROM serversJoined WHERE userId = ?", userId)
 
-    -- Preserve existing profile data
-    if profile then
-        username = profile.username
-        pfp = profile.pfp
+    -- Then add the new server associations
+    for _, serverId in ipairs(servers) do
+        AddUserToServer(userId, serverId)
     end
-
-    SQLWrite("INSERT OR REPLACE INTO profiles (userId, username, pfp, serversJoined) VALUES (?, ?, ?, ?)",
-        userId, username, pfp, json.encode(servers))
 end
 
 -- Add notification for a user
@@ -195,6 +330,10 @@ app.get("/profile", function(req, res)
         UpdateProfile(originalId, nil, DEFAULT_PFP)
         profile = GetProfile(originalId)
     end
+
+    -- Add serversJoined data from the new table
+    profile.serversJoined = json.encode(GetServersJoined(originalId))
+    profile.friends = json.encode(GetFriends(originalId))
 
     -- If this is a delegated address, include the originalId
     if userId ~= originalId then
@@ -248,7 +387,7 @@ app.post("/delegate", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
+    local serversJoined = GetServersJoined(userId)
     for _, server in ipairs(serversJoined) do
         ao.send({
             Target = server,
@@ -298,7 +437,7 @@ app.post("/undelegate", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
+    local serversJoined = GetServersJoined(convertedId)
     for _, server in ipairs(serversJoined) do
         ao.send({
             Target = server,
@@ -401,28 +540,16 @@ app.post("/join-server", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
-
-    -- Convert to array if it's not already
-    if type(serversJoined) ~= "table" then
-        serversJoined = {}
+    -- Check if already joined using the new helper function
+    if IsUserInServer(userId, serverId) then
+        res:status(400):json({
+            error = "Already joined server"
+        })
+        return
     end
 
-    -- Check if already joined
-    for _, server in ipairs(serversJoined) do
-        if server == serverId then
-            res:status(400):json({
-                error = "Already joined server"
-            })
-            return
-        end
-    end
-
-    -- Add server to the list
-    table.insert(serversJoined, serverId)
-
-    -- Update the servers list while preserving other profile data
-    UpdateServers(userId, serversJoined)
+    -- Add user to server
+    AddUserToServer(userId, serverId)
 
     -- Prepare tags for Add-Member message
     local tags = { User = userId }
@@ -463,34 +590,16 @@ app.post("/leave-server", function(req, res)
         return
     end
 
-    local serversJoined = json.decode(profile.serversJoined or "[]") or {}
-
-    -- Convert to array if it's not already
-    if type(serversJoined) ~= "table" then
-        serversJoined = {}
-    end
-
-    local found = false
-    local newServers = {}
-
-    -- Create new array without the server to leave
-    for _, server in ipairs(serversJoined) do
-        if server == serverId then
-            found = true
-        else
-            table.insert(newServers, server)
-        end
-    end
-
-    if not found then
+    -- Check if user is in the server
+    if not IsUserInServer(userId, serverId) then
         res:status(400):json({
             error = "Not joined server"
         })
         return
     end
 
-    -- Update the servers list while preserving other profile data (username and pfp)
-    UpdateServers(userId, newServers)
+    -- Remove user from server
+    RemoveUserFromServer(userId, serverId)
 
     ao.send({
         Target = serverId,
@@ -548,6 +657,215 @@ app.post("/mark-read", function(req, res)
         notificationsDeleted = rowsUpdated
     })
 end)
+
+---------------------------------------------------------------
+-- FRIENDS
+
+-- LOGIC:
+-- userId1 - Alice, userId2 - Bob, user1Accepted - 1, user2Accepted - 0 : means Alice has sent a friend request to Bob and Bob has not accepted it yet
+-- when bob accepts the request, user2Accepted is set to 1
+-- or if Bob had sent the request, he would have been the userId1 and Alice would have been the userId2
+
+-- userId1 and userId2 are the addresses of the users
+-- to check for a users friends, you need to check for both userId1 and userId2
+
+function IsFriend(userId1, userId2)
+    local result = SQLRead(
+        "SELECT * FROM friends WHERE (userId1 = ? AND userId2 = ?) OR (userId1 = ? AND userId2 = ?) AND user1Accepted = 1 AND user2Accepted = 1",
+        userId1, userId2, userId2, userId1)
+    return result[1] and result[1].user1Accepted == 1 and result[1].user2Accepted == 1
+end
+
+function SendFriendRequest(userId1, userId2)
+    SQLWrite("INSERT OR IGNORE INTO friends (userId1, userId2, user1Accepted, user2Accepted) VALUES (?, ?, 1, 0)",
+        userId1,
+        userId2)
+end
+
+function AcceptFriendRequest(userId1, userId2)
+    SQLWrite("UPDATE friends SET user2Accepted = 1 WHERE userId1 = ? AND userId2 = ?", userId1, userId2)
+end
+
+function RejectFriendRequest(userId1, userId2)
+    SQLWrite("DELETE FROM friends WHERE userId1 = ? AND userId2 = ?", userId1, userId2)
+end
+
+function RemoveFriend(userId1, userId2)
+    SQLWrite("DELETE FROM friends WHERE (userId1 = ? AND userId2 = ?) OR (userId1 = ? AND userId2 = ?)", userId1, userId2,
+        userId2, userId1)
+end
+
+function GetFriends(userId)
+    local result = SQLRead("SELECT * FROM friends WHERE userId1 = ? OR userId2 = ?", userId, userId)
+    return result
+end
+
+function GetFriendRequestsReceived(userId)
+    local result = SQLRead("SELECT * FROM friends WHERE userId2 = ? AND user2Accepted = 0", userId)
+    return result
+end
+
+function GetFriendRequestsSent(userId)
+    local result = SQLRead("SELECT * FROM friends WHERE userId1 = ? AND user1Accepted = 0", userId)
+    return result
+end
+
+-- example:
+-- A - friends are B,C,D
+-- X - friends are W,C,Y,D
+-- common friends are C,D
+
+function GetCommonFriends(firstUserId, secondUserId)
+    -- do this in a single query
+    local result = SQLRead(
+        "SELECT * FROM friends WHERE (userId1 = ? AND userId2 = ?) OR (userId1 = ? AND userId2 = ?) AND user1Accepted = 1 AND user2Accepted = 1",
+        firstUserId, secondUserId, secondUserId, firstUserId)
+    return result
+end
+
+app.post("/send-friend-request", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    -- Check if friendId is already a friend
+    if IsFriend(userId, friendId) then
+        res:status(400):json({
+            error = "Already friends"
+        })
+        return
+    end
+
+    SendFriendRequest(userId, friendId)
+    res:json({})
+end)
+
+app.post("/accept-friend-request", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    -- Find the friend request where current user is userId2 (recipient) and friendId is userId1 (sender)
+    local friendRequest = SQLRead("SELECT * FROM friends WHERE userId1 = ? AND userId2 = ? AND user2Accepted = 0",
+        friendId, userId)
+    if not friendRequest or #friendRequest == 0 then
+        res:status(400):json({
+            error = "No pending friend request found"
+        })
+        return
+    end
+
+    -- Accept the friend request (friendId sent request to userId, so friendId is userId1)
+    AcceptFriendRequest(friendId, userId)
+
+    res:json({})
+end)
+
+app.post("/reject-friend-request", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    -- Find the friend request where current user is userId2 (recipient) and friendId is userId1 (sender)
+    local friendRequest = SQLRead("SELECT * FROM friends WHERE userId1 = ? AND userId2 = ? AND user2Accepted = 0",
+        friendId, userId)
+    if not friendRequest or #friendRequest == 0 then
+        res:status(400):json({
+            error = "No pending friend request found"
+        })
+        return
+    end
+
+    -- Reject the friend request (friendId sent request to userId, so friendId is userId1)
+    RejectFriendRequest(friendId, userId)
+
+    res:json({})
+end)
+
+app.post("/remove-friend", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local friendId = req.body.friendId
+    friendId = TranslateDelegation(friendId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local friendProfile = GetProfile(friendId)
+    if not friendProfile then
+        res:status(404):json({
+            error = "Friend profile not found"
+        })
+        return
+    end
+
+    if not IsFriend(userId, friendId) then
+        res:status(400):json({
+            error = "Not friends"
+        })
+        return
+    end
+
+    RemoveFriend(userId, friendId)
+    res:json({})
+end)
+
 
 -- Add a handler for receiving notification data from servers
 Handlers.add("Add-Notification", function(msg)

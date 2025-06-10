@@ -39,7 +39,8 @@ export default function UserProfile({ className }: UserProfileProps) {
     const [nicknamePromptOpen, setNicknamePromptOpen] = useState(false)
     const [promptNickname, setPromptNickname] = useState("")
     const [isSavingPromptNickname, setIsSavingPromptNickname] = useState(false)
-    const [hasBeenPromptedForNickname, setHasBeenPromptedForNickname] = useState(false)
+    const [promptedServerIds, setPromptedServerIds] = useState<Set<string>>(new Set())
+    const [previousActiveServerId, setPreviousActiveServerId] = useState<string | null>(null)
 
     // Form state
     const [editedNickname, setEditedNickname] = useState("")
@@ -87,16 +88,32 @@ export default function UserProfile({ className }: UserProfileProps) {
 
     // Check if we should show the nickname prompt
     useEffect(() => {
-        if (activeServerId && address && !profile?.primaryName && !serverNickname && !nicknamePromptOpen && !profileDialogOpen && !hasBeenPromptedForNickname) {
+        if (activeServerId && address && !profile?.primaryName && !serverNickname && !nicknamePromptOpen && !profileDialogOpen && !promptedServerIds.has(activeServerId)) {
             setNicknamePromptOpen(true)
-            setHasBeenPromptedForNickname(true)
+            setPromptedServerIds(prev => new Set([...prev, activeServerId]))
         }
-    }, [activeServerId, address, profile?.primaryName, serverNickname, nicknamePromptOpen, profileDialogOpen, hasBeenPromptedForNickname])
+    }, [activeServerId, address, profile?.primaryName, serverNickname, nicknamePromptOpen, profileDialogOpen, promptedServerIds])
 
-    // Reset the prompt flag when switching servers or when a nickname is set
+    // Track when user gets a nickname to prevent showing prompt again for this server
     useEffect(() => {
-        setHasBeenPromptedForNickname(false)
+        if (activeServerId && serverNickname) {
+            setPromptedServerIds(prev => new Set([...prev, activeServerId]))
+        }
     }, [activeServerId, serverNickname])
+
+    // Clear prompted status when switching away from a server (so user gets prompted again when returning)
+    useEffect(() => {
+        if (previousActiveServerId && previousActiveServerId !== activeServerId) {
+            // Remove the previous server from prompted set when switching away
+            setPromptedServerIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(previousActiveServerId)
+                return newSet
+            })
+        }
+        // Update the previous server ID
+        setPreviousActiveServerId(activeServerId)
+    }, [activeServerId, previousActiveServerId])
 
     // Get the selected server's nickname
     const getSelectedServerNickname = () => {

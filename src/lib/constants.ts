@@ -43,6 +43,11 @@ export class Constants {
         DelegateUser: "Delegate-User",
         UndelegateUser: "Undelegate-User",
 
+        SendFriendRequest: "Send-Friend-Request",
+        AcceptFriendRequest: "Accept-Friend-Request",
+        RejectFriendRequest: "Reject-Friend-Request",
+        RemoveFriend: "Remove-Friend",
+
         UploadFileAR: "Upload-File-AR",
         UploadFileTurbo: "Upload-File-Turbo",
     };

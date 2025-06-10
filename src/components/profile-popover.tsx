@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ArioBadge from "./ario-badhe";
-import { Check, Copy, Shield, Loader2, Plus, X, Pencil } from "lucide-react";
+import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useCallback } from "react";
 import { Button } from "./ui/button";
@@ -34,6 +34,7 @@ export default function ProfilePopover({ userId, showAt = true, side = "bottom",
     const [rolePopoverOpen, setRolePopoverOpen] = useState(false)
     const [assigningRole, setAssigningRole] = useState(false)
     const [removingRoles, setRemovingRoles] = useState<number[]>([])
+    const [friendActionLoading, setFriendActionLoading] = useState(false)
 
     const server = activeServerId ? servers[activeServerId] : null
     const nickname = server ? server?.members.find(m => m.userId === userId)?.nickname : null
@@ -86,6 +87,10 @@ export default function ProfilePopover({ userId, showAt = true, side = "bottom",
 
     const userRoles = getUserRoles()
     const availableRoles = getAvailableRoles()
+
+    // Get friendship status
+    const friendshipStatus = address ? profileActions.getFriendshipStatus(address, userId) : 'none'
+    const isCurrentUser = address === userId
 
     // Handle role assignment
     const handleAssignRole = async (roleId: number) => {
@@ -177,6 +182,131 @@ export default function ProfilePopover({ userId, showAt = true, side = "bottom",
             toast.error("Failed to remove role")
         } finally {
             setRemovingRoles(prev => prev.filter(id => id !== roleId))
+        }
+    }
+
+    // Handle friend actions
+    const handleSendFriendRequest = async () => {
+        if (!address) return
+
+        setFriendActionLoading(true)
+        try {
+            const success = await subspace.user.sendFriendRequest({ friendId: userId })
+            if (success) {
+                toast.success("Friend request sent!")
+                // Refresh both users' profiles to get updated friends data
+                const [currentUserProfile, targetUserProfile] = await Promise.all([
+                    subspace.user.getProfile({ userId: address }),
+                    subspace.user.getProfile({ userId: userId })
+                ])
+
+                if (currentUserProfile) {
+                    profileActions.updateProfile(address, currentUserProfile)
+                }
+                if (targetUserProfile) {
+                    profileActions.updateProfile(userId, targetUserProfile)
+                }
+            } else {
+                toast.error("Failed to send friend request")
+            }
+        } catch (error) {
+            console.error("Error sending friend request:", error)
+            toast.error("Failed to send friend request")
+        } finally {
+            setFriendActionLoading(false)
+        }
+    }
+
+    const handleAcceptFriendRequest = async () => {
+        if (!address) return
+
+        setFriendActionLoading(true)
+        try {
+            const success = await subspace.user.acceptFriendRequest({ friendId: userId })
+            if (success) {
+                toast.success("Friend request accepted!")
+                // Refresh both users' profiles to get updated friends data
+                const [currentUserProfile, targetUserProfile] = await Promise.all([
+                    subspace.user.getProfile({ userId: address }),
+                    subspace.user.getProfile({ userId: userId })
+                ])
+
+                if (currentUserProfile) {
+                    profileActions.updateProfile(address, currentUserProfile)
+                }
+                if (targetUserProfile) {
+                    profileActions.updateProfile(userId, targetUserProfile)
+                }
+            } else {
+                toast.error("Failed to accept friend request")
+            }
+        } catch (error) {
+            console.error("Error accepting friend request:", error)
+            toast.error("Failed to accept friend request")
+        } finally {
+            setFriendActionLoading(false)
+        }
+    }
+
+    const handleRejectFriendRequest = async () => {
+        if (!address) return
+
+        setFriendActionLoading(true)
+        try {
+            const success = await subspace.user.rejectFriendRequest({ friendId: userId })
+            if (success) {
+                toast.success("Friend request rejected")
+                // Refresh both users' profiles to get updated friends data
+                const [currentUserProfile, targetUserProfile] = await Promise.all([
+                    subspace.user.getProfile({ userId: address }),
+                    subspace.user.getProfile({ userId: userId })
+                ])
+
+                if (currentUserProfile) {
+                    profileActions.updateProfile(address, currentUserProfile)
+                }
+                if (targetUserProfile) {
+                    profileActions.updateProfile(userId, targetUserProfile)
+                }
+            } else {
+                toast.error("Failed to reject friend request")
+            }
+        } catch (error) {
+            console.error("Error rejecting friend request:", error)
+            toast.error("Failed to reject friend request")
+        } finally {
+            setFriendActionLoading(false)
+        }
+    }
+
+    const handleRemoveFriend = async () => {
+        if (!address) return
+
+        setFriendActionLoading(true)
+        try {
+            const success = await subspace.user.removeFriend({ friendId: userId })
+            if (success) {
+                toast.success("Friend removed")
+                // Refresh both users' profiles to get updated friends data
+                const [currentUserProfile, targetUserProfile] = await Promise.all([
+                    subspace.user.getProfile({ userId: address }),
+                    subspace.user.getProfile({ userId: userId })
+                ])
+
+                if (currentUserProfile) {
+                    profileActions.updateProfile(address, currentUserProfile)
+                }
+                if (targetUserProfile) {
+                    profileActions.updateProfile(userId, targetUserProfile)
+                }
+            } else {
+                toast.error("Failed to remove friend")
+            }
+        } catch (error) {
+            console.error("Error removing friend:", error)
+            toast.error("Failed to remove friend")
+        } finally {
+            setFriendActionLoading(false)
         }
     }
 
@@ -492,6 +622,95 @@ export default function ProfilePopover({ userId, showAt = true, side = "bottom",
                                             )) : <p className="text-xs text-muted-foreground/70">No roles assigned</p>}
                                         </div>
                                     </div>
+
+                                    {/* Friend Management - only show if not current user */}
+                                    {!isCurrentUser && (
+                                        <>
+                                            <Separator />
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                                    Friend Status
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {friendshipStatus === 'none' && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={handleSendFriendRequest}
+                                                            disabled={friendActionLoading}
+                                                            className="h-7 px-2 text-xs"
+                                                        >
+                                                            {friendActionLoading ? (
+                                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                            ) : (
+                                                                <>
+                                                                    <UserPlus className="w-3 h-3 mr-1" />
+                                                                    Add Friend
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                    {friendshipStatus === 'pending_sent' && (
+                                                        <Badge variant="secondary" className="text-xs px-2 py-1 flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            Request Sent
+                                                        </Badge>
+                                                    )}
+                                                    {friendshipStatus === 'pending_received' && (
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={handleAcceptFriendRequest}
+                                                                disabled={friendActionLoading}
+                                                                className="h-7 px-2 text-xs"
+                                                            >
+                                                                {friendActionLoading ? (
+                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                ) : (
+                                                                    <>
+                                                                        <UserCheck className="w-3 h-3 mr-1" />
+                                                                        Accept
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={handleRejectFriendRequest}
+                                                                disabled={friendActionLoading}
+                                                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                                            >
+                                                                <UserX className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {friendshipStatus === 'friends' && (
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="secondary" className="text-xs px-2 py-1 flex items-center gap-1 bg-green-100 text-green-700 border-green-200">
+                                                                <UserCheck className="w-3 h-3" />
+                                                                Friends
+                                                            </Badge>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={handleRemoveFriend}
+                                                                disabled={friendActionLoading}
+                                                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                                                title="Remove friend"
+                                                            >
+                                                                {friendActionLoading ? (
+                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                ) : (
+                                                                    <UserX className="w-3 h-3" />
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

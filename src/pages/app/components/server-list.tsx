@@ -13,6 +13,7 @@ import { FileDropzone } from "@/components/ui/file-dropzone"
 import { toast } from "sonner"
 import { usePWA } from "@/hooks/use-pwa"
 import { JoinServerDialog, type WelcomePopupData } from "@/components/join-server-dialog"
+import { useUI } from "@/hooks/use-ui"
 
 const ServerButton = memo(({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -868,6 +869,7 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
     const { address, connectionStrategy, connected } = useWallet()
     const { servers, actions, activeServerId, serversJoined, loadingServers } = useServer()
     const profiles = useProfile(state => state.profiles)
+    const { actions: uiActions } = useUI()
     const { onServerJoined, ...divProps } = props
 
     const myProfile: Profile = address ? profiles[address] : null
@@ -891,7 +893,13 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 bg-primary/5 rounded-full blur-2xl" />
 
             {/* Home Button */}
-            <HomeButton isActive={activeServerId === ""} onClick={() => { actions.setActiveServerId(""); actions.setActiveChannelId(0) }} />
+            <HomeButton isActive={activeServerId === ""} onClick={() => {
+                actions.setActiveServerId("");
+                actions.setActiveChannelId(0);
+                uiActions.setShowUsers(true);
+                uiActions.setShowSettings(false);
+                uiActions.setShowFriends(false);
+            }} />
 
             {/* Enhanced Separator with gradient */}
             <div className="relative mx-auto mb-3">

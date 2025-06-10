@@ -31,6 +31,8 @@ import data from '@emoji-mart/data'
 import type { Emoji } from "emoji-mart"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Constants } from "@/lib/constants"
+import FriendList from "./friend-list"
+import { useUI } from "@/hooks/use-ui"
 
 
 
@@ -2001,6 +2003,7 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
     const { address } = useWallet()
     const isMobile = useIsMobile()
     const isMobileDevice = useIsMobileDevice()
+    const { showFriends } = useUI()
 
     // State for editing messages
     const [editingMessage, setEditingMessage] = useState<Message | null>(null)
@@ -2316,6 +2319,13 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
 
     // If no channel is selected, show the no channel state
     if (!hasActiveChannel) {
+
+        // if (showFriends) {
+        //     return (
+        //         <FriendList />
+        //     )
+        // }
+
         return (
             <JoinServerDialogContext.Provider value={joinDialogContext}>
                 <div
@@ -2334,7 +2344,8 @@ export default function MessageList(props: React.HTMLAttributes<HTMLDivElement> 
                     {/* Ambient glow at top */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-16 bg-primary/3 rounded-full blur-3xl" />
 
-                    <NoChannel serverName={currentServer?.name} />
+                    {showFriends ? <FriendList /> : <NoChannel serverName={currentServer?.name} />}
+
 
                     {/* Ambient glow at bottom */}
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-12 bg-primary/2 rounded-full blur-2xl" />

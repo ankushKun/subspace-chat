@@ -64,7 +64,7 @@ export default function UserProfile({ className }: UserProfileProps) {
                         if (data) {
                             subspace.user.getPrimaryLogo({ userId: address }).then(logo => {
                                 if (logo) {
-                                    setImportOptions(prev => ({ ...prev, "ArNS": logo }))
+                                    setImportOptions(prev => ({ ...prev, "Primary Logo": logo }))
                                 }
                             })
                             profileActions.updateProfile(address, { primaryName: data } as any)
@@ -385,7 +385,7 @@ export default function UserProfile({ className }: UserProfileProps) {
 
             {/* Profile Settings Dialog */}
             <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
-                <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-hidden flex flex-col" removeCloseButton>
+                <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] outline-0 overflow-hidden flex flex-col" removeCloseButton>
                     <DialogHeader className="flex-shrink-0">
                         <DialogTitle className="flex items-center justify-between">
                             <span>Profile Settings</span>
@@ -543,13 +543,10 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                         setProfilePicFile(id)
                                                     }}>
                                                     <img src={`https://arweave.net/${id}`} alt={source} className="w-10 h-10 rounded-full" />
-                                                    <p className="truncate">{source}</p>
+                                                    <p className="truncate w-full text-center">{source}</p>
                                                     {profile?.pfp === id && <CheckCircle2 className="w-4 h-4 text-green-500 absolute top-1 right-1" />}
                                                 </div>
                                             ))}
-                                            <div className="flex items-center justify-center gap-2 cursor-default rounded-md p-2 bg-primary/5 relative">
-                                                <p className="truncate">Velocity (coming soon)</p>
-                                            </div>
                                         </div>
                                     </div>}
                                 </div>

@@ -10,6 +10,7 @@
         "@hello-pangea/dnd": "^18.0.1",
         "@hookform/resolvers": "^5.0.1",
         "@permaweb/aoconnect": "^0.0.85",
+        "@permaweb/libs": "^0.0.42",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
         "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -511,6 +512,8 @@
     "@permaweb/ao-scheduler-utils": ["@permaweb/ao-scheduler-utils@0.0.25", "", { "dependencies": { "lru-cache": "^10.2.2", "ramda": "^0.30.0", "zod": "^3.23.5" } }, "sha512-b0UYSTgnLMIYLScrfNBgcqK7ZMmd78L3J0Jz4RIsIq2P5PtkdRqQ7fYqLlltg7bD1f3dvl4TkO1925ED4ei7LA=="],
 
     "@permaweb/aoconnect": ["@permaweb/aoconnect@0.0.85", "", { "dependencies": { "@dha-team/arbundles": "1.0.3", "@permaweb/ao-scheduler-utils": "~0.0.25", "@permaweb/protocol-tag-utils": "~0.0.2", "axios": "^1.7.9", "base64url": "^3.0.1", "buffer": "^6.0.3", "debug": "^4.4.0", "http-message-signatures": "^1.0.4", "hyper-async": "^1.1.2", "mnemonist": "^0.39.8", "ramda": "^0.30.1", "structured-headers": "^2.0.0", "zod": "^3.24.1" } }, "sha512-lPfDLDaQyOY1oupxkw9B9ZslKw1ENASEdzComoMc2RZ7DejBx2OdHzU+fmZO1ZEQ5zQSm82/wgRVBd/1l6092g=="],
+
+    "@permaweb/libs": ["@permaweb/libs@0.0.42", "", { "dependencies": { "@dha-team/arbundles": "^1.0.3" } }, "sha512-xW4Wx1RKCyIYXBK4XxVbjyRHWnnMhA1ds5Gm698FQ/qFRdFqLD0wd545ax0IT1b/3o+2MbfwOkd0B/5qUb3pqg=="],
 
     "@permaweb/protocol-tag-utils": ["@permaweb/protocol-tag-utils@0.0.2", "", {}, "sha512-2IiKu71W7pkHKIzxabCGQ5q8DSppZaE/sPcPF2hn+OWwfe04M7b5X5LHRXQNPRuxHWuioieGdPQb3F7apOlffQ=="],
 

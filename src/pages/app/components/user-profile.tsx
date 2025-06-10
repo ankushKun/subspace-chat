@@ -15,6 +15,7 @@ import type { Profile } from "@/types/subspace"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import ArioBadge from "@/components/ario-badhe"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import Permaweb from "@permaweb/libs"
 
 interface UserProfileProps {
     className?: string
@@ -59,16 +60,22 @@ export default function UserProfile({ className }: UserProfileProps) {
             subspace.user.getProfile({ userId: address }).then(data => {
                 if (data) {
                     profileActions.updateProfile(address, data as any)
-                }
-            })
-            subspace.user.getPrimaryName({ userId: address }).then(data => {
-                if (data) {
-                    subspace.user.getPrimaryLogo({ userId: address }).then(logo => {
-                        if (logo) {
-                            setImportOptions(prev => ({ ...prev, "ArNS": logo }))
+                    subspace.user.getPrimaryName({ userId: address }).then(data => {
+                        if (data) {
+                            subspace.user.getPrimaryLogo({ userId: address }).then(logo => {
+                                if (logo) {
+                                    setImportOptions(prev => ({ ...prev, "ArNS": logo }))
+                                }
+                            })
+                            profileActions.updateProfile(address, { primaryName: data } as any)
                         }
                     })
-                    profileActions.updateProfile(address, { primaryName: data } as any)
+                }
+            })
+            const permaweb = Permaweb.init({})
+            permaweb.getProfileByWalletAddress(address).then(data => {
+                if (data && data.thumbnail) {
+                    setImportOptions(prev => ({ ...prev, "Permaweb": data.thumbnail }))
                 }
             })
         }
@@ -540,9 +547,6 @@ export default function UserProfile({ className }: UserProfileProps) {
                                                     {profile?.pfp === id && <CheckCircle2 className="w-4 h-4 text-green-500 absolute top-1 right-1" />}
                                                 </div>
                                             ))}
-                                            <div className="flex items-center justify-center gap-2 cursor-default rounded-md p-2 bg-primary/5 relative">
-                                                <p className="truncate">Bazar (coming soon)</p>
-                                            </div>
                                             <div className="flex items-center justify-center gap-2 cursor-default rounded-md p-2 bg-primary/5 relative">
                                                 <p className="truncate">Velocity (coming soon)</p>
                                             </div>

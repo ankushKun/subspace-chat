@@ -248,6 +248,27 @@ export class User {
         }
     }
 
+    async reorderServers({ serverIds }: { serverIds: string[] }): Promise<boolean> {
+        const path = `${Constants.Profiles}/reorder-servers`
+        const res = await aofetch(path, {
+            method: "POST",
+            body: { serverIds: JSON.stringify(serverIds) },
+            AO: this.connectionManager.getAo(),
+            signer: this.connectionManager.getAoSigner(),
+            tags: [
+                ...Constants.CommonTags,
+                { name: Constants.TagNames.SubspaceFunction, value: Constants.TagValues.ReorderServers },
+            ]
+        })
+
+        if (res.status == 200) {
+            return true;
+        } else {
+            Logger.error("reorderServers", res);
+            return false;
+        }
+    }
+
     // friend management
 
     async sendFriendRequest({ friendId }: { friendId: string }): Promise<boolean> {

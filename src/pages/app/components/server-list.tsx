@@ -4,7 +4,7 @@ import useSubspace, { useProfile, useNotifications } from "@/hooks/subspace"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { type Profile, type Server } from "@/types/subspace"
 import { Button } from "@/components/ui/button"
-import { Download, Home, Plus, Sparkles, Users, WalletCards } from "lucide-react"
+import { Download, Home, Plus, Sparkles, Users, WalletCards, Loader2 } from "lucide-react"
 import { cn, uploadFileTurbo } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -14,8 +14,9 @@ import { toast } from "sonner"
 import { usePWA } from "@/hooks/use-pwa"
 import { JoinServerDialog, type WelcomePopupData } from "@/components/join-server-dialog"
 import { useUI } from "@/hooks/use-ui"
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 
-const ServerButton = memo(({ server, isActive = false, onClick }: { server: Server; isActive?: boolean, onClick?: () => void }) => {
+const ServerButton = memo(({ server, isActive = false, onClick, isUpdating = false, dragHandleProps }: { server: Server; isActive?: boolean, onClick?: () => void, isUpdating?: boolean, dragHandleProps?: any }) => {
     const [isHovered, setIsHovered] = useState(false)
     const { unreadCountsByServer } = useNotifications()
 
@@ -42,36 +43,49 @@ const ServerButton = memo(({ server, isActive = false, onClick }: { server: Serv
             />
 
             <div className="flex justify-center relative">
-                <Button
-                    size="icon"
-                    variant="ghost"
+                <div
                     className={cn(
-                        "w-12 h-12 p-0 transition-all duration-300 ease-out hover:bg-transparent group relative overflow-hidden",
+                        "w-12 h-12 p-0 transition-all duration-300 ease-out group relative overflow-hidden cursor-grab active:cursor-grabbing",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
-                        isActive ? "rounded-2xl shadow-lg shadow-primary/20" : "rounded-3xl hover:rounded-2xl hover:shadow-md hover:shadow-foreground/10"
+                        isActive ? "rounded-2xl shadow-lg shadow-primary/20" : "rounded-3xl hover:rounded-2xl hover:shadow-md hover:shadow-foreground/10",
+                        "hover:bg-muted/50"
                     )}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
                     onClick={onClick}
+                    {...dragHandleProps}
+                    onMouseDown={(e) => {
+                        console.log('🖱️ Server mouse down:', server.serverId)
+                        if (dragHandleProps?.onMouseDown) {
+                            dragHandleProps.onMouseDown(e)
+                        }
+                    }}
+                    onDragStart={(e) => {
+                        console.log('🚀 Server drag start:', server.serverId)
+                        if (dragHandleProps?.onDragStart) {
+                            dragHandleProps.onDragStart(e)
+                        }
+                    }}
                 >
                     <div className={cn(
-                        "w-12 h-12 overflow-hidden transition-all duration-300 ease-out relative",
+                        "w-12 h-12 overflow-hidden transition-all duration-300 ease-out relative pointer-events-none",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 before:via-transparent before:to-transparent before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-300",
                         isActive ? "rounded-2xl" : "rounded-xl group-hover:rounded-2xl"
                     )}>
                         <img
                             src={`https://arweave.net/${server.icon}`}
                             alt={server.name}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 pointer-events-none"
+                            draggable={false}
                         />
                         {/* Shimmer effect */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none" />
                     </div>
-                </Button>
+                </div>
 
                 {/* Mention count badge */}
                 {unreadCount > 0 && (
-                    <div className="absolute -top-1 -right-1 z-10">
+                    <div className="absolute -top-1 -right-1 z-10 pointer-events-none">
                         <div className={cn(
                             "flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold text-white rounded-full aspect-square",
                             "bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30",
@@ -80,6 +94,19 @@ const ServerButton = memo(({ server, isActive = false, onClick }: { server: Serv
                             "animate-in zoom-in-50 duration-300"
                         )}>
                             {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                    </div>
+                )}
+
+                {/* Loading indicator when reordering */}
+                {isUpdating && (
+                    <div className="absolute -bottom-1 -right-1 z-10 pointer-events-none">
+                        <div className={cn(
+                            "flex items-center justify-center w-[18px] h-[18px] rounded-full",
+                            "bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/30",
+                            "border border-background/20 backdrop-blur-sm"
+                        )}>
+                            <Loader2 className="h-3 w-3 animate-spin text-primary-foreground" />
                         </div>
                     </div>
                 )}
@@ -97,6 +124,12 @@ const ServerButton = memo(({ server, isActive = false, onClick }: { server: Serv
                                 <div className="flex items-center gap-1 ml-2 px-1.5 py-0.5 bg-red-500/10 text-red-600 rounded text-xs">
                                     <span>{unreadCount}</span>
                                     <span className="text-red-500/70">mention{unreadCount !== 1 ? 's' : ''}</span>
+                                </div>
+                            )}
+                            {isUpdating && (
+                                <div className="flex items-center gap-1 ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                                    <Loader2 className="w-2 h-2 animate-spin" />
+                                    <span>Updating...</span>
                                 </div>
                             )}
                         </div>
@@ -871,10 +904,109 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
     const profiles = useProfile(state => state.profiles)
     const { actions: uiActions } = useUI()
     const { onServerJoined, ...divProps } = props
+    const subspace = useSubspace()
+
+    // Drag and drop state
+    const [isUpdating, setIsUpdating] = useState(false)
+    const [updatingServers, setUpdatingServers] = useState<string[]>([])
 
     const myProfile: Profile = address ? profiles[address] : null
     const myServers = myProfile?.serversJoined ? myProfile?.serversJoined : []
 
+    // Debug logging
+    useEffect(() => {
+        console.log('ServerList Debug:', {
+            address,
+            serversJoined: serversJoined[address],
+            serversCount: serversJoined[address]?.length || 0,
+            servers: Object.keys(servers).length,
+            loadingServers
+        })
+    }, [address, serversJoined, servers, loadingServers])
+
+    // Handle drag start
+    const handleDragStart = (result: any) => {
+        console.log('🚀 Drag started:', result)
+    }
+
+    // Handle drag update  
+    const handleDragUpdate = (result: any) => {
+        console.log('🔄 Drag updating:', result)
+    }
+
+    // Handle drag end for server reordering
+    const handleDragEnd = async (result: any) => {
+        console.log('🎯 Server drag end triggered:', result)
+        const { source, destination } = result
+
+        // Dropped outside the list or no change
+        if (!destination || (source.droppableId === destination.droppableId && source.index === destination.index)) {
+            console.log('❌ Drag cancelled or no change')
+            return
+        }
+
+        if (!address || !serversJoined[address]) {
+            console.log('❌ No address or servers joined')
+            return
+        }
+
+        console.log('✅ Processing server reorder from', source.index, 'to', destination.index)
+        const currentServers = [...serversJoined[address]]
+        const [movedServer] = currentServers.splice(source.index, 1)
+        currentServers.splice(destination.index, 0, movedServer)
+
+        console.log('📋 New server order:', currentServers)
+
+        // Optimistic update - update local state immediately
+        actions.setServersJoined(address, currentServers)
+
+        // Mark server as updating
+        setUpdatingServers(prev => [...prev, movedServer])
+        setIsUpdating(true)
+
+        try {
+            const success = await subspace.user.reorderServers({ serverIds: currentServers })
+
+            if (success) {
+                toast.success('Server order updated', {
+                    richColors: true,
+                    style: {
+                        backgroundColor: "var(--background)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                        backdropFilter: "blur(8px)"
+                    },
+                    className: "font-medium",
+                    duration: 3000
+                })
+            } else {
+                throw new Error('Failed to update server order')
+            }
+        } catch (error) {
+            console.error('Error updating server order:', error)
+            toast.error('Failed to update server order', {
+                richColors: true,
+                style: {
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+                    backdropFilter: "blur(8px)"
+                },
+                className: "font-medium",
+                duration: 4000
+            })
+
+            // Revert optimistic update
+            actions.setServersJoined(address, serversJoined[address])
+        } finally {
+            setIsUpdating(false)
+            setUpdatingServers(prev => prev.filter(id => id !== movedServer))
+        }
+    }
 
     return (
         <div
@@ -922,17 +1054,63 @@ export default function ServerList(props: React.HTMLAttributes<HTMLDivElement> &
                     serversJoined
                     && serversJoined[address]
                     && serversJoined[address].length > 0
-                    && serversJoined[address].map((serverId, index) => (
-                        servers[serverId] && (
-                            <div
-                                key={serverId}
-                                style={{ animationDelay: `${index * 100}ms` }}
-                                className="animate-in slide-in-from-left-5 fade-in duration-500"
-                            >
-                                <ServerButton server={servers[serverId]} isActive={serverId === activeServerId} onClick={() => actions.setActiveServerIdAndRestoreChannel(serverId)} />
-                            </div>
-                        )
-                    ))
+                    && (
+                        <DragDropContext
+                            onDragEnd={handleDragEnd}
+                            onDragStart={handleDragStart}
+                            onDragUpdate={handleDragUpdate}
+                        >
+                            <Droppable droppableId="servers" type="SERVER">
+                                {(provided, snapshot) => (
+                                    <div
+                                        ref={provided.innerRef}
+                                        {...provided.droppableProps}
+                                        className={cn(
+                                            "space-y-1",
+                                            snapshot.isDraggingOver && "bg-accent/20 rounded-md p-1"
+                                        )}
+                                    >
+                                        {serversJoined[address].map((serverId, index) => {
+                                            if (!servers[serverId]) return null;
+
+                                            return (
+                                                <Draggable
+                                                    key={serverId}
+                                                    draggableId={serverId}
+                                                    index={index}
+                                                    isDragDisabled={isUpdating}
+                                                >
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            style={{
+                                                                ...provided.draggableProps.style,
+                                                                animationDelay: `${index * 100}ms`
+                                                            }}
+                                                            className={cn(
+                                                                "animate-in slide-in-from-left-5 fade-in duration-500",
+                                                                snapshot.isDragging && "opacity-90 shadow-lg ring-1 ring-primary/30 rounded-2xl"
+                                                            )}
+                                                        >
+                                                            <ServerButton
+                                                                server={servers[serverId]}
+                                                                isActive={serverId === activeServerId}
+                                                                onClick={() => actions.setActiveServerIdAndRestoreChannel(serverId)}
+                                                                isUpdating={isUpdating && updatingServers.includes(serverId)}
+                                                                dragHandleProps={provided.dragHandleProps}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            );
+                                        })}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </DragDropContext>
+                    )
                 }
                 {/* Skeleton loaders for servers being loaded */}
                 {(() => {

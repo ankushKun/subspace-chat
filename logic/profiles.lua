@@ -82,18 +82,22 @@ function migrate_tables()
                             -- Handle both array format [] and object format {}
                             if servers[1] then
                                 -- Array format
-                                for _, serverId in ipairs(servers) do
+                                for i, serverId in ipairs(servers) do
                                     if serverId and serverId ~= "" then
-                                        SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)",
-                                            profile.userId, serverId)
+                                        SQLWrite(
+                                            "INSERT OR IGNORE INTO serversJoined (userId, serverId, orderId) VALUES (?, ?, ?)",
+                                            profile.userId, serverId, i)
                                     end
                                 end
                             else
                                 -- Object format - iterate over keys/values
+                                local i = 1
                                 for serverId, _ in pairs(servers) do
                                     if serverId and serverId ~= "" then
-                                        SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)",
-                                            profile.userId, serverId)
+                                        SQLWrite(
+                                            "INSERT OR IGNORE INTO serversJoined (userId, serverId, orderId) VALUES (?, ?, ?)",
+                                            profile.userId, serverId, i)
+                                        i = i + 1
                                     end
                                 end
                             end
@@ -174,6 +178,33 @@ function migrate_tables()
         end
     end
 
+    -- Migrate serversJoined table to add orderId column
+    if table_exists("serversJoined") and not column_exists("serversJoined", "orderId") then
+        print("Adding orderId column to serversJoined table...")
+
+        local success, error_msg = pcall(function()
+            -- Add orderId column with default value 0
+            db:exec("ALTER TABLE serversJoined ADD COLUMN orderId INTEGER DEFAULT 0")
+
+            -- Update existing records to have sequential orderIds per user
+            local users = SQLRead("SELECT DISTINCT userId FROM serversJoined")
+            for _, user in ipairs(users) do
+                local servers = SQLRead("SELECT serverId FROM serversJoined WHERE userId = ? ORDER BY serverId",
+                    user.userId)
+                for i, server in ipairs(servers) do
+                    SQLWrite("UPDATE serversJoined SET orderId = ? WHERE userId = ? AND serverId = ?",
+                        i, user.userId, server.serverId)
+                end
+            end
+        end)
+
+        if success then
+            print("Successfully added orderId column to serversJoined table")
+        else
+            print("Error adding orderId column: " .. tostring(error_msg))
+        end
+    end
+
     -- Migrate notifications table
     if table_exists("notifications") then
         if column_exists("notifications", "id") and not column_exists("notifications", "notificationId") then
@@ -206,7 +237,7 @@ end
 
 -- Helper function to get servers joined by a user
 function GetServersJoined(userId)
-    local servers = SQLRead("SELECT serverId FROM serversJoined WHERE userId = ?", userId)
+    local servers = SQLRead("SELECT serverId FROM serversJoined WHERE userId = ? ORDER BY orderId", userId)
     local serverIds = {}
     for _, server in ipairs(servers) do
         table.insert(serverIds, server.serverId)
@@ -215,8 +246,14 @@ function GetServersJoined(userId)
 end
 
 -- Helper function to add a user to a server
-function AddUserToServer(userId, serverId)
-    SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId) VALUES (?, ?)", userId, serverId)
+function AddUserToServer(userId, serverId, orderId)
+    -- If orderId is not provided, use the next available order
+    if not orderId then
+        local maxOrder = SQLRead("SELECT MAX(orderId) as maxOrder FROM serversJoined WHERE userId = ?", userId)
+        orderId = (maxOrder[1] and maxOrder[1].maxOrder or 0) + 1
+    end
+    SQLWrite("INSERT OR IGNORE INTO serversJoined (userId, serverId, orderId) VALUES (?, ?, ?)", userId, serverId,
+        orderId)
 end
 
 -- Helper function to remove a user from a server
@@ -231,6 +268,26 @@ function IsUserInServer(userId, serverId)
     return result[1] and result[1].count > 0
 end
 
+-- Helper function to update server order for a user
+function UpdateServerOrder(userId, serverId, newOrderId)
+    return SQLWrite("UPDATE serversJoined SET orderId = ? WHERE userId = ? AND serverId = ?", newOrderId, userId,
+        serverId)
+end
+
+-- Helper function to reorder all servers for a user
+function ReorderServers(userId, serverIds)
+    -- serverIds should be an array of serverIds in the desired order
+    for i, serverId in ipairs(serverIds) do
+        UpdateServerOrder(userId, serverId, i)
+    end
+end
+
+-- Helper function to get servers with their order info
+function GetServersWithOrder(userId)
+    local servers = SQLRead("SELECT serverId, orderId FROM serversJoined WHERE userId = ? ORDER BY orderId", userId)
+    return servers
+end
+
 db:exec([[
     CREATE TABLE IF NOT EXISTS profiles (
         userId TEXT PRIMARY KEY,
@@ -242,6 +299,7 @@ db:exec([[
     CREATE TABLE IF NOT EXISTS serversJoined (
         userId TEXT NOT NULL,
         serverId TEXT NOT NULL,
+        orderId INTEGER DEFAULT 0,
         PRIMARY KEY (userId, serverId)
     );
 
@@ -608,6 +666,74 @@ app.post("/leave-server", function(req, res)
     })
 
     res:json({})
+end)
+
+app.post("/reorder-servers", function(req, res)
+    local userId = req.msg.From
+    userId = TranslateDelegation(userId)
+    local serverIds = req.body.serverIds
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    -- Parse serverIds if it's a JSON string
+    if type(serverIds) == "string" then
+        local success, parsed = pcall(json.decode, serverIds)
+        if success and type(parsed) == "table" then
+            serverIds = parsed
+        else
+            res:status(400):json({
+                error = "Invalid serverIds format - must be a valid JSON array"
+            })
+            return
+        end
+    end
+
+    -- Validate that serverIds is an array
+    if not serverIds or type(serverIds) ~= "table" then
+        res:status(400):json({
+            error = "serverIds must be an array"
+        })
+        return
+    end
+
+    -- Validate that all servers in the list belong to the user
+    for _, serverId in ipairs(serverIds) do
+        if not IsUserInServer(userId, serverId) then
+            res:status(400):json({
+                error = "Server " .. serverId .. " not found in user's server list"
+            })
+            return
+        end
+    end
+
+    -- Reorder the servers
+    ReorderServers(userId, serverIds)
+
+    res:json({
+        message = "Servers reordered successfully"
+    })
+end)
+
+app.get("/get-servers-with-order", function(req, res)
+    local userId = req.body.userId or req.msg.From
+    userId = TranslateDelegation(userId)
+
+    local profile = GetProfile(userId)
+    if not profile then
+        res:status(404):json({
+            error = "Profile not found"
+        })
+        return
+    end
+
+    local servers = GetServersWithOrder(userId)
+    res:json(servers)
 end)
 
 -- Get all unread notifications for a user

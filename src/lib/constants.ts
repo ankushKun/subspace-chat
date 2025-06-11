@@ -39,6 +39,7 @@ export class Constants {
 
         JoinServer: "Join-Server",
         LeaveServer: "Leave-Server",
+        ReorderServers: "Reorder-Servers",
 
         DelegateUser: "Delegate-User",
         UndelegateUser: "Undelegate-User",
